@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Basic Lower Third</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 1920px;
+      height: 1080px;
+      background: transparent;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    .lower-third {
+      position: absolute;
+      bottom: 120px;
+      left: 80px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 16px 24px;
+      min-width: 400px;
+    }
+    .primary { font-size: 32px; color: #ffffff; font-weight: bold; }
+    .secondary { font-size: 22px; color: #cccccc; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="lower-third" id="lower-third">
+    <div class="primary" id="primary-text"></div>
+    <div class="secondary" id="secondary-text"></div>
+  </div>
+
+  <script>
+    // ograf RealTime API implementation (minimal stub for fixture)
+    window.update = function(data) {
+      if (data.primaryText !== undefined) {
+        document.getElementById('primary-text').textContent = data.primaryText
+      }
+      if (data.secondaryText !== undefined) {
+        document.getElementById('secondary-text').textContent = data.secondaryText
+      }
+    }
+    window.play = function() {
+      document.getElementById('lower-third').style.display = 'block'
+    }
+    window.stop = function() {
+      document.getElementById('lower-third').style.display = 'none'
+    }
+  </script>
+</body>
+</html>

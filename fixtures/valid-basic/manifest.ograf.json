@@ -1,0 +1,27 @@
+{
+  "$schema": "https://ograf.ebu.io/v1/specification/json-schemas/graphics/schema.json",
+  "id": "com.example.lower-third",
+  "version": "1.0.0",
+  "name": "Lower Third",
+  "description": "A simple lower third graphic",
+  "main": "graphic.mjs",
+  "supportsRealTime": true,
+  "supportsNonRealTime": false,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "headline": {
+        "type": "string",
+        "label": "Headline",
+        "default": "John Doe",
+        "gddType": "single-line"
+      },
+      "subline": {
+        "type": "string",
+        "label": "Subline",
+        "default": "Reporter",
+        "gddType": "single-line"
+      }
+    }
+  }
+}

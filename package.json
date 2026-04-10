@@ -1,0 +1,26 @@
+{
+  "name": "ograf-validator-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "OGraf Validator – browser-based validation, inspection and preview tool for ograf Graphics Packages",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/app",
+    "build": "npm run build --workspace=packages/validator-core && npm run build --workspace=packages/app",
+    "test": "npm run test --workspaces --if-present",
+    "test:core": "npm run test --workspace=packages/validator-core",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/streamshapers/ograf-validator.git"
+  },
+  "license": "MIT"
+}

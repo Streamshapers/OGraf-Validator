@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Football Scoreboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 1920px; height: 1080px; background: transparent; font-family: Arial, sans-serif; overflow: hidden; }
+    .scoreboard {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.92);
+      display: flex;
+      align-items: center;
+      padding: 10px 24px;
+      gap: 20px;
+      min-width: 420px;
+    }
+    .team { font-size: 28px; color: #fff; font-weight: bold; flex: 1; }
+    .team.away { text-align: right; }
+    .score { font-size: 36px; color: #fff; font-weight: bold; min-width: 80px; text-align: center; }
+    .time { font-size: 18px; color: #aaa; text-align: center; }
+    .live-dot { width: 8px; height: 8px; background: red; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  </style>
+</head>
+<body>
+  <div class="scoreboard" id="scoreboard">
+    <div class="team home" id="home-team">Home</div>
+    <div class="score" id="score">0 – 0</div>
+    <div class="team away" id="away-team">Away</div>
+  </div>
+  <script>
+    window.update = function(data) {
+      if (data.homeTeam) document.getElementById('home-team').textContent = data.homeTeam
+      if (data.awayTeam) document.getElementById('away-team').textContent = data.awayTeam
+      const hs = data.homeScore !== undefined ? data.homeScore : 0
+      const as = data.awayScore !== undefined ? data.awayScore : 0
+      document.getElementById('score').textContent = hs + ' – ' + as
+    }
+    window.play = function() { document.getElementById('scoreboard').style.display = 'flex' }
+    window.stop = function() { document.getElementById('scoreboard').style.display = 'none' }
+  </script>
+</body>
+</html>

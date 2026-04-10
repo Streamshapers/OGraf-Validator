@@ -1,0 +1,9 @@
+{
+  "id": "",
+  "name": 42,
+  "main": "",
+  "supportsRealTime": false,
+  "supportsNonRealTime": false,
+  "version": "not-semver",
+  "schema": "this should be an object"
+}

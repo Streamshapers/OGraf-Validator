@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Goal Flash</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 1920px; height: 1080px; background: transparent; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif; }
+    .flash { text-align: center; color: #fff; }
+    .goal-label { font-size: 120px; font-weight: 900; color: #FFD700; }
+    .scorer { font-size: 48px; font-weight: bold; margin-top: 16px; }
+    .team { font-size: 32px; color: #ccc; margin-top: 8px; }
+    .minute { font-size: 28px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <div class="flash" id="flash">
+    <div class="goal-label">GOAL!</div>
+    <div class="scorer" id="scorer-name"></div>
+    <div class="team" id="scoring-team"></div>
+    <div class="minute" id="goal-minute"></div>
+  </div>
+  <script>
+    window.update = function(data) {
+      if (data.scorerName) document.getElementById('scorer-name').textContent = data.scorerName
+      if (data.scoringTeam) document.getElementById('scoring-team').textContent = data.scoringTeam
+      if (data.goalMinute) document.getElementById('goal-minute').textContent = data.goalMinute
+    }
+    window.play = function() { document.getElementById('flash').style.display = 'block' }
+    window.stop = function() { document.getElementById('flash').style.display = 'none' }
+  </script>
+</body>
+</html>

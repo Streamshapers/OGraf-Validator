@@ -1,0 +1,50 @@
+{
+  "$schema": "https://ograf.ebu.io/v1/specification/json-schemas/graphics/schema.json",
+  "id": "com.example.scoreboard",
+  "version": "2.1.0",
+  "name": "Football Scoreboard",
+  "description": "Real-time football scoreboard with team names and score",
+  "main": "graphic.mjs",
+  "supportsRealTime": true,
+  "supportsNonRealTime": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "homeTeam": {
+        "type": "string",
+        "label": "Home Team",
+        "default": "Home",
+        "gddType": "single-line"
+      },
+      "awayTeam": {
+        "type": "string",
+        "label": "Away Team",
+        "default": "Away",
+        "gddType": "single-line"
+      },
+      "homeScore": {
+        "type": "integer",
+        "label": "Home Score",
+        "default": 0,
+        "gddType": "number"
+      },
+      "awayScore": {
+        "type": "integer",
+        "label": "Away Score",
+        "default": 0,
+        "gddType": "number"
+      },
+      "period": {
+        "type": "string",
+        "label": "Period",
+        "default": "1st Half",
+        "gddType": "dropdown",
+        "validValues": [
+          { "value": "1st Half", "label": "1st Half" },
+          { "value": "2nd Half", "label": "2nd Half" },
+          { "value": "Extra Time", "label": "Extra Time" }
+        ]
+      }
+    }
+  }
+}
