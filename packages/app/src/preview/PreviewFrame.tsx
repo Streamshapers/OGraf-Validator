@@ -5,7 +5,7 @@ import type {
 } from '@streamshapers/ograf-validator-core';
 import { DEFAULT_BACKGROUND, type PreviewBackground } from './preview-types.js';
 import { usePreviewGraphic } from './use-preview-graphic.js';
-import PreviewStage from './PreviewStage.js';
+import PreviewStage, { StatusBadge } from './PreviewStage.js';
 import PreviewLifecycleBar from './PreviewLifecycleBar.js';
 import PreviewBackgroundPicker from './PreviewBackgroundPicker.js';
 import PreviewActionPanel from './PreviewActionPanel.js';
@@ -13,7 +13,7 @@ import PreviewDataEditor from './PreviewDataEditor.js';
 import PreviewNonRealtimePanel from './PreviewNonRealtimePanel.js';
 import PreviewEventLog from './PreviewEventLog.js';
 
-// ─── Background persistence (localStorage, global across packages) ────────────
+// ─── Background persistence ───────────────────────────────────────────────────
 
 const BG_KEY       = 'ograf-preview-background';
 const BG_IMAGE_KEY = 'ograf-preview-background-image';
@@ -46,7 +46,7 @@ function saveBackground(bg: PreviewBackground): void {
             localStorage.setItem(BG_KEY, JSON.stringify(bg));
             localStorage.removeItem(BG_IMAGE_KEY);
         }
-    } catch { /* quota exceeded — keep in-memory only */ }
+    } catch { /* quota exceeded */ }
 }
 
 interface Props {
@@ -80,74 +80,133 @@ export default function PreviewFrame({ swReady, manifest, packagePath }: Props) 
     }
 
     return (
-        <div className="flex flex-col gap-4">
-            <PreviewLifecycleBar
-                phase={preview.state.phase}
-                renderType={preview.state.renderType}
-                supportsRealTime={supportsRealTime}
-                supportsNonRealTime={supportsNonRealTime}
-                currentStep={preview.state.currentStep}
-                stepCount={stepCount}
-                isMounted={preview.isMounted}
-                onChangeRenderType={preview.setRenderType}
-                onLoad={() => void preview.callLoad()}
-                onReload={() => void preview.reMount()}
-                onDispose={() => void preview.callDispose()}
-            />
+        <div className="flex h-full">
+            {/* ── Left panel: Player (60%) ──────────────────────────────────── */}
+            <div className="flex flex-col min-w-0 flex-[3] overflow-y-auto bg-ss-surface-dim"
+                 style={{ borderRight: '1px solid var(--ss-border-subtle)' }}>
 
-            {/* Canvas controls: render characteristics (left) + background picker (right) */}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-                <RenderCharacteristicsRow
-                    value={preview.state.renderCharacteristics}
-                    onChange={preview.setRenderCharacteristics}
+                {/* Top bar: render controls + step + status */}
+                <div className="flex-shrink-0 flex items-center gap-4 px-4 h-10 bg-ss-surface"
+                     style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                    <RenderCharacteristicsRow
+                        value={preview.state.renderCharacteristics}
+                        onChange={preview.setRenderCharacteristics}
+                    />
+                    <div className="ml-auto flex items-center gap-3">
+                        {preview.state.renderType === 'realtime' && stepCount !== undefined && stepCount !== 0 && (
+                            <span className="text-xs font-mono text-ss-on-surface-variant">
+                                STEP{' '}
+                                <span className="text-ss-on-surface">
+                                    {preview.state.currentStep === null
+                                        ? (stepCount === -1 ? '∞' : String(stepCount))
+                                        : preview.state.currentStep !== undefined
+                                            ? String(preview.state.currentStep + 1)
+                                            : '0'}
+                                </span>
+                                {' '}/{' '}
+                                {stepCount === -1 ? '∞' : stepCount}
+                            </span>
+                        )}
+                        <StatusBadge phase={preview.state.phase} error={preview.state.error} />
+                    </div>
+                </div>
+
+                {/* Stage -- aspect ratio from renderCharacteristics */}
+                <PreviewStage
+                    containerRef={preview.containerRef}
+                    background={background}
+                    width={preview.state.renderCharacteristics.width}
+                    height={preview.state.renderCharacteristics.height}
                 />
-                <PreviewBackgroundPicker value={background} onChange={setBackground} />
+
+                {/* Bottom bar: background picker right-aligned */}
+                <div className="flex-shrink-0 flex items-center justify-end gap-3 px-4 h-10 bg-ss-surface"
+                     style={{ borderTop: '1px solid var(--ss-border-subtle)' }}>
+                    <PreviewBackgroundPicker value={background} onChange={setBackground} />
+                </div>
+
             </div>
 
-            <PreviewStage
-                containerRef={preview.containerRef}
-                phase={preview.state.phase}
-                error={preview.state.error}
-                background={background}
-            />
+            {/* ── Right panel: Controls (40%, scrollable) ───────────────────── */}
+            <div className="flex flex-col min-w-0 flex-[2] overflow-y-auto bg-ss-surface-dim">
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <PreviewActionPanel
-                    isMounted={preview.isMounted}
-                    skipAnimationDefault={preview.state.skipAnimationDefault}
-                    customActions={customActions}
-                    onChangeSkipAnimationDefault={preview.setSkipAnimationDefault}
-                    onPlay={(opts) => void preview.callPlay(opts)}
-                    onStop={(opts) => void preview.callStop(opts)}
-                    onUpdate={(opts) => void preview.callUpdate(opts)}
-                    onCustom={(id, payload, opts) => void preview.callCustom(id, payload, opts)}
-                />
-                <PreviewDataEditor
-                    schema={schema}
-                    value={preview.state.currentData}
-                    onChange={preview.setCurrentData}
-                    onReset={preview.resetData}
-                />
+                {/* Lifecycle bar as section title */}
+                <div className="flex-shrink-0 flex items-center px-4 h-10 bg-ss-surface"
+                     style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                    <PreviewLifecycleBar
+                        phase={preview.state.phase}
+                        renderType={preview.state.renderType}
+                        supportsRealTime={supportsRealTime}
+                        supportsNonRealTime={supportsNonRealTime}
+                        isMounted={preview.isMounted}
+                        onChangeRenderType={preview.setRenderType}
+                        onLoad={() => void preview.callLoad()}
+                        onReload={() => void preview.reMount()}
+                        onDispose={() => void preview.callDispose()}
+                    />
+                </div>
+
+                {/* ACTIONS — switches based on render type */}
+                <div className="p-4" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                    {preview.state.renderType === 'realtime' ? (
+                        <PreviewActionPanel
+                            isMounted={preview.isMounted}
+                            stepCount={stepCount}
+                            customActions={customActions}
+                            onPlay={(opts) => void preview.callPlay(opts)}
+                            onStop={(opts) => void preview.callStop(opts)}
+                            onUpdate={(opts) => void preview.callUpdate(opts)}
+                            onCustom={(id, payload, opts) => void preview.callCustom(id, payload, opts)}
+                        />
+                    ) : (
+                        <PreviewNonRealtimePanel
+                            disabled={!preview.isMounted}
+                            manifest={manifest}
+                            onGoToTime={(t) => void preview.callGoToTime(t)}
+                            onSetSchedule={(s) => void preview.callSetSchedule(s)}
+                        />
+                    )}
+                </div>
+
+                {/* TEMPLATE DATA */}
+                <RightSection title="Template Data">
+                    <PreviewDataEditor
+                        schema={schema}
+                        value={preview.state.currentData}
+                        onChange={preview.setCurrentData}
+                        onReset={preview.resetData}
+                    />
+                </RightSection>
+
+                {/* EVENT LOG — title bar is inside PreviewEventLog */}
+                <div className="flex-shrink-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                    <PreviewEventLog log={preview.state.log} onClear={preview.clearLog} />
+                </div>
+
             </div>
-
-            {supportsNonRealTime && (
-                <PreviewNonRealtimePanel
-                    disabled={!preview.isMounted}
-                    onGoToTime={(t) => void preview.callGoToTime(t)}
-                    onSetSchedule={(s) => void preview.callSetSchedule(s)}
-                />
-            )}
-
-            <PreviewEventLog log={preview.state.log} onClear={preview.clearLog} />
-
-            <p className="text-xs text-ss-text-2">
-                Service Worker · <code className="font-mono">/__ograf_preview__/{mainFile}</code>
-            </p>
         </div>
     );
 }
 
-// ─── Manifest accessors ──────────────────────────────────────────────────────
+// ─── Right panel section wrapper ─────────────────────────────────────────────
+
+function RightSection({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <div className="flex-shrink-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+            <div className="flex items-center px-4 h-10 bg-ss-surface"
+                 style={{ borderBottom: '1px solid rgba(64, 72, 80, 0.3)' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
+                    {title}
+                </span>
+            </div>
+            <div className="p-4">
+                {children}
+            </div>
+        </div>
+    );
+}
+
+// ─── Manifest accessors ───────────────────────────────────────────────────────
 
 function readString(manifest: unknown, key: string): string | undefined {
     if (typeof manifest !== 'object' || manifest === null) return undefined;
@@ -194,13 +253,13 @@ function readCustomActions(manifest: unknown): OgrafCustomAction[] {
 
 function Notice({ icon, text }: { icon: string; text: string }) {
     return (
-        <div className="flex items-center gap-2 text-sm text-ss-text-2 py-6 justify-center">
+        <div className="flex items-center gap-2 text-sm text-ss-on-surface-variant py-6 justify-center h-full">
             <span>{icon}</span><span>{text}</span>
         </div>
     );
 }
 
-// ─── Render characteristics row ──────────────────────────────────────────────
+// ─── Render characteristics row ───────────────────────────────────────────────
 
 function RenderCharacteristicsRow({
     value,
@@ -210,7 +269,7 @@ function RenderCharacteristicsRow({
     onChange: (rc: import('./preview-types.js').RenderCharacteristics) => void;
 }) {
     const inputCls =
-        'w-16 px-1.5 py-0.5 rounded bg-ss-dark-2 border border-ss-border text-ss-text-1 font-mono text-xs ' +
+        'w-16 px-1.5 py-0.5 rounded bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs ' +
         'focus:outline-none focus:border-ss-primary';
 
     const handleWidth = (raw: string) => {
@@ -227,7 +286,7 @@ function RenderCharacteristicsRow({
     };
 
     return (
-        <div className="flex items-center gap-2 text-[10px] text-ss-text-2">
+        <div className="flex items-center gap-2 text-[10px] text-ss-on-surface-variant">
             <span className="uppercase tracking-wide font-semibold">Render</span>
             <input
                 type="number" min={1}

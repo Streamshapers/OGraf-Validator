@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { Upload } from 'lucide-react';
 import type { PreviewBackground } from './preview-types.js';
 
 // ─── Preset swatches ──────────────────────────────────────────────────────────
@@ -59,11 +60,11 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
     };
 
     const ring = 'ring-2 ring-ss-primary ring-offset-1 ring-offset-ss-dark-2';
-    const swatch = 'h-5 w-5 rounded border border-ss-border/60 cursor-pointer transition-all hover:scale-110 flex-shrink-0';
+    const swatch = 'h-5 w-5 rounded border border-ss-outline-variant/40/60 cursor-pointer transition-all hover:scale-110 flex-shrink-0';
 
     return (
         <div className="flex items-center gap-2 justify-end flex-wrap">
-            <span className="text-[10px] text-ss-text-2 uppercase tracking-wide font-semibold">
+            <span className="text-[10px] text-ss-on-surface-variant uppercase tracking-wide font-semibold">
                 Background
             </span>
 
@@ -111,7 +112,7 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
             <button
                 title={value.type === 'image' ? 'Change background image' : 'Upload background image'}
                 onClick={() => fileInputRef.current?.click()}
-                className={`${swatch} overflow-hidden bg-ss-dark-1 flex items-center justify-center ${value.type === 'image' ? ring : ''}`}
+                className={`${swatch} overflow-hidden bg-ss-surface-high flex items-center justify-center ${value.type === 'image' ? ring : ''}`}
                 style={
                     value.type === 'image'
                         ? {
@@ -122,7 +123,7 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
                         : undefined
                 }
             >
-                {value.type !== 'image' && <ImageIcon />}
+                {value.type !== 'image' && <Upload size={12} className="text-ss-on-surface-variant" />}
             </button>
             <input
                 ref={fileInputRef}
@@ -135,14 +136,3 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
     );
 }
 
-function ImageIcon() {
-    return (
-        <svg className="h-3 w-3 text-ss-text-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 10.5h.008v.008H13.5V10.5zM3.75 20.25h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12.75c0 .828.672 1.5 1.5 1.5z"
-            />
-        </svg>
-    );
-}

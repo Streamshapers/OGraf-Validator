@@ -12,31 +12,31 @@ export default function PreviewDataEditor({ schema, value, onChange, onReset }: 
     const hasSchema = !!(schema && schema.properties && Object.keys(schema.properties).length > 0);
 
     return (
-        <section className="rounded-md border border-ss-border overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-ss-dark-1 border-b border-ss-border">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ss-text-2">Data</span>
+        <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] text-ss-on-surface-variant">
+                    {hasSchema ? `${Object.keys(schema!.properties).length} fields` : 'No schema'}
+                </span>
                 <button
                     onClick={onReset}
-                    className="text-xs text-ss-text-2 hover:text-ss-text-1 transition-colors"
+                    className="text-[10px] text-ss-on-surface-variant hover:text-ss-on-surface transition-colors"
                 >
                     Reset to defaults
                 </button>
             </div>
-            <div className="p-3 space-y-3 bg-ss-dark-2/40">
-                {hasSchema ? (
-                    <GddForm
-                        properties={schema!.properties}
-                        value={value}
-                        onChange={onChange}
-                    />
-                ) : (
-                    <p className="text-xs text-ss-text-2 italic">
-                        No GDD schema defined — edit the raw JSON below.
-                    </p>
-                )}
-                <RawJsonEditor value={value} onChange={onChange} />
-            </div>
-        </section>
+            {hasSchema ? (
+                <GddForm
+                    properties={schema!.properties}
+                    value={value}
+                    onChange={onChange}
+                />
+            ) : (
+                <p className="text-xs text-ss-on-surface-variant italic">
+                    No GDD schema defined — edit the raw JSON below.
+                </p>
+            )}
+            <RawJsonEditor value={value} onChange={onChange} />
+        </div>
     );
 }
 
@@ -79,13 +79,13 @@ function GddFormField({ name, field, value, onChange }: FieldProps) {
 
     return (
         <div className="flex flex-col gap-1">
-            <label className="text-xs text-ss-text-2 font-mono flex items-baseline gap-2">
-                <span className="text-ss-text-1">{label}</span>
-                <span className="text-ss-text-2/60 text-[10px]">{fieldHint(field)}</span>
+            <label className="text-xs text-ss-on-surface-variant font-mono flex items-baseline gap-2">
+                <span className="text-ss-on-surface">{label}</span>
+                <span className="text-ss-on-surface-variant/60 text-[10px]">{fieldHint(field)}</span>
             </label>
             {component}
             {field.description && (
-                <p className="text-[10px] text-ss-text-2/60">{field.description}</p>
+                <p className="text-[10px] text-ss-on-surface-variant/60">{field.description}</p>
             )}
         </div>
     );
@@ -143,7 +143,7 @@ function determineComponent(
         case 'object':
             return <ObjectInput field={field} value={value} onChange={onChange} />;
         case 'null':
-            return <span className="text-xs text-ss-text-2 italic">null</span>;
+            return <span className="text-xs text-ss-on-surface-variant italic">null</span>;
         case 'string':
         default:
             return <TextInput value={value} onChange={onChange} />;
@@ -161,7 +161,7 @@ function fieldHint(field: GddField): string {
 // ─── Input primitives ────────────────────────────────────────────────────────
 
 const INPUT_CLS =
-    'w-full px-2 py-1 rounded text-xs bg-ss-dark-2 border border-ss-border text-ss-text-1 ' +
+    'w-full px-2 py-1 rounded text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface ' +
     'focus:outline-none focus:border-ss-primary transition-colors font-mono';
 
 function TextInput({
@@ -259,14 +259,14 @@ function BooleanInput({
     onChange: (next: unknown) => void;
 }) {
     return (
-        <label className="inline-flex items-center gap-2 text-xs text-ss-text-1">
+        <label className="inline-flex items-center gap-2 text-xs text-ss-on-surface">
             <input
                 type="checkbox"
                 checked={value === true}
                 onChange={(e) => onChange(e.target.checked)}
                 className="accent-ss-primary"
             />
-            <span className="text-ss-text-2">{value === true ? 'true' : 'false'}</span>
+            <span className="text-ss-on-surface-variant">{value === true ? 'true' : 'false'}</span>
         </label>
     );
 }
@@ -287,7 +287,7 @@ function ColorInput({
                 type="color"
                 value={hex}
                 onChange={(e) => onChange(e.target.value)}
-                className="h-7 w-10 rounded border border-ss-border bg-ss-dark-2 cursor-pointer"
+                className="h-7 w-10 rounded border border-ss-outline-variant/40 bg-ss-surface cursor-pointer"
             />
             <input
                 type="text"
@@ -352,7 +352,7 @@ function ObjectInput({
     }
 
     return (
-        <fieldset className="border border-ss-border/60 rounded p-2 space-y-2">
+        <fieldset className="border border-ss-outline-variant/40/60 rounded p-2 space-y-2">
             <GddForm
                 properties={field.properties}
                 value={current}
@@ -383,7 +383,7 @@ function ArrayInput({
         <div className="space-y-2">
             {items.map((item, idx) => (
                 <div key={idx} className="flex items-start gap-2">
-                    <div className="flex-1 border border-ss-border/60 rounded p-2">
+                    <div className="flex-1 border border-ss-outline-variant/40/60 rounded p-2">
                         <GddFormField
                             name={`[${idx}]`}
                             field={itemSchema}
@@ -449,7 +449,7 @@ function RawJsonEditor({
 
     return (
         <details className="text-xs">
-            <summary className="cursor-pointer text-ss-text-2 hover:text-ss-text-1 select-none">
+            <summary className="cursor-pointer text-ss-on-surface-variant hover:text-ss-on-surface select-none">
                 Raw JSON
             </summary>
             <div className="mt-2 space-y-1">

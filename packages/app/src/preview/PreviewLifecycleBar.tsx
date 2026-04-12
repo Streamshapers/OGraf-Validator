@@ -5,8 +5,6 @@ interface Props {
     renderType: 'realtime' | 'non-realtime';
     supportsRealTime: boolean;
     supportsNonRealTime: boolean;
-    currentStep: number | undefined;
-    stepCount: number | undefined;
     isMounted: boolean;
     onChangeRenderType: (type: 'realtime' | 'non-realtime') => void;
     onLoad: () => void;
@@ -19,8 +17,6 @@ export default function PreviewLifecycleBar({
     renderType,
     supportsRealTime,
     supportsNonRealTime,
-    currentStep,
-    stepCount,
     isMounted,
     onChangeRenderType,
     onLoad,
@@ -30,11 +26,10 @@ export default function PreviewLifecycleBar({
     const busy = phase === 'importing' || phase === 'loading';
 
     return (
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 w-full overflow-hidden">
             {/* Render type selector */}
             <div className="flex items-center gap-2 text-xs">
-                <span className="text-ss-text-2 uppercase tracking-wide font-semibold">Type</span>
-                <div className="flex rounded-md border border-ss-border overflow-hidden">
+                <div className="flex rounded-md border border-ss-outline-variant/40 overflow-hidden">
                     <RenderTypeButton
                         label="realtime"
                         active={renderType === 'realtime'}
@@ -50,8 +45,6 @@ export default function PreviewLifecycleBar({
                 </div>
             </div>
 
-            {/* Step counter */}
-            {renderStepCounter(currentStep, stepCount)}
 
             {/* Lifecycle buttons */}
             <div className="flex gap-2 ml-auto">
@@ -63,22 +56,6 @@ export default function PreviewLifecycleBar({
     );
 }
 
-function renderStepCounter(
-    currentStep: number | undefined,
-    stepCount: number | undefined,
-): React.ReactNode {
-    if (stepCount === undefined || stepCount === 0) return null;
-    const display = stepCount === -1 ? 'dynamic' : String(stepCount);
-
-    return (
-        <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-ss-text-2 uppercase tracking-wide font-semibold">Step</span>
-            <span className="font-mono text-ss-text-1">
-                {currentStep ?? 0} <span className="text-ss-text-2">/ {display}</span>
-            </span>
-        </div>
-    );
-}
 
 function RenderTypeButton({
     label,
@@ -93,10 +70,10 @@ function RenderTypeButton({
 }) {
     const base = 'px-2.5 py-1 text-xs font-medium transition-colors';
     const stateCls = active
-        ? 'bg-ss-primary text-ss-text-1'
+        ? 'bg-ss-surface-highest text-ss-on-surface font-semibold'
         : disabled
-            ? 'bg-ss-dark-2 text-ss-text-2/40 cursor-not-allowed'
-            : 'bg-ss-dark-1 text-ss-text-2 hover:text-ss-text-1';
+            ? 'bg-ss-surface text-ss-on-surface-variant/40 cursor-not-allowed'
+            : 'bg-ss-surface-high text-ss-on-surface-variant hover:text-ss-on-surface';
 
     return (
         <button disabled={disabled} onClick={onClick} className={`${base} ${stateCls}`}>
@@ -119,7 +96,7 @@ function LifecycleButton({
     const variantCls =
         variant === 'danger'
             ? 'bg-ss-error/10 hover:bg-ss-error/20 text-ss-error'
-            : 'bg-ss-dark-1 hover:bg-ss-grey text-ss-text-1';
+            : 'bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface';
 
     return (
         <button

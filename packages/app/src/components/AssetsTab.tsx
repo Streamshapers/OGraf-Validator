@@ -12,7 +12,7 @@ export default function AssetsTab({ assets, manifest }: Props) {
     if (assets.length === 0) {
         return (
             <div className="rounded-md border border-ss-border px-4 py-6 text-center">
-                <p className="text-sm text-ss-text-2">No files found in this package directory.</p>
+                <p className="text-sm text-ss-on-surface-variant">No files found in this package directory.</p>
             </div>
         );
     }
@@ -27,8 +27,8 @@ export default function AssetsTab({ assets, manifest }: Props) {
 
     return (
         <div className="rounded-md border border-ss-border overflow-hidden">
-            <div className="px-3 py-2 bg-ss-dark-1 border-b border-ss-border flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ss-text-2">
+            <div className="px-3 py-2 bg-ss-surface-high border-b border-ss-border flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ss-on-surface-variant">
                     {assets.length} {assets.length === 1 ? 'file' : 'files'}
                 </span>
             </div>
@@ -46,9 +46,9 @@ function FileRow({ path, isMain }: { path: string; isMain: boolean }) {
     const icon = fileIcon(ext);
 
     return (
-        <li className={`flex items-center gap-3 px-3 py-2 text-sm hover:bg-ss-dark-1/40 transition-colors ${isMain ? 'bg-ss-primary/10' : ''}`}>
+        <li className={`flex items-center gap-3 px-3 py-2 text-sm hover:bg-ss-surface-high/40 transition-colors ${isMain ? 'bg-ss-primary/10' : ''}`}>
             <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
-            <span className={`flex-1 font-mono truncate ${isMain ? 'text-ss-primary-light' : 'text-ss-text-1'}`} title={path}>
+            <span className={`flex-1 font-mono truncate ${isMain ? 'text-ss-primary-light' : 'text-ss-on-surface'}`} title={path}>
                 {path}
             </span>
             {isMain && (

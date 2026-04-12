@@ -199,6 +199,22 @@ function validateManifestFields(manifest: unknown): ValidationIssue[] {
         ));
     }
 
+    // Vendor-specific fields: unknown keys must use "v_" prefix
+    const KNOWN_FIELDS = new Set([
+        '$schema', 'id', 'version', 'name', 'description', 'author',
+        'main', 'customActions', 'supportsRealTime', 'supportsNonRealTime',
+        'schema', 'stepCount', 'renderRequirements',
+    ]);
+    for (const key of Object.keys(m)) {
+        if (!KNOWN_FIELDS.has(key) && !key.startsWith('v_')) {
+            issues.push(warn(
+                'UNKNOWN_FIELD',
+                `Unknown field "${key}". Vendor-specific fields must use the "v_" prefix.`,
+                key,
+            ));
+        }
+    }
+
     return issues;
 }
 
@@ -214,6 +230,15 @@ function validateAuthor(author: unknown): ValidationIssue[] {
     }
 
     const a = author as Record<string, unknown>;
+
+    // Spec: "When provided, the object MUST contain a name field"
+    if (!('name' in a) || typeof a['name'] !== 'string' || a['name'].trim() === '') {
+        issues.push(err(
+            'MISSING_AUTHOR_NAME',
+            'The "author" object must contain a "name" field.',
+            'author.name',
+        ));
+    }
 
     for (const field of ['name', 'email', 'url'] as const) {
         if (field in a && a[field] !== null && a[field] !== undefined) {
@@ -327,8 +352,87 @@ function validateRenderRequirements(reqs: unknown): ValidationIssue[] {
                 `Render requirement at index ${idx} must be an object.`,
                 path,
             ));
+
+            return;
+        }
+
+        const r = req as Record<string, unknown>;
+
+        // resolution – optional object with width/height NumberConstraints
+        if ('resolution' in r && r['resolution'] !== null && r['resolution'] !== undefined) {
+            if (typeof r['resolution'] !== 'object' || r['resolution'] === null || Array.isArray(r['resolution'])) {
+                issues.push(err('INVALID_RENDER_REQUIREMENT', `"resolution" must be an object.`, `${path}.resolution`));
+            } else {
+                const res = r['resolution'] as Record<string, unknown>;
+                if ('width' in res && res['width'] !== null && res['width'] !== undefined) {
+                    issues.push(...validateNumberConstraint(res['width'], `${path}.resolution.width`));
+                }
+                if ('height' in res && res['height'] !== null && res['height'] !== undefined) {
+                    issues.push(...validateNumberConstraint(res['height'], `${path}.resolution.height`));
+                }
+            }
+        }
+
+        // frameRate – optional NumberConstraint
+        if ('frameRate' in r && r['frameRate'] !== null && r['frameRate'] !== undefined) {
+            issues.push(...validateNumberConstraint(r['frameRate'], `${path}.frameRate`));
+        }
+
+        // accessToPublicInternet – optional BooleanConstraint
+        if ('accessToPublicInternet' in r && r['accessToPublicInternet'] !== null && r['accessToPublicInternet'] !== undefined) {
+            issues.push(...validateBooleanConstraint(r['accessToPublicInternet'], `${path}.accessToPublicInternet`));
         }
     });
+
+    return issues;
+}
+
+function validateNumberConstraint(value: unknown, path: string): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        issues.push(err('INVALID_RENDER_REQUIREMENT', `"${path}" must be a NumberConstraint object.`, path));
+
+        return issues;
+    }
+    const c = value as Record<string, unknown>;
+    const ALLOWED = new Set(['max', 'min', 'exact', 'ideal']);
+    for (const key of Object.keys(c)) {
+        if (!ALLOWED.has(key)) {
+            issues.push(warn('UNKNOWN_FIELD', `Unknown NumberConstraint field "${key}".`, `${path}.${key}`));
+        }
+    }
+    for (const field of ['max', 'min', 'exact', 'ideal'] as const) {
+        if (field in c && c[field] !== null && c[field] !== undefined) {
+            if (typeof c[field] !== 'number') {
+                issues.push(err('INVALID_RENDER_REQUIREMENT', `"${path}.${field}" must be a number.`, `${path}.${field}`));
+            }
+        }
+    }
+
+    return issues;
+}
+
+function validateBooleanConstraint(value: unknown, path: string): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        issues.push(err('INVALID_RENDER_REQUIREMENT', `"${path}" must be a BooleanConstraint object.`, path));
+
+        return issues;
+    }
+    const c = value as Record<string, unknown>;
+    const ALLOWED = new Set(['exact', 'ideal']);
+    for (const key of Object.keys(c)) {
+        if (!ALLOWED.has(key)) {
+            issues.push(warn('UNKNOWN_FIELD', `Unknown BooleanConstraint field "${key}".`, `${path}.${key}`));
+        }
+    }
+    for (const field of ['exact', 'ideal'] as const) {
+        if (field in c && c[field] !== null && c[field] !== undefined) {
+            if (typeof c[field] !== 'boolean') {
+                issues.push(err('INVALID_RENDER_REQUIREMENT', `"${path}.${field}" must be a boolean.`, `${path}.${field}`));
+            }
+        }
+    }
 
     return issues;
 }
@@ -392,13 +496,103 @@ function validateGddField(field: unknown, path: string, fieldName: string): Vali
 
 // ─── Asset validation ─────────────────────────────────────────────────────────
 
+const VALID_MAIN_EXTENSIONS = ['.js', '.mjs'];
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function collectFilePathDefaults(
+    manifest: OgrafManifest,
+): Array<{ jsonPath: string; filePath: string }> {
+    const results: Array<{ jsonPath: string; filePath: string }> = [];
+    if (!manifest.schema?.properties) return results;
+
+    function walk(props: Record<string, GddField>, basePath: string): void {
+        for (const [name, field] of Object.entries(props)) {
+            const path = `${basePath}.${name}`;
+            if (
+                field.gddType?.includes('file-path') &&
+                typeof field.default === 'string' &&
+                field.default.length > 0
+            ) {
+                results.push({ jsonPath: `${path}.default`, filePath: field.default });
+            }
+            if (field.properties) walk(field.properties, path);
+        }
+    }
+
+    walk(manifest.schema.properties, 'schema.properties');
+    return results;
+}
+
 async function validateAssets(manifest: OgrafManifest, fs: VirtualFS): Promise<ValidationIssue[]> {
     const issues: ValidationIssue[] = [];
 
+    // 1. Main entry point existence (existing check)
     if (manifest.main) {
         const exists = await fs.fileExists(manifest.main);
         if (!exists) {
-            issues.push(err('MISSING_ASSET', `Main entry point not found: "${manifest.main}"`, 'main'));
+            issues.push(err('MISSING_ASSET', `Main entry point not found: "${manifest.main}".`, 'main'));
+        } else {
+            // 2. Unusual main extension
+            const ext = manifest.main.includes('.') ? '.' + manifest.main.split('.').pop()!.toLowerCase() : '';
+            if (ext && !VALID_MAIN_EXTENSIONS.includes(ext)) {
+                issues.push(warn(
+                    'UNUSUAL_MAIN_EXTENSION',
+                    `Main entry point "${manifest.main}" has an unusual extension. The spec requires a JavaScript file (${VALID_MAIN_EXTENSIONS.join(', ')}).`,
+                    'main',
+                ));
+            }
+        }
+    }
+
+    // 3. List all files in the package
+    const files = await fs.listFiles();
+
+    // 4. Empty package check (only manifest, no other files)
+    const nonManifestFiles = files.filter((f) => !f.endsWith('.ograf.json'));
+    if (nonManifestFiles.length === 0) {
+        issues.push(warn('EMPTY_PACKAGE', 'Package directory contains no files besides the manifest.'));
+    }
+
+    // 5. File count info
+    issues.push(info('PACKAGE_FILE_COUNT', `Package contains ${files.length} file(s).`));
+
+    // 6. File size checks (only when getFileSize is available)
+    if (fs.getFileSize) {
+        let totalSize = 0;
+        for (const file of files) {
+            try {
+                const size = await fs.getFileSize(file);
+                totalSize += size;
+                if (size > LARGE_FILE_THRESHOLD) {
+                    issues.push(warn(
+                        'LARGE_FILE',
+                        `File "${file}" is ${formatBytes(size)}. Consider optimizing large assets.`,
+                        file,
+                    ));
+                }
+            } catch {
+                // Skip files we can't measure
+            }
+        }
+        issues.push(info('PACKAGE_TOTAL_SIZE', `Total package size: ${formatBytes(totalSize)}.`));
+    }
+
+    // 7. GDD file-path default values
+    const filePathDefaults = collectFilePathDefaults(manifest);
+    for (const { jsonPath, filePath } of filePathDefaults) {
+        const exists = await fs.fileExists(filePath);
+        if (!exists) {
+            issues.push(warn(
+                'MISSING_DEFAULT_ASSET',
+                `GDD field default value "${filePath}" references a file that doesn't exist in the package.`,
+                jsonPath,
+            ));
         }
     }
 
@@ -411,17 +605,29 @@ export function validateManifest(manifest: unknown): ValidationResult {
     return buildResult(validateManifestFields(manifest));
 }
 
-export async function validatePackage(manifest: unknown, fs: VirtualFS): Promise<ValidationResult> {
-    const manifestResult = validateManifest(manifest);
-    const assetIssues: ValidationIssue[] = [];
+export async function validatePackage(
+    manifest: unknown,
+    fs: VirtualFS,
+    manifestFilename?: string,
+): Promise<ValidationResult> {
+    const issues: ValidationIssue[] = [];
 
-    if (
-        manifestResult.valid &&
-        typeof manifest === 'object' &&
-        manifest !== null
-    ) {
-        assetIssues.push(...(await validateAssets(manifest as OgrafManifest, fs)));
+    // Manifest filename check
+    if (manifestFilename && !manifestFilename.endsWith('.ograf.json')) {
+        issues.push(err(
+            'INVALID_MANIFEST_FILENAME',
+            `Manifest filename "${manifestFilename}" must end with ".ograf.json".`,
+            manifestFilename,
+        ));
     }
 
-    return buildResult([...manifestResult.issues, ...assetIssues]);
+    const manifestResult = validateManifest(manifest);
+    issues.push(...manifestResult.issues);
+
+    // Run asset checks whenever we have a valid object (even if manifest has errors)
+    if (typeof manifest === 'object' && manifest !== null) {
+        issues.push(...(await validateAssets(manifest as OgrafManifest, fs)));
+    }
+
+    return buildResult(issues);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { validateManifest, validatePackage } from '../validate.js';
 import type { VirtualFS, ValidationResult } from '../types.js';
@@ -18,6 +18,19 @@ function loadFixture(name: string): unknown {
     throw new Error(`No *.ograf.json found in fixture "${name}"`);
 }
 
+function collectFilesRecursive(dir: string, prefix = ''): string[] {
+    const results: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+            results.push(...collectFilesRecursive(join(dir, entry.name), rel));
+        } else {
+            results.push(rel);
+        }
+    }
+    return results;
+}
+
 function nodeFs(baseDir: string): VirtualFS {
     return {
         async readFile(path: string): Promise<string> {
@@ -27,7 +40,32 @@ function nodeFs(baseDir: string): VirtualFS {
             return existsSync(join(baseDir, path));
         },
         async listFiles(): Promise<string[]> {
-            return [];
+            return collectFilesRecursive(baseDir);
+        },
+        async getFileSize(path: string): Promise<number> {
+            return statSync(join(baseDir, path)).size;
+        },
+    };
+}
+
+/** Minimal mock FS for isolated tests */
+function mockFs(files: Record<string, string | number> = {}): VirtualFS {
+    return {
+        async readFile(path: string): Promise<string> {
+            const v = files[path];
+            if (v === undefined) throw new Error(`File not found: ${path}`);
+            return typeof v === 'string' ? v : '';
+        },
+        async fileExists(path: string): Promise<boolean> {
+            return path in files;
+        },
+        async listFiles(): Promise<string[]> {
+            return Object.keys(files);
+        },
+        async getFileSize(path: string): Promise<number> {
+            const v = files[path];
+            if (v === undefined) throw new Error(`File not found: ${path}`);
+            return typeof v === 'number' ? v : (typeof v === 'string' ? v.length : 0);
         },
     };
 }
@@ -197,6 +235,12 @@ describe('validateManifest – optional fields', () => {
         expectInvalid(result);
     });
 
+    it('errors when author is provided without a name', () => {
+        const result = validateManifest(validManifest({ author: { email: 'a@example.com' } }));
+        expect(hasCode(result, 'MISSING_AUTHOR_NAME')).toBe(true);
+        expectInvalid(result);
+    });
+
     it('errors when author is not an object', () => {
         const result = validateManifest(validManifest({ author: 'Alice' }));
         expect(hasCode(result, 'INVALID_AUTHOR')).toBe(true);
@@ -262,6 +306,55 @@ describe('validateManifest – optional fields', () => {
             renderRequirements: [{ resolution: { width: { exact: 1920 }, height: { exact: 1080 } } }],
         })));
     });
+
+    it('validates NumberConstraint fields in renderRequirements', () => {
+        const result = validateManifest(validManifest({
+            renderRequirements: [{ resolution: { width: { min: 'abc' } } }],
+        }));
+        expect(hasCode(result, 'INVALID_RENDER_REQUIREMENT')).toBe(true);
+    });
+
+    it('validates BooleanConstraint for accessToPublicInternet', () => {
+        // valid
+        expectValid(validateManifest(validManifest({
+            renderRequirements: [{ accessToPublicInternet: { ideal: true } }],
+        })));
+        // invalid
+        const result = validateManifest(validManifest({
+            renderRequirements: [{ accessToPublicInternet: { ideal: 42 } }],
+        }));
+        expect(hasCode(result, 'INVALID_RENDER_REQUIREMENT')).toBe(true);
+    });
+
+    it('validates frameRate as NumberConstraint', () => {
+        expectValid(validateManifest(validManifest({
+            renderRequirements: [{ frameRate: { exact: 25 } }],
+        })));
+        const result = validateManifest(validManifest({
+            renderRequirements: [{ frameRate: { exact: 'fast' } }],
+        }));
+        expect(hasCode(result, 'INVALID_RENDER_REQUIREMENT')).toBe(true);
+    });
+});
+
+// ─── Vendor-specific fields ─────────────────────────────────────────────────
+
+describe('validateManifest – vendor-specific fields', () => {
+    it('warns UNKNOWN_FIELD for fields without v_ prefix', () => {
+        const result = validateManifest(validManifest({ customProp: 'value' }));
+        expect(hasCode(result, 'UNKNOWN_FIELD')).toBe(true);
+    });
+
+    it('accepts vendor-specific fields with v_ prefix', () => {
+        const result = validateManifest(validManifest({ v_editor: { type: 'custom' } }));
+        expect(hasCode(result, 'UNKNOWN_FIELD')).toBe(false);
+        expectValid(result);
+    });
+
+    it('does not warn for known fields', () => {
+        const result = validateManifest(validManifest({ version: '1.0.0', description: 'test' }));
+        expect(hasCode(result, 'UNKNOWN_FIELD')).toBe(false);
+    });
 });
 
 // ─── GDD schema validation ────────────────────────────────────────────────────
@@ -312,6 +405,91 @@ describe('validatePackage – asset checks', () => {
         const manifest = validManifest({ main: 'does-not-exist.mjs' });
         const result = await validatePackage(manifest, nodeFs(join(FIXTURES_DIR, 'valid-basic')));
         expect(hasCode(result, 'MISSING_ASSET')).toBe(true);
+    });
+
+    it('reports UNUSUAL_MAIN_EXTENSION for .py files', async () => {
+        const fs = mockFs({ 'graphic.py': 'print("hello")', 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.py' }), fs);
+        expect(hasCode(result, 'UNUSUAL_MAIN_EXTENSION')).toBe(true);
+    });
+
+    it('does not warn UNUSUAL_MAIN_EXTENSION for .mjs files', async () => {
+        const fs = mockFs({ 'graphic.mjs': 'export default class{}', 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.mjs' }), fs);
+        expect(hasCode(result, 'UNUSUAL_MAIN_EXTENSION')).toBe(false);
+    });
+
+    it('reports EMPTY_PACKAGE when only manifest present', async () => {
+        const fs = mockFs({ 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.mjs' }), fs);
+        expect(hasCode(result, 'EMPTY_PACKAGE')).toBe(true);
+    });
+
+    it('reports PACKAGE_FILE_COUNT info', async () => {
+        const manifest = loadFixture('valid-basic');
+        const result = await validatePackage(manifest, nodeFs(join(FIXTURES_DIR, 'valid-basic')));
+        expect(hasCode(result, 'PACKAGE_FILE_COUNT')).toBe(true);
+    });
+
+    it('reports PACKAGE_TOTAL_SIZE info when getFileSize available', async () => {
+        const manifest = loadFixture('valid-basic');
+        const result = await validatePackage(manifest, nodeFs(join(FIXTURES_DIR, 'valid-basic')));
+        expect(hasCode(result, 'PACKAGE_TOTAL_SIZE')).toBe(true);
+    });
+
+    it('reports LARGE_FILE for files over 10MB', async () => {
+        const largeSize = 11 * 1024 * 1024;
+        const fs = mockFs({ 'graphic.mjs': 'export default class{}', 'huge.png': largeSize, 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.mjs' }), fs);
+        expect(hasCode(result, 'LARGE_FILE')).toBe(true);
+    });
+
+    it('reports MISSING_DEFAULT_ASSET for file-path GDD defaults', async () => {
+        const manifest = validManifest({
+            main: 'graphic.mjs',
+            schema: {
+                type: 'object',
+                properties: {
+                    bg: { type: 'string', gddType: 'file-path', default: 'missing.png' },
+                },
+            },
+        });
+        const fs = mockFs({ 'graphic.mjs': 'export default class{}', 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(manifest, fs);
+        expect(hasCode(result, 'MISSING_DEFAULT_ASSET')).toBe(true);
+    });
+
+    it('reports UNUSUAL_MAIN_EXTENSION for .html files (spec requires JS)', async () => {
+        const fs = mockFs({ 'graphic.html': '<html></html>', 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.html' }), fs);
+        expect(hasCode(result, 'UNUSUAL_MAIN_EXTENSION')).toBe(true);
+    });
+
+    it('reports INVALID_MANIFEST_FILENAME when filename does not end with .ograf.json', async () => {
+        const fs = mockFs({ 'graphic.mjs': 'export default class{}', 'manifest.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.mjs' }), fs, 'manifest.json');
+        expect(hasCode(result, 'INVALID_MANIFEST_FILENAME')).toBe(true);
+    });
+
+    it('does not report INVALID_MANIFEST_FILENAME for valid .ograf.json filename', async () => {
+        const fs = mockFs({ 'graphic.mjs': 'export default class{}', 'my-graphic.ograf.json': '{}' });
+        const result = await validatePackage(validManifest({ main: 'graphic.mjs' }), fs, 'my-graphic.ograf.json');
+        expect(hasCode(result, 'INVALID_MANIFEST_FILENAME')).toBe(false);
+    });
+
+    it('does not warn MISSING_DEFAULT_ASSET when file exists', async () => {
+        const manifest = validManifest({
+            main: 'graphic.mjs',
+            schema: {
+                type: 'object',
+                properties: {
+                    bg: { type: 'string', gddType: 'file-path', default: 'bg.png' },
+                },
+            },
+        });
+        const fs = mockFs({ 'graphic.mjs': 'export default class{}', 'bg.png': '', 'manifest.ograf.json': '{}' });
+        const result = await validatePackage(manifest, fs);
+        expect(hasCode(result, 'MISSING_DEFAULT_ASSET')).toBe(false);
     });
 });
 

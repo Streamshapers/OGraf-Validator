@@ -1,27 +1,36 @@
 import { useState, useEffect } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Info, Loader2, FolderOpen, Cpu, History, FileCode2 } from 'lucide-react';
+
+declare const __APP_VERSION__: string;
+declare const __CORE_VERSION__: string;
 import type { ValidationResult } from '@streamshapers/ograf-validator-core';
 import type { PackageEntry } from '../scanner/scan-packages.js';
 import IssueList from './IssueList.js';
-import ManifestDiffPanel from './ManifestDiffPanel.js';
+
 import ManifestTab from './ManifestTab.js';
 import GddTab from './GddTab.js';
 import AssetsTab from './AssetsTab.js';
+import InspectTab from './InspectTab.js';
 import PreviewFrame from '../preview/PreviewFrame.js';
+import PackageOverview from './PackageOverview.js';
+import RuntimeTestCard from './RuntimeTestCard.js';
+import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
 
 export interface PackageCache {
     validationResult: ValidationResult;
     manifest: unknown;
     previousManifest?: unknown;
     assets: string[];
+    runtimeTest?: RuntimeTestResult;
+    runtimeTestRunning?: boolean;
+    runtimeTestSteps?: RuntimeTestStep[];
 }
 
-type Tab = 'validation' | 'manifest' | 'gdd' | 'assets' | 'preview';
+type Tab = 'validation' | 'inspect' | 'preview';
 
 const TABS: { id: Tab; label: string }[] = [
     { id: 'validation', label: 'Validation' },
-    { id: 'manifest', label: 'Manifest' },
-    { id: 'gdd', label: 'GDD' },
-    { id: 'assets', label: 'Assets' },
+    { id: 'inspect', label: 'Inspect' },
     { id: 'preview', label: 'Preview' },
 ];
 
@@ -31,9 +40,19 @@ interface Props {
     isValidating: boolean;
     validationError: string | null;
     swReady: boolean;
+    onOpenDirectory: () => void;
+    onReopenLastDirectory: () => void;
+    onRerunRuntimeTest?: () => void;
+
+    // Package overview props
+    rootName: string | null;
+    packages: PackageEntry[];
+    packageCache: Record<string, PackageCache>;
+    isScanning: boolean;
+    onSelectPackage: (entry: PackageEntry) => void;
 }
 
-export default function ContentArea({ selectedPackage, cache, isValidating, validationError, swReady }: Props) {
+export default function ContentArea({ selectedPackage, cache, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>('validation');
 
     // Reset to validation tab whenever a different package is selected
@@ -41,22 +60,41 @@ export default function ContentArea({ selectedPackage, cache, isValidating, vali
         setActiveTab('validation');
     }, [selectedPackage?.path]);
 
-    if (!selectedPackage) return <WelcomeScreen />;
+    if (!selectedPackage && rootName) {
+        return (
+            <PackageOverview
+                rootName={rootName}
+                packages={packages}
+                packageCache={packageCache}
+                isScanning={isScanning}
+                onSelectPackage={onSelectPackage}
+            />
+        );
+    }
+
+    if (!selectedPackage) return <WelcomeScreen onOpenDirectory={onOpenDirectory} onReopenLastDirectory={onReopenLastDirectory} />;
+
+    const version = readManifestVersion(cache?.manifest);
+    const stability = readManifestStability(cache?.manifest);
 
     return (
-        <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
             {/* Package header */}
-            <div className="flex-shrink-0 px-6 pt-5 pb-0">
-                <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-lg font-semibold text-ss-text-1 font-mono">
-                        {selectedPackage.displayName}
+            <div className="flex-shrink-0 px-6 pt-4 pb-0 bg-ss-surface-dim">
+                <div className="flex items-center gap-2.5 mb-3">
+                    <h2 className="text-sm font-semibold text-ss-on-surface font-mono">
+                        {selectedPackage.displayName}{version ? `-v${version}` : ''}
                     </h2>
+                    {stability && <StabilityBadge label={stability} />}
                     {cache && <ValidityBadge valid={cache.validationResult.valid} />}
-                    <span className="text-xs text-ss-text-2 font-mono">{selectedPackage.manifestFilename}</span>
+                    <span className="text-[10px] text-ss-on-surface-variant font-mono ml-1">
+                        {selectedPackage.manifestFilename}
+                    </span>
+                    <PackageSizeBadge result={cache?.validationResult} />
                 </div>
 
                 {/* Tab bar */}
-                <div className="flex gap-1 border-b border-ss-border">
+                <div className="flex gap-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                     {TABS.map((tab) => (
                         <TabButton
                             key={tab.id}
@@ -70,55 +108,91 @@ export default function ContentArea({ selectedPackage, cache, isValidating, vali
                 </div>
             </div>
 
-            {/* Tab content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-                {isValidating && (
-                    <div className="flex items-center gap-3 text-sm text-ss-text-2 py-4">
-                        <Spinner />
-                        Validating package…
-                    </div>
-                )}
+            {/* Tab content -- inspect/preview get full-height containers, validation scrolls normally */}
+            {activeTab === 'inspect' ? (
+                <div className="flex-1 overflow-hidden relative">
+                    {isValidating && cache && <RevalidatingOverlay />}
+                    {!cache && isValidating && <InlineSpinner />}
+                    {cache && (
+                        <InspectTab manifest={cache.manifest} previousManifest={cache.previousManifest} assets={cache.assets} dirHandle={selectedPackage.dirHandle} />
+                    )}
+                </div>
+            ) : activeTab === 'preview' ? (
+                <div className="flex-1 overflow-hidden relative">
+                    {isValidating && cache && <RevalidatingOverlay />}
+                    {!cache && isValidating && <InlineSpinner />}
+                    {cache && (
+                        <PreviewFrame
+                            swReady={swReady}
+                            dirHandle={selectedPackage.dirHandle}
+                            manifest={cache.manifest}
+                            packagePath={selectedPackage.path}
+                        />
+                    )}
+                </div>
+            ) : (
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                    {!cache && isValidating && <InlineSpinner />}
 
-                {validationError && !isValidating && (
-                    <div className="rounded-md border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-300">
-                        <strong className="font-semibold">Error: </strong>
-                        {validationError}
-                    </div>
-                )}
+                    {validationError && !isValidating && (
+                        <div className="rounded border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+                            <strong className="font-semibold">Error: </strong>
+                            {validationError}
+                        </div>
+                    )}
 
-                {cache && !isValidating && (
-                    <>
-                        {activeTab === 'validation' && (
-                            <div className="flex flex-col gap-4">
-                                <div className="flex items-center justify-between gap-4 flex-wrap">
-                                    <SummaryBar result={cache.validationResult} />
+                    {cache && activeTab === 'validation' && (
+                        <div className={`flex flex-col gap-4 transition-opacity ${isValidating ? 'opacity-50' : 'opacity-100'}`}>
+                            {/* Summary row */}
+                            <div className="flex items-center justify-between gap-4 flex-wrap">
+                                <SummaryBar result={cache.validationResult} />
+                                <div className="flex items-center gap-2">
+                                    {isValidating && <Spinner />}
                                     <ExportButtons
                                         result={cache.validationResult}
                                         packageName={selectedPackage.displayName}
                                     />
                                 </div>
-                                <ManifestDiffPanel
-                                    previous={cache.previousManifest}
-                                    current={cache.manifest}
-                                />
-                                <IssueList result={cache.validationResult} />
                             </div>
-                        )}
-                        {activeTab === 'manifest' && <ManifestTab manifest={cache.manifest} />}
-                        {activeTab === 'gdd' && <GddTab manifest={cache.manifest} />}
-                        {activeTab === 'assets' && <AssetsTab assets={cache.assets} manifest={cache.manifest} />}
-                        {activeTab === 'preview' && (
-                            <PreviewFrame
-                                swReady={swReady}
-                                dirHandle={selectedPackage.dirHandle}
-                                manifest={cache.manifest}
-                                packagePath={selectedPackage.path}
+                            <IssueList result={cache.validationResult} />
+                            {/* Runtime test results */}
+                            <RuntimeTestCard
+                                result={cache.runtimeTest}
+                                running={cache.runtimeTestRunning}
+                                liveSteps={cache.runtimeTestSteps}
+                                onRerun={onRerunRuntimeTest}
                             />
-                        )}
-                    </>
-                )}
-            </div>
+                            {/* Bottom stats */}
+                            <ValidationStats result={cache.validationResult} />
+                        </div>
+                    )}
+                </div>
+            )}
         </main>
+    );
+}
+
+// ─── Revalidating indicators ─────────────────────────────────────────────────
+
+/** Subtle pulsing bar at the top — shown when re-validating over existing content. */
+function RevalidatingOverlay() {
+    return (
+        <div className="absolute top-0 left-0 right-0 h-0.5 z-10 overflow-hidden">
+            <div
+                className="h-full animate-pulse"
+                style={{ backgroundColor: '#4ba1e2', opacity: 0.7 }}
+            />
+        </div>
+    );
+}
+
+/** Full spinner — shown only on first load when there's no cache yet. */
+function InlineSpinner() {
+    return (
+        <div className="flex items-center gap-3 text-sm text-ss-on-surface-variant py-4">
+            <Spinner />
+            Validating package…
+        </div>
     );
 }
 
@@ -144,14 +218,14 @@ function TabButton({
             className={`
                 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5
                 ${active
-                    ? 'border-ss-primary text-ss-text-1'
-                    : 'border-transparent text-ss-text-2 hover:text-ss-text-1 hover:border-ss-border'}
+                    ? 'border-ss-primary-container text-ss-on-surface'
+                    : 'border-transparent text-ss-on-surface-variant hover:text-ss-on-surface'}
                 ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
             `}
         >
             {label}
             {badge && (
-                <span className="px-1 py-0.5 rounded text-xs font-mono leading-none bg-red-950 text-red-400 border border-red-900">
+                <span className="px-1.5 py-px rounded-full text-[9px] font-semibold font-mono leading-none bg-red-950 text-red-400 border border-red-900">
                     {badge}
                 </span>
             )}
@@ -161,18 +235,42 @@ function TabButton({
 
 function issueBadge(result: ValidationResult): string | undefined {
     if (result.errors.length > 0) return String(result.errors.length);
-
     return undefined;
+}
+
+function readManifestVersion(manifest: unknown): string | undefined {
+    if (typeof manifest !== 'object' || manifest === null) return undefined;
+    const v = (manifest as Record<string, unknown>)['version'];
+    return typeof v === 'string' ? v : undefined;
+}
+
+function readManifestStability(manifest: unknown): string | undefined {
+    if (typeof manifest !== 'object' || manifest === null) return undefined;
+    const s = (manifest as Record<string, unknown>)['stability'];
+    if (typeof s === 'string') return s.toUpperCase();
+    return undefined;
+}
+
+function StabilityBadge({ label }: { label: string }) {
+    const isStable = label === 'STABLE';
+    const cls = isStable
+        ? 'bg-ss-success/15 text-ss-success border-ss-success/30'
+        : 'bg-ss-warning/15 text-ss-warning border-ss-warning/30';
+    return (
+        <span className={`inline-flex items-center px-2 py-px rounded-full text-[10px] font-semibold border tracking-wide ${cls}`}>
+            {label}
+        </span>
+    );
 }
 
 function ValidityBadge({ valid }: { valid: boolean }) {
     return valid ? (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-ss-success/20 text-ss-success border border-ss-success/40">
+        <span className="inline-flex items-center gap-1 px-2 py-px rounded-full text-[10px] font-semibold bg-ss-success/15 text-ss-success border border-ss-success/30">
             <span className="h-1.5 w-1.5 rounded-full bg-ss-success" />
             Valid
         </span>
     ) : (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-ss-error/20 text-ss-error border border-ss-error/40">
+        <span className="inline-flex items-center gap-1 px-2 py-px rounded-full text-[10px] font-semibold bg-ss-error/15 text-ss-error border border-ss-error/30">
             <span className="h-1.5 w-1.5 rounded-full bg-ss-error" />
             Invalid
         </span>
@@ -180,49 +278,167 @@ function ValidityBadge({ valid }: { valid: boolean }) {
 }
 
 function SummaryBar({ result }: { result: ValidationResult }) {
-    const parts: React.ReactNode[] = [];
-    if (result.errors.length > 0) parts.push(<span key="e" className="text-ss-error">{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}</span>);
-    if (result.warnings.length > 0) parts.push(<span key="w" className="text-ss-secondary">{result.warnings.length} warning{result.warnings.length !== 1 ? 's' : ''}</span>);
-    if (result.infos.length > 0) parts.push(<span key="i" className="text-ss-primary">{result.infos.length} info{result.infos.length !== 1 ? 's' : ''}</span>);
-    if (parts.length === 0) return <p className="text-sm text-ss-success">No issues found.</p>;
+    const issueCount = result.errors.length + result.warnings.length;
+    if (issueCount === 0) {
+        return (
+            <div className="flex items-center gap-2 text-ss-success text-sm">
+                <CheckCircle2 size={16} />
+                No issues found.
+            </div>
+        );
+    }
 
-    return <p className="text-sm text-ss-text-2 flex flex-wrap gap-x-3">{parts.map((p, i) => <span key={i}>{p}</span>)}</p>;
+    return (
+        <div className="flex items-center gap-4 flex-wrap">
+            {result.errors.length > 0 && (
+                <span className="flex items-center gap-1.5 text-sm text-ss-error">
+                    <XCircle size={16} />
+                    <strong>{result.errors.length}</strong> error{result.errors.length !== 1 ? 's' : ''}
+                </span>
+            )}
+            {result.warnings.length > 0 && (
+                <span className="flex items-center gap-1.5 text-sm text-ss-warning">
+                    <AlertTriangle size={16} />
+                    <strong>{result.warnings.length}</strong> warning{result.warnings.length !== 1 ? 's' : ''}
+                </span>
+            )}
+        </div>
+    );
 }
 
-function WelcomeScreen() {
+function ValidationStats({ result }: { result: ValidationResult }) {
+    const errors = result.errors.length;
+    const warnings = result.warnings.length;
+    const issueCount = errors + warnings; // Infos are not "issues"
+    // Score: 100% if no issues, deduct per error (errors count double)
+    const maxPenalty = 100;
+    const penalty = Math.min(maxPenalty, errors * 15 + warnings * 5);
+    const score = Math.max(0, 100 - penalty);
+    const scoreColor = score >= 90 ? 'text-ss-success' : score >= 70 ? 'text-ss-warning' : 'text-ss-error';
+    const barColor = score >= 90 ? 'bg-ss-success' : score >= 70 ? 'bg-ss-warning' : 'bg-ss-error';
+    const env = errors === 0 ? 'Production-Ready' : errors <= 2 ? 'Review Required' : 'Not Production-Ready';
+    const envColor = errors === 0 ? 'text-ss-success border-ss-success/30 bg-ss-success/10'
+        : errors <= 2 ? 'text-ss-warning border-ss-warning/30 bg-ss-warning/10'
+        : 'text-ss-error border-ss-error/30 bg-ss-error/10';
+
     return (
-        <main className="flex-1 flex items-center justify-center">
-            <div className="text-center max-w-sm">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-ss-dark-1 border border-ss-border">
-                    <PackageIcon />
+        <div className="grid grid-cols-3 gap-3 mt-2">
+            <StatCard label="Issues Found">
+                <span className="text-2xl font-semibold text-ss-on-surface font-mono">{issueCount}</span>
+                {issueCount > 0 && (
+                    <span className="text-[10px] text-ss-on-surface-variant">
+                        {errors} error{errors !== 1 ? 's' : ''} · {warnings} warning{warnings !== 1 ? 's' : ''}
+                    </span>
+                )}
+            </StatCard>
+            <StatCard label="Validation Score">
+                <span className={`text-2xl font-semibold font-mono ${scoreColor}`}>{score}%</span>
+                <div className="w-full h-1 rounded-full bg-ss-surface-highest mt-1">
+                    <div className={`h-1 rounded-full transition-all ${barColor}`} style={{ width: `${score}%` }} />
                 </div>
-                <h2 className="text-xl font-semibold text-ss-text-1 mb-2">OGraf Validator</h2>
-                <p className="text-sm text-ss-text-2 leading-relaxed mb-4">
-                    Open a directory containing one or more OGraf Graphics Packages to validate them against the EBU OGraf specification.
-                </p>
-                <p className="text-xs text-ss-text-2/60">
-                    Requires a Chromium-based browser (Chrome, Edge) for the File System Access API.
-                </p>
+            </StatCard>
+            <StatCard label="Environment">
+                <span className={`my-auto w-fit text-sm font-semibold px-3 py-1 rounded-full border ${envColor}`}>
+                    {env}
+                </span>
+            </StatCard>
+        </div>
+    );
+}
+
+function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex flex-col gap-1.5 px-4 py-3 rounded bg-ss-surface"
+             style={{ border: '1px solid var(--ss-border-subtle)' }}>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
+                {label}
+            </span>
+            {children}
+        </div>
+    );
+}
+
+function WelcomeScreen({ onOpenDirectory, onReopenLastDirectory }: { onOpenDirectory: () => void; onReopenLastDirectory: () => void }) {
+    const lastDir = (() => { try { return localStorage.getItem('ograf-last-directory'); } catch { return null; } })();
+
+    return (
+        <main className="flex-1 flex flex-col items-center justify-center bg-ss-surface-dim gap-10 px-6">
+            {/* Logo card */}
+            <div className="flex flex-col items-center gap-6">
+                <img
+                    src="https://raw.githubusercontent.com/ebu/ograf/main/docs/logo/ograf-logo-colour.svg"
+                    alt="OGraf"
+                    width={1818}
+                    height={611}
+                    className="w-48 h-auto"
+                />
+
+                <div className="text-center max-w-md">
+                    <h2 className="text-2xl font-semibold text-ss-on-surface mb-3">
+                        Open a directory to get started
+                    </h2>
+                    <p className="text-sm text-ss-on-surface-variant leading-relaxed mb-6">
+                        Select any folder containing one or more{' '}
+                        <code className="font-mono text-ss-primary-container bg-ss-surface-high px-1 py-0.5 rounded text-xs">OGraf</code>
+                        {' '}packages to begin the validation process. Our architect will scan for schema integrity and cross-references.
+                    </p>
+                    <button
+                        onClick={onOpenDirectory}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded text-sm font-semibold bg-ss-primary-dark hover:bg-ss-primary-container text-white transition-colors"
+                    >
+                        <FolderOpen size={16} />
+                        Open Directory
+                    </button>
+                </div>
+            </div>
+
+            {/* Info cards */}
+            <div className="flex gap-4 flex-wrap justify-center">
+                <InfoCard
+                    icon={<Cpu size={14} />}
+                    label="Validator Core"
+                    value={`v${__CORE_VERSION__}`}
+                />
+                <InfoCard
+                    icon={<History size={14} />}
+                    label="Last Directory"
+                    value={lastDir ?? '—'}
+                    muted={!lastDir}
+                    onClick={lastDir ? onReopenLastDirectory : undefined}
+                />
+                <InfoCard
+                    icon={<FileCode2 size={14} />}
+                    label="OGraf Spec"
+                    value="v1"
+                />
             </div>
         </main>
     );
 }
 
-function Spinner() {
+function InfoCard({ icon, label, value, muted, onClick }: { icon: React.ReactNode; label: string; value: string; muted?: boolean; onClick?: () => void }) {
+    const clickable = !!onClick;
     return (
-        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
+        <div
+            onClick={onClick}
+            className={`flex flex-col items-center gap-1.5 px-6 py-3 rounded bg-ss-surface transition-colors
+                ${clickable ? 'cursor-pointer hover:bg-ss-surface-high' : ''}`}
+            style={{ border: '1px solid rgba(64, 72, 80, 0.3)' }}
+            title={clickable ? `Reopen "${value}"` : undefined}
+        >
+            <div className="flex items-center gap-1.5 text-ss-on-surface-variant">
+                {icon}
+                <span className="text-[10px] uppercase tracking-[0.08em] font-semibold">{label}</span>
+            </div>
+            <span className={`text-xs font-mono ${muted ? 'text-ss-on-surface-variant/40' : 'text-ss-on-surface'}`}>
+                {value}
+            </span>
+        </div>
     );
 }
 
-function PackageIcon() {
-    return (
-        <svg className="h-8 w-8 text-ss-text-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-        </svg>
-    );
+function Spinner() {
+    return <Loader2 size={16} className="animate-spin" />;
 }
 
 // ─── Validation report export ─────────────────────────────────────────────────
@@ -236,18 +452,23 @@ function ExportButtons({
 }) {
     const slug = packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 
+    const btnCls = 'px-2.5 py-1 rounded text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface transition-colors';
+    const btnStyle = { border: '1px solid rgba(64, 72, 80, 0.5)' };
+
     return (
         <div className="flex gap-2">
             <button
                 onClick={() => downloadJson(result, slug)}
-                className="px-2.5 py-1 rounded text-xs font-medium bg-ss-dark-1 hover:bg-ss-grey text-ss-text-2 hover:text-ss-text-1 border border-ss-border transition-colors"
+                className={btnCls}
+                style={btnStyle}
                 title="Download validation result as JSON"
             >
                 Export JSON
             </button>
             <button
                 onClick={() => downloadHtml(result, packageName)}
-                className="px-2.5 py-1 rounded text-xs font-medium bg-ss-dark-1 hover:bg-ss-grey text-ss-text-2 hover:text-ss-text-1 border border-ss-border transition-colors"
+                className={btnCls}
+                style={btnStyle}
                 title="Download validation report as HTML"
             >
                 Export HTML
@@ -326,4 +547,23 @@ ${result.issues.length === 0
 
 function escHtml(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function PackageSizeBadge({ result }: { result: ValidationResult | undefined }) {
+    if (!result) return null;
+    const sizeIssue = result.infos.find((i) => i.code === 'PACKAGE_TOTAL_SIZE');
+    const countIssue = result.infos.find((i) => i.code === 'PACKAGE_FILE_COUNT');
+    if (!sizeIssue) return null;
+    const sizeMatch = sizeIssue.message.match(/:\s*(.+)\.$/);
+    const countMatch = countIssue?.message.match(/(\d+)/);
+    if (!sizeMatch) return null;
+    return (
+        <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium text-ss-on-surface-variant bg-ss-surface-high ml-auto"
+        >
+            {countMatch && <span>{countMatch[1]} files</span>}
+            {countMatch && <span className="text-ss-on-surface-variant/30">·</span>}
+            <span>{sizeMatch[1]}</span>
+        </span>
+    );
 }

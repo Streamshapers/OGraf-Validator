@@ -107,7 +107,7 @@ export interface LogEntry {
 
 export interface PreviewState {
     phase: PreviewPhase;
-    currentStep: number | undefined;
+    currentStep: number | null | undefined; // undefined = not started, number = at step, null = at end
     currentData: Record<string, unknown>;
     renderType: 'realtime' | 'non-realtime';
     renderCharacteristics: RenderCharacteristics;

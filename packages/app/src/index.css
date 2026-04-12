@@ -1,5 +1,183 @@
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── CSS custom properties — Dark theme (default) ────────────────────────── */
+:root {
+  /* Primary */
+  --ss-primary:             148 204 255;
+  --ss-primary-container:   75 161 226;
+  --ss-primary-dark:        52 139 193;
+  --ss-primary-light:       106 188 239;
+
+  /* Secondary */
+  --ss-secondary:           226 176 111;
+  --ss-secondary-dark:      198 145 82;
+  --ss-secondary-light:     249 204 149;
+
+  /* Status */
+  --ss-success:             23 166 90;
+  --ss-warning:             226 176 111;
+  --ss-error:               204 86 98;
+  --ss-error-container:     147 0 10;
+  --ss-info:                148 204 255;
+
+  /* Surfaces */
+  --ss-surface-dim:         19 19 19;
+  --ss-surface-lowest:      14 14 14;
+  --ss-surface:             32 31 31;
+  --ss-surface-high:        42 42 42;
+  --ss-surface-highest:     53 53 53;
+  --ss-surface-variant:     53 53 53;
+
+  /* Text */
+  --ss-on-surface:          238 238 238;
+  --ss-on-surface-variant:  191 199 209;
+  --ss-text-2:              136 136 136;
+
+  /* Borders */
+  --ss-border:              73 73 73;
+  --ss-outline-variant:     64 72 80;
+  --ss-grey:                73 73 73;
+
+  /* Inline border helper (used in style={{ border: ... }}) */
+  --ss-border-subtle:       rgba(64, 72, 80, 0.4);
+
+  /* Scrollbar */
+  --ss-scrollbar-thumb:     #353535;
+  --ss-scrollbar-thumb-hover: #404850;
+
+  /* Base */
+  --ss-bg:                  #131313;
+  --ss-fg:                  #eeeeee;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+.theme-light {
+  /* Primary — slightly darker so it contrasts on light bg */
+  --ss-primary:             52 139 193;
+  --ss-primary-container:   75 161 226;
+  --ss-primary-dark:        42 111 160;
+  --ss-primary-light:       106 188 239;
+
+  /* Secondary */
+  --ss-secondary:           198 145 82;
+  --ss-secondary-dark:      160 114 64;
+  --ss-secondary-light:     226 176 111;
+
+  /* Status — same hues, adjusted for light bg readability */
+  --ss-success:             22 142 74;
+  --ss-warning:             198 145 82;
+  --ss-error:               185 56 68;
+  --ss-error-container:     185 56 68;
+  --ss-info:                52 139 193;
+
+  /* Surfaces — Streamshapers light palette */
+  --ss-surface-dim:         246 246 246;   /* #f6f6f6 page bg */
+  --ss-surface-lowest:      209 209 209;   /* #d1d1d1 sidebar / statusbar */
+  --ss-surface:             255 255 255;   /* #ffffff panels */
+  --ss-surface-high:        239 239 239;   /* #efefef active states */
+  --ss-surface-highest:     225 225 225;   /* #e1e1e1 hover */
+  --ss-surface-variant:     225 225 225;
+
+  /* Text — Streamshapers light text */
+  --ss-on-surface:          24 24 24;      /* #181818 */
+  --ss-on-surface-variant:  73 73 73;      /* #494949 */
+  --ss-text-2:              54 54 54;      /* #363636 */
+
+  /* Borders */
+  --ss-border:              182 182 182;   /* #b6b6b6 */
+  --ss-outline-variant:     182 182 182;
+  --ss-grey:                73 73 73;
+
+  --ss-border-subtle:       rgba(182, 182, 182, 0.7);
+
+  /* Scrollbar */
+  --ss-scrollbar-thumb:     #c8c8c8;
+  --ss-scrollbar-thumb-hover: #aaaaaa;
+
+  /* Base */
+  --ss-bg:                  #f6f6f6;
+  --ss-fg:                  #181818;
+}
+
+/* ── System theme — delegates to OS preference ───────────────────────────── */
+@media (prefers-color-scheme: light) {
+  .theme-system {
+    --ss-primary:             52 139 193;
+    --ss-primary-container:   75 161 226;
+    --ss-primary-dark:        42 111 160;
+    --ss-primary-light:       106 188 239;
+    --ss-secondary:           198 145 82;
+    --ss-secondary-dark:      160 114 64;
+    --ss-secondary-light:     226 176 111;
+    --ss-success:             22 142 74;
+    --ss-warning:             198 145 82;
+    --ss-error:               185 56 68;
+    --ss-error-container:     185 56 68;
+    --ss-info:                52 139 193;
+    --ss-surface-dim:         246 246 246;
+    --ss-surface-lowest:      209 209 209;
+    --ss-surface:             255 255 255;
+    --ss-surface-high:        239 239 239;
+    --ss-surface-highest:     225 225 225;
+    --ss-surface-variant:     225 225 225;
+    --ss-on-surface:          24 24 24;
+    --ss-on-surface-variant:  73 73 73;
+    --ss-text-2:              54 54 54;
+    --ss-border:              182 182 182;
+    --ss-outline-variant:     182 182 182;
+    --ss-grey:                73 73 73;
+    --ss-border-subtle:       rgba(182, 182, 182, 0.7);
+    --ss-scrollbar-thumb:     #c8c8c8;
+    --ss-scrollbar-thumb-hover: #aaaaaa;
+    --ss-bg:                  #f6f6f6;
+    --ss-fg:                  #181818;
+  }
+}
+
+/* ── Global base ─────────────────────────────────────────────────────────── */
+@layer base {
+  html, body, #root {
+    height: 100%;
+    background-color: var(--ss-bg);
+    color: var(--ss-fg);
+  }
+
+  /* Thin custom scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ss-scrollbar-thumb) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--ss-scrollbar-thumb);
+    border-radius: 3px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ss-scrollbar-thumb-hover);
+  }
+
+  /* Focus ring */
+  *:focus-visible {
+    outline: 1px solid rgb(var(--ss-primary));
+    outline-offset: 1px;
+  }
+
+  /* Remove number input spinners */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+}

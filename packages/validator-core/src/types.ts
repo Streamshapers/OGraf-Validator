@@ -126,4 +126,6 @@ export interface VirtualFS {
     readFile(path: string): Promise<string>;
     fileExists(path: string): Promise<boolean>;
     listFiles(path?: string): Promise<string[]>;
+    /** Return file size in bytes. Optional — asset size checks are skipped when absent. */
+    getFileSize?(path: string): Promise<number>;
 }

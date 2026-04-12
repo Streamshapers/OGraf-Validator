@@ -1,12 +1,12 @@
 import { useState } from 'react';
+import { Play, Square, ArrowLeftRight } from 'lucide-react';
 import type { OgrafCustomAction } from '@streamshapers/ograf-validator-core';
 import type { PlayActionParams, StopActionParams } from './preview-types.js';
 
 interface Props {
     isMounted: boolean;
-    skipAnimationDefault: boolean;
+    stepCount: number | undefined;
     customActions: OgrafCustomAction[];
-    onChangeSkipAnimationDefault: (skip: boolean) => void;
     onPlay: (opts: PlayActionParams) => void;
     onStop: (opts: StopActionParams) => void;
     onUpdate: (opts: { skipAnimation?: boolean }) => void;
@@ -15,129 +15,96 @@ interface Props {
 
 export default function PreviewActionPanel({
     isMounted,
-    skipAnimationDefault,
+    stepCount,
     customActions,
-    onChangeSkipAnimationDefault,
     onPlay,
     onStop,
     onUpdate,
     onCustom,
 }: Props) {
+    const [skipAnimation, setSkipAnimation] = useState(false);
+    const [delta, setDelta] = useState('1');
+    const [goto, setGoto] = useState('');
+
+    const knownSteps = typeof stepCount === 'number' && stepCount > 0 && stepCount !== -1;
+
     return (
-        <section className="rounded-md border border-ss-border overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-ss-dark-1 border-b border-ss-border">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ss-text-2">Actions</span>
-                <label className="inline-flex items-center gap-1.5 text-xs text-ss-text-2">
+        <div className="flex flex-col gap-2">
+            {/* Equal-height action buttons */}
+            <div className="grid grid-cols-3 gap-2">
+                <BigActionButton icon={<Play size={16} />}   label="Play"   variant="primary" disabled={!isMounted} onClick={() => {
+                    const opts: PlayActionParams = { skipAnimation };
+                    const d = parseInt(delta, 10);
+                    if (!Number.isNaN(d)) opts.delta = d;
+                    if (goto !== '') { const g = parseInt(goto, 10); if (!Number.isNaN(g)) opts.goto = g; }
+                    onPlay(opts);
+                }} />
+                <BigActionButton icon={<Square size={16} />}   label="Stop"   variant="surface" disabled={!isMounted} onClick={() => onStop({ skipAnimation })} />
+                <BigActionButton icon={<ArrowLeftRight size={16} />} label="Update" variant="surface" disabled={!isMounted} onClick={() => onUpdate({ skipAnimation })} />
+            </div>
+
+            {/* Params row */}
+            <div className="flex items-center gap-3 flex-wrap pt-1">
+                <NumberField label="delta" value={delta} onChange={setDelta} width={48} />
+                {knownSteps ? (
+                    <GotoSelect value={goto} onChange={setGoto} stepCount={stepCount!} />
+                ) : (
+                    <NumberField label="goto" value={goto} onChange={setGoto} width={48} placeholder="auto" />
+                )}
+                <span className="text-ss-on-surface-variant/30 text-xs select-none">·</span>
+                <label className="inline-flex items-center gap-1.5 text-xs text-ss-on-surface-variant cursor-pointer select-none ml-auto">
                     <input
                         type="checkbox"
-                        checked={skipAnimationDefault}
-                        onChange={(e) => onChangeSkipAnimationDefault(e.target.checked)}
+                        checked={skipAnimation}
+                        onChange={(e) => setSkipAnimation(e.target.checked)}
                         className="accent-ss-primary"
                     />
-                    skipAnimation default
+                    skip animation
                 </label>
             </div>
 
-            <div className="p-3 space-y-3 bg-ss-dark-2/40">
-                <PlaySection disabled={!isMounted} onPlay={onPlay} />
-                <StopSection disabled={!isMounted} onStop={onStop} />
-                <UpdateSection disabled={!isMounted} onUpdate={onUpdate} />
-
-                {customActions.length > 0 && (
-                    <div className="pt-3 border-t border-ss-border/40 space-y-3">
-                        <span className="text-[10px] text-ss-text-2 uppercase tracking-wide font-semibold">
-                            Custom Actions
-                        </span>
-                        {customActions.map((action) => (
-                            <CustomActionRow key={action.id} action={action} disabled={!isMounted} onInvoke={onCustom} />
-                        ))}
-                    </div>
-                )}
-            </div>
-        </section>
+            {customActions.length > 0 && (
+                <div className="pt-2 border-t border-ss-outline-variant/40 space-y-3">
+                    <span className="text-[10px] text-ss-on-surface-variant uppercase tracking-wide font-semibold">
+                        Custom Actions
+                    </span>
+                    {customActions.map((action) => (
+                        <CustomActionRow key={action.id} action={action} disabled={!isMounted} skipAnimation={skipAnimation} onInvoke={onCustom} />
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
-// ─── Play ────────────────────────────────────────────────────────────────────
+// ─── Large action buttons ────────────────────────────────────────────────────
 
-function PlaySection({
+function BigActionButton({
+    icon,
+    label,
+    variant,
     disabled,
-    onPlay,
+    onClick,
 }: {
+    icon: React.ReactNode;
+    label: string;
+    variant: 'primary' | 'surface';
     disabled: boolean;
-    onPlay: (opts: PlayActionParams) => void;
+    onClick: () => void;
 }) {
-    const [delta, setDelta] = useState('1');
-    const [goto, setGoto] = useState('');
-    const [skipAnimation, setSkipAnimation] = useState<boolean | null>(null);
-
-    const invoke = () => {
-        const opts: PlayActionParams = {};
-        const d = parseInt(delta, 10);
-        if (!Number.isNaN(d)) opts.delta = d;
-        if (goto.trim() !== '') {
-            const g = parseInt(goto, 10);
-            if (!Number.isNaN(g)) opts.goto = g;
-        }
-        if (skipAnimation !== null) opts.skipAnimation = skipAnimation;
-        onPlay(opts);
-    };
+    const cls = variant === 'primary'
+        ? 'bg-ss-primary-container hover:bg-ss-primary-container/80 text-white'
+        : 'bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface';
 
     return (
-        <ActionRow label="▶ Play" disabled={disabled} onInvoke={invoke}>
-            <NumberField label="delta" value={delta} onChange={setDelta} width={60} />
-            <NumberField label="goto" value={goto} onChange={setGoto} width={60} placeholder="(auto)" />
-            <OverrideToggle label="skip" value={skipAnimation} onChange={setSkipAnimation} />
-        </ActionRow>
-    );
-}
-
-// ─── Stop ────────────────────────────────────────────────────────────────────
-
-function StopSection({
-    disabled,
-    onStop,
-}: {
-    disabled: boolean;
-    onStop: (opts: StopActionParams) => void;
-}) {
-    const [skipAnimation, setSkipAnimation] = useState<boolean | null>(null);
-
-    const invoke = () => {
-        const opts: StopActionParams = {};
-        if (skipAnimation !== null) opts.skipAnimation = skipAnimation;
-        onStop(opts);
-    };
-
-    return (
-        <ActionRow label="■ Stop" disabled={disabled} onInvoke={invoke}>
-            <OverrideToggle label="skip" value={skipAnimation} onChange={setSkipAnimation} />
-        </ActionRow>
-    );
-}
-
-// ─── Update ──────────────────────────────────────────────────────────────────
-
-function UpdateSection({
-    disabled,
-    onUpdate,
-}: {
-    disabled: boolean;
-    onUpdate: (opts: { skipAnimation?: boolean }) => void;
-}) {
-    const [skipAnimation, setSkipAnimation] = useState<boolean | null>(null);
-
-    const invoke = () => {
-        const opts: { skipAnimation?: boolean } = {};
-        if (skipAnimation !== null) opts.skipAnimation = skipAnimation;
-        onUpdate(opts);
-    };
-
-    return (
-        <ActionRow label="↻ Update" disabled={disabled} onInvoke={invoke}>
-            <OverrideToggle label="skip" value={skipAnimation} onChange={setSkipAnimation} />
-            <span className="text-[10px] text-ss-text-2/60 ml-auto">sends current data</span>
-        </ActionRow>
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            className={`flex flex-col items-center justify-center gap-1.5 w-full py-3 rounded text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
+        >
+            <span className="text-lg leading-none">{icon}</span>
+            <span>{label}</span>
+        </button>
     );
 }
 
@@ -146,15 +113,16 @@ function UpdateSection({
 function CustomActionRow({
     action,
     disabled,
+    skipAnimation,
     onInvoke,
 }: {
     action: OgrafCustomAction;
     disabled: boolean;
+    skipAnimation: boolean;
     onInvoke: (id: string, payload: unknown, opts: { skipAnimation?: boolean }) => void;
 }) {
     const [payloadText, setPayloadText] = useState('{}');
     const [payloadError, setPayloadError] = useState<string | null>(null);
-    const [skipAnimation, setSkipAnimation] = useState<boolean | null>(null);
 
     const invoke = () => {
         let payload: unknown = {};
@@ -164,30 +132,27 @@ function CustomActionRow({
                 setPayloadError(null);
             } catch (e) {
                 setPayloadError(e instanceof Error ? e.message : String(e));
-
                 return;
             }
         }
-        const opts: { skipAnimation?: boolean } = {};
-        if (skipAnimation !== null) opts.skipAnimation = skipAnimation;
-        onInvoke(action.id, payload, opts);
+        onInvoke(action.id, payload, { skipAnimation });
     };
 
     return (
-        <div className="rounded border border-ss-border/60 p-2 space-y-1.5">
+        <div className="rounded border border-ss-outline-variant/40 p-2 space-y-1.5">
             <div className="flex items-center gap-2">
-                <span className="text-xs text-ss-text-1 font-semibold">{action.name}</span>
-                <span className="text-[10px] text-ss-text-2/60 font-mono">{action.id}</span>
+                <span className="text-xs text-ss-on-surface font-semibold">{action.name}</span>
+                <span className="text-[10px] text-ss-on-surface-variant/60 font-mono">{action.id}</span>
                 <button
                     onClick={invoke}
                     disabled={disabled}
-                    className="ml-auto px-2 py-0.5 rounded text-xs bg-ss-dark-1 hover:bg-ss-grey text-ss-text-1 disabled:opacity-40 transition-colors"
+                    className="ml-auto px-2 py-0.5 rounded text-xs bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
                 >
                     Invoke
                 </button>
             </div>
             {action.description && (
-                <p className="text-[10px] text-ss-text-2/70">{action.description}</p>
+                <p className="text-[10px] text-ss-on-surface-variant/70">{action.description}</p>
             )}
             <textarea
                 rows={2}
@@ -195,38 +160,28 @@ function CustomActionRow({
                 value={payloadText}
                 onChange={(e) => setPayloadText(e.target.value)}
                 placeholder="payload JSON"
-                className="w-full px-2 py-1 rounded text-xs bg-ss-dark-2 border border-ss-border text-ss-text-1 font-mono focus:outline-none focus:border-ss-primary resize-y"
+                className="w-full px-2 py-1 rounded text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono focus:outline-none focus:border-ss-primary resize-y"
             />
             {payloadError && <p className="text-[10px] text-ss-error">{payloadError}</p>}
-            <OverrideToggle label="skipAnimation" value={skipAnimation} onChange={setSkipAnimation} />
         </div>
     );
 }
 
 // ─── Reusable bits ───────────────────────────────────────────────────────────
 
-function ActionRow({
-    label,
-    disabled,
-    onInvoke,
-    children,
-}: {
-    label: string;
-    disabled: boolean;
-    onInvoke: () => void;
-    children: React.ReactNode;
-}) {
+const SELECT_CLS = 'px-1.5 py-0.5 rounded bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface text-xs focus:outline-none focus:border-ss-primary';
+
+function GotoSelect({ value, onChange, stepCount }: { value: string; onChange: (v: string) => void; stepCount: number }) {
     return (
-        <div className="flex items-center gap-2 flex-wrap">
-            <button
-                onClick={onInvoke}
-                disabled={disabled}
-                className="px-3 py-1 rounded text-xs font-semibold bg-ss-dark-1 hover:bg-ss-grey text-ss-text-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-w-[80px]"
-            >
-                {label}
-            </button>
-            {children}
-        </div>
+        <label className="inline-flex items-center gap-1 text-[10px] text-ss-on-surface-variant">
+            goto
+            <select value={value} onChange={(e) => onChange(e.target.value)} className={SELECT_CLS}>
+                <option value="">auto</option>
+                {Array.from({ length: stepCount }, (_, i) => (
+                    <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
+                ))}
+            </select>
+        </label>
     );
 }
 
@@ -244,7 +199,7 @@ function NumberField({
     placeholder?: string;
 }) {
     return (
-        <label className="inline-flex items-center gap-1 text-[10px] text-ss-text-2">
+        <label className="inline-flex items-center gap-1 text-[10px] text-ss-on-surface-variant">
             {label}
             <input
                 type="number"
@@ -252,42 +207,9 @@ function NumberField({
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
                 style={{ width }}
-                className="px-1.5 py-0.5 rounded bg-ss-dark-2 border border-ss-border text-ss-text-1 font-mono text-xs focus:outline-none focus:border-ss-primary"
+                className="px-1.5 py-0.5 rounded bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs focus:outline-none focus:border-ss-primary"
             />
         </label>
     );
 }
 
-function OverrideToggle({
-    label,
-    value,
-    onChange,
-}: {
-    label: string;
-    value: boolean | null;
-    onChange: (next: boolean | null) => void;
-}) {
-    // Tri-state: null = use default, true = force skip, false = force play
-    const next = (): boolean | null => {
-        if (value === null) return true;
-        if (value === true) return false;
-
-        return null;
-    };
-    const labelCls =
-        value === null
-            ? 'text-ss-text-2/60'
-            : value
-                ? 'text-ss-primary'
-                : 'text-ss-text-1';
-
-    return (
-        <button
-            onClick={() => onChange(next())}
-            className={`text-[10px] px-1.5 py-0.5 rounded border border-ss-border/60 hover:border-ss-border ${labelCls}`}
-            title="Click to cycle: default → true → false → default"
-        >
-            {label}: {value === null ? 'default' : value ? 'true' : 'false'}
-        </button>
-    );
-}

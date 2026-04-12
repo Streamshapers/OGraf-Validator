@@ -32,6 +32,13 @@ export class BrowserFS implements VirtualFS {
         }
     }
 
+    async getFileSize(path: string): Promise<number> {
+        const handle = await this.resolveFile(path);
+        const file = await handle.getFile();
+
+        return file.size;
+    }
+
     async listFiles(basePath?: string): Promise<string[]> {
         const start = basePath ? await this.resolveDir(basePath) : this.root;
 

@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserFS } from '../fs/browser-fs.js';
 
 export const PREVIEW_PREFIX = '/__ograf_preview__/';
 const CHANNEL_NAME = 'ograf-preview';
+const SW_PATH = '/preview-sw.js';
 
 function getMimeType(path: string): string {
     const ext = path.split('.').pop()?.toLowerCase() ?? '';
@@ -33,7 +34,12 @@ function getMimeType(path: string): string {
  * Also starts the BroadcastChannel file server that the SW talks to.
  * Call once at app root level.
  */
-export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): boolean {
+export interface PreviewSW {
+    swReady: boolean;
+    resetSW: () => Promise<void>;
+}
+
+export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): PreviewSW {
     const [swReady, setSwReady] = useState(false);
     const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(dirHandle);
 
@@ -47,7 +53,7 @@ export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): boole
         if (!('serviceWorker' in navigator)) return;
 
         void navigator.serviceWorker
-            .register('/preview-sw.js', { scope: '/' })
+            .register(SW_PATH, { scope: '/' })
             .then(() => navigator.serviceWorker.ready)
             .then(() => setSwReady(true))
             .catch((err) => console.warn('Preview SW registration failed:', err));
@@ -64,11 +70,8 @@ export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): boole
             if (type !== 'FILE_REQUEST' || typeof id !== 'string' || typeof path !== 'string') return;
 
             const handle = dirHandleRef.current;
-            if (!handle) {
-                channel.postMessage({ type: 'FILE_RESPONSE', id, error: 'No directory handle available' });
-
-                return;
-            }
+            // If no handle is set, don't respond — let another handler (e.g. runRuntimeTest) serve it.
+            if (!handle) return;
 
             try {
                 const fs = new BrowserFS(handle);
@@ -89,7 +92,21 @@ export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): boole
         };
     }, []);
 
-    return swReady;
+    const resetSW = useCallback(async () => {
+        if (!('serviceWorker' in navigator)) return;
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((r) => r.unregister()));
+            setSwReady(false);
+            await navigator.serviceWorker.register(SW_PATH, { scope: '/' });
+            await navigator.serviceWorker.ready;
+            setSwReady(true);
+        } catch (err) {
+            console.warn('Preview SW reset failed:', err);
+        }
+    }, []);
+
+    return { swReady, resetSW };
 }
 
 /** Build a unique import URL that bypasses the module cache. */

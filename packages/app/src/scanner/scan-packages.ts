@@ -20,8 +20,9 @@ export async function scanPackages(
     dir: FileSystemDirectoryHandle,
     relativePath = '',
     depth = 0,
+    maxDepth = MAX_DEPTH,
 ): Promise<PackageEntry[]> {
-    if (depth > MAX_DEPTH) return [];
+    if (depth > maxDepth) return [];
 
     const manifestFilename = await findOgrafManifest(dir);
     if (manifestFilename) {
@@ -46,6 +47,7 @@ export async function scanPackages(
             handle as FileSystemDirectoryHandle,
             subPath,
             depth + 1,
+            maxDepth,
         );
         packages.push(...subPackages);
     }

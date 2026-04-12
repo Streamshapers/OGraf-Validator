@@ -67,33 +67,37 @@ export default function GddTab({ manifest }: Props) {
     }
 
     return (
-        <div className="rounded-md border border-ss-border overflow-hidden">
-            <table className="w-full text-sm">
+        <div className="overflow-hidden rounded" style={{ border: '1px solid var(--ss-border-subtle)' }}>
+            <table className="w-full text-xs">
                 <thead>
-                    <tr className="bg-ss-dark-1 border-b border-ss-border">
-                        <Th>Field</Th>
+                    <tr className="bg-ss-surface" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                        <Th>Field Name</Th>
                         <Th>Type</Th>
-                        <Th>gddType</Th>
                         <Th>Label</Th>
                         <Th>Default</Th>
+                        <Th>GDDType</Th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-ss-border/40">
+                <tbody>
                     {rows.map((row) => (
-                        <tr key={row.name} className="hover:bg-ss-dark-1/40 transition-colors">
-                            <td className="px-3 py-2 font-mono text-ss-primary-light">{row.name}</td>
-                            <td className="px-3 py-2 text-ss-text-2">{row.type}</td>
+                        <tr key={row.name} className="hover:bg-ss-surface-highest transition-colors"
+                            style={{ borderBottom: '1px solid rgba(64, 72, 80, 0.2)' }}>
+                            <td className="px-3 py-2 font-mono text-ss-primary-container">{row.name}</td>
+                            <td className="px-3 py-2">
+                                <TypeBadge type={row.type} />
+                            </td>
+                            <td className="px-3 py-2 text-ss-on-surface">{row.label}</td>
+                            <td className="px-3 py-2 font-mono text-ss-success">{row.defaultValue}</td>
                             <td className="px-3 py-2">
                                 {row.gddType !== '—' ? (
-                                    <span className="px-1.5 py-0.5 rounded text-xs bg-purple-950 text-purple-300 border border-purple-800 font-mono">
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] border font-mono"
+                                          style={{ color: '#6abcef', background: '#6abcef18', borderColor: '#6abcef40' }}>
                                         {row.gddType}
                                     </span>
                                 ) : (
-                                    <span className="text-ss-text-2/50">—</span>
+                                    <span className="text-ss-on-surface-variant/40">—</span>
                                 )}
                             </td>
-                            <td className="px-3 py-2 text-ss-text-1">{row.label}</td>
-                            <td className="px-3 py-2 font-mono text-ss-success text-xs">{row.defaultValue}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -104,18 +108,47 @@ export default function GddTab({ manifest }: Props) {
 
 function Th({ children }: { children: React.ReactNode }) {
     return (
-        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-ss-text-2">
+        <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
             {children}
         </th>
     );
 }
 
+const TYPE_COLORS: Record<string, string> = {
+    string:  '#4ba1e2',
+    boolean: '#28af62',
+    number:  '#e2b06f',
+    object:  '#6abcef',
+    array:   '#f9cc95',
+};
+
+function TypeBadge({ type }: { type: string }) {
+    const color = TYPE_COLORS[type.toLowerCase()];
+
+    if (color) {
+        return (
+            <span
+                className="px-1.5 py-0.5 rounded-full text-[10px] border font-mono uppercase"
+                style={{ color, background: `${color}18`, borderColor: `${color}40` }}
+            >
+                {type}
+            </span>
+        );
+    }
+
+    return (
+        <span className="px-1.5 py-0.5 rounded-full text-[10px] border font-mono uppercase bg-ss-surface-highest text-ss-on-surface-variant border-ss-outline-variant/40">
+            {type}
+        </span>
+    );
+}
+
 function EmptyState({ icon, message, hint }: { icon: string; message: string; hint?: string }) {
     return (
-        <div className="rounded-md border border-ss-border px-4 py-6 text-center">
+        <div className="rounded px-4 py-6 text-center" style={{ border: '1px solid var(--ss-border-subtle)' }}>
             <p className="text-2xl mb-2">{icon}</p>
-            <p className="text-sm text-ss-text-2">{message}</p>
-            {hint && <p className="text-xs text-ss-text-2/60 mt-1 max-w-sm mx-auto">{hint}</p>}
+            <p className="text-xs text-ss-on-surface-variant">{message}</p>
+            {hint && <p className="text-[10px] text-ss-on-surface-variant/60 mt-1 max-w-sm mx-auto">{hint}</p>}
         </div>
     );
 }

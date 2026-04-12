@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 
 interface Props {
     previous: unknown;
@@ -13,7 +14,6 @@ function diffLines(oldLines: string[], newLines: string[]): DiffOp[] {
     const m = oldLines.length;
     const n = newLines.length;
 
-    // Build DP table for LCS (bottom-up)
     const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
     for (let i = m - 1; i >= 0; i--) {
         for (let j = n - 1; j >= 0; j--) {
@@ -23,7 +23,6 @@ function diffLines(oldLines: string[], newLines: string[]): DiffOp[] {
         }
     }
 
-    // Traceback
     const result: DiffOp[] = [];
     let i = 0;
     let j = 0;
@@ -52,7 +51,6 @@ type ViewLine =
     | { kind: 'hunk'; count: number };
 
 function buildView(ops: DiffOp[]): ViewLine[] {
-    // Mark every line that is within CONTEXT_LINES of a change as visible
     const visible = new Uint8Array(ops.length);
     for (let i = 0; i < ops.length; i++) {
         if (ops[i]!.type !== 'equal') {
@@ -85,12 +83,11 @@ function safeStringify(v: unknown): string {
 }
 
 export default function ManifestDiffPanel({ previous, current }: Props) {
-    const [expanded, setExpanded] = useState(true);
+    const [expanded, setExpanded] = useState(false);
 
     const oldText = safeStringify(previous);
     const newText = safeStringify(current);
 
-    // Only render when there's an actual change
     if (!previous || oldText === newText) return null;
 
     const ops  = diffLines(oldText.split('\n'), newText.split('\n'));
@@ -100,41 +97,38 @@ export default function ManifestDiffPanel({ previous, current }: Props) {
     const removed = ops.filter((o) => o.type === 'delete').length;
 
     return (
-        <div className="rounded-md border border-ss-border overflow-hidden">
-            {/* Header with toggle */}
-            <div className="flex items-center gap-3 px-3 py-2 bg-ss-dark-1 border-b border-ss-border">
-                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                        type="checkbox"
-                        checked={expanded}
-                        onChange={(e) => setExpanded(e.target.checked)}
-                        className="accent-ss-primary"
-                    />
-                    <span className="text-xs font-semibold uppercase tracking-wide text-ss-text-2">
-                        Manifest Diff
-                    </span>
-                </label>
-                <span className="text-xs font-mono">
-                    <span className="text-ss-success">+{added}</span>
-                    <span className="text-ss-text-2/40 mx-1">/</span>
-                    <span className="text-ss-error">-{removed}</span>
+        <div className="rounded overflow-hidden" style={{ border: '1px solid var(--ss-border-subtle)' }}>
+            {/* Accordion header */}
+            <button
+                onClick={() => setExpanded((v) => !v)}
+                className="w-full flex items-center gap-2 px-3 py-2 bg-ss-surface-high hover:bg-ss-surface-highest transition-colors text-left"
+            >
+                <ChevronRight
+                    size={12}
+                    className={`flex-shrink-0 text-ss-on-surface-variant transition-transform ${expanded ? 'rotate-90' : ''}`}
+                />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
+                    Manifest Diff
                 </span>
-            </div>
+                <span className="text-[10px] font-mono ml-1">
+                    <span style={{ color: '#28af62' }}>+{added}</span>
+                    <span className="text-ss-on-surface-variant/40 mx-1">/</span>
+                    <span style={{ color: '#cc5662' }}>-{removed}</span>
+                </span>
+            </button>
 
             {/* Diff body */}
             {expanded && (
-                <div className="overflow-x-auto bg-ss-dark-2/40">
+                <div className="overflow-x-auto bg-ss-surface/40">
                     <pre className="text-xs font-mono leading-5 min-w-0">
                         {view.map((vl, idx) => {
                             if (vl.kind === 'hunk') {
                                 return (
                                     <div
                                         key={idx}
-                                        className="px-3 py-0.5 text-ss-text-2/50 bg-ss-dark-1/60 select-none"
+                                        className="px-3 py-0.5 text-ss-on-surface-variant/50 bg-ss-surface-high/60 select-none"
                                     >
-                                        {'@@ '}
-                                        {vl.count} unchanged line{vl.count !== 1 ? 's' : ''}
-                                        {' @@'}
+                                        {'@@ '}{vl.count} unchanged line{vl.count !== 1 ? 's' : ''}{' @@'}
                                     </div>
                                 );
                             }
@@ -144,7 +138,7 @@ export default function ManifestDiffPanel({ previous, current }: Props) {
                                     ? ['+', 'bg-ss-success/10 text-ss-success']
                                     : vl.kind === 'delete'
                                         ? ['-', 'bg-ss-error/10 text-ss-error']
-                                        : [' ', 'text-ss-text-2/60'];
+                                        : [' ', 'text-ss-on-surface-variant/60'];
 
                             return (
                                 <div key={idx} className={`px-3 py-px whitespace-pre ${cls}`}>

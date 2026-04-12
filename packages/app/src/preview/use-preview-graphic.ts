@@ -75,14 +75,26 @@ function getMainFile(manifest: unknown): string | undefined {
     return typeof value === 'string' ? value : undefined;
 }
 
-function extractCurrentStep(result: unknown): number | undefined {
+// Returns: number = at step, null = at end (spec: currentStep undefined), undefined = not in result
+function extractCurrentStep(result: unknown): number | null | undefined {
     if (typeof result !== 'object' || result === null) return undefined;
     const r = result as Record<string, unknown>;
-    const inner = r['result'];
-    if (typeof inner !== 'object' || inner === null) return undefined;
-    const step = (inner as Record<string, unknown>)['currentStep'];
 
-    return typeof step === 'number' ? step : undefined;
+    // Direct: { currentStep: X } or { currentStep: undefined }
+    if ('currentStep' in r) {
+        return typeof r['currentStep'] === 'number' ? r['currentStep'] as number : null;
+    }
+
+    // Nested: { result: { currentStep: X } }
+    const inner = r['result'];
+    if (typeof inner === 'object' && inner !== null) {
+        const ri = inner as Record<string, unknown>;
+        if ('currentStep' in ri) {
+            return typeof ri['currentStep'] === 'number' ? ri['currentStep'] as number : null;
+        }
+    }
+
+    return undefined;
 }
 
 function makeLogId(): string {
@@ -395,7 +407,8 @@ export function usePreviewGraphic({
             setState((prev) => ({
                 ...prev,
                 phase: prev.phase === 'error' ? 'error' : 'loaded',
-                currentStep: nextStep ?? prev.currentStep,
+                // undefined = result had no step info → keep previous; null/number = use new value
+                currentStep: nextStep === undefined ? prev.currentStep : nextStep,
             }));
         },
         [invoke],

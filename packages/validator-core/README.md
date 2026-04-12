@@ -149,6 +149,10 @@ Implement this interface to adapt the validator to any file source - local files
 |------|-------------|
 | `INVALID_SCHEMA_REF` | `$schema` is not the exact official OGraf schema URL |
 | `NO_RUNTIME_SUPPORT` | Both `supportsRealTime` and `supportsNonRealTime` are `false` — the graphic cannot be rendered |
+| `UNUSUAL_MAIN_EXTENSION` | `main` has an unexpected file extension (expected `.js`, `.mjs`, or `.html`) |
+| `EMPTY_PACKAGE` | Package directory contains no files besides the manifest |
+| `LARGE_FILE` | A file in the package exceeds 10 MB |
+| `MISSING_DEFAULT_ASSET` | A GDD field with `gddType: "file-path"` has a `default` value pointing to a non-existent file |
 
 ### Infos — informational only
 
@@ -157,6 +161,8 @@ Implement this interface to adapt the validator to any file source - local files
 | `MISSING_GDD` | No `schema` defined — valid but limits tooling support |
 | `MISSING_GDD_TYPE` | A GDD field has no `gddType` hint |
 | `INVALID_VERSION_FORMAT` | `version` does not follow semver (not required by spec) |
+| `PACKAGE_FILE_COUNT` | Reports the total number of files in the package |
+| `PACKAGE_TOTAL_SIZE` | Reports the total size of all files in the package |
 
 ---
 

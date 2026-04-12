@@ -12,40 +12,46 @@ export default function PreviewEventLog({ log, onClear }: Props) {
     const filtered = showConsole ? log : log.filter((e) => !isConsoleMethod(e.method));
 
     return (
-        <section className="rounded-md border border-ss-border overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-ss-dark-1 border-b border-ss-border">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ss-text-2">
-                    Event Log ({filtered.length})
+        <>
+            {/* Title bar — replaces outer RightSection header */}
+            <div className="flex-shrink-0 flex items-center justify-between px-4 h-10 bg-ss-surface"
+                 style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
+                    Event Log {log.length > 0 && `(${filtered.length})`}
                 </span>
                 <div className="flex items-center gap-3">
-                    <label className="inline-flex items-center gap-1.5 text-xs text-ss-text-2 cursor-pointer">
+                    <label className="inline-flex items-center gap-1.5 text-xs text-ss-on-surface-variant cursor-pointer">
                         <input
                             type="checkbox"
                             checked={showConsole}
                             onChange={(e) => setShowConsole(e.target.checked)}
                             className="accent-ss-primary"
                         />
-                        console
+                        template logs
                     </label>
                     <button
                         onClick={onClear}
                         disabled={log.length === 0}
-                        className="text-xs text-ss-text-2 hover:text-ss-text-1 disabled:opacity-40 transition-colors"
+                        className="px-3 py-1 rounded text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                         Clear
                     </button>
                 </div>
             </div>
-            {filtered.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-ss-text-2 text-center">
-                    No API calls yet. Interact with the graphic above.
-                </p>
-            ) : (
-                <ul className="max-h-72 overflow-y-auto divide-y divide-ss-border/40">
-                    {filtered.map((entry) => <LogRow key={entry.id} entry={entry} />)}
-                </ul>
-            )}
-        </section>
+
+            {/* Log entries */}
+            <div className="py-2 px-1">
+                {filtered.length === 0 ? (
+                    <p className="py-2 text-xs text-ss-on-surface-variant text-center">
+                        No API calls yet. Interact with the graphic above.
+                    </p>
+                ) : (
+                    <ul className="flex flex-col divide-y divide-ss-outline-variant/20">
+                        {filtered.map((entry) => <LogRow key={entry.id} entry={entry} />)}
+                    </ul>
+                )}
+            </div>
+        </>
     );
 }
 
@@ -59,17 +65,17 @@ function LogRow({ entry }: { entry: LogEntry }) {
         <li className="text-xs">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-ss-dark-1/40 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-ss-surface-high/40 transition-colors"
             >
                 <MethodBadge method={entry.method} isError={isError} />
                 {!isConsole && (
-                    <span className="text-ss-text-2 font-mono">{entry.durationMs}ms</span>
+                    <span className="text-ss-on-surface-variant font-mono">{entry.durationMs}ms</span>
                 )}
-                <span className="ml-auto text-ss-text-2/60">{relativeTime}</span>
-                <span className="text-ss-text-2/60">{expanded ? '▾' : '▸'}</span>
+                <span className="ml-auto text-ss-on-surface-variant/60">{relativeTime}</span>
+                <span className="text-ss-on-surface-variant/60">{expanded ? '▾' : '▸'}</span>
             </button>
             {expanded && (
-                <div className="px-3 pb-2 pt-1 bg-ss-dark-2/60 text-xs font-mono space-y-2">
+                <div className="px-3 pb-2 pt-1 bg-ss-surface/60 text-xs font-mono space-y-2">
                     <DetailBlock label={isConsole ? 'output' : 'params'} value={entry.params} isError={isError && isConsole} />
                     {entry.error !== undefined && <DetailBlock label="error" value={entry.error} isError />}
                     {entry.result !== undefined && <DetailBlock label="result" value={entry.result} />}
@@ -91,7 +97,7 @@ function badgeClass(method: ApiMethod, isError: boolean): string {
     switch (categoryOf(method)) {
         case 'lifecycle':    return 'bg-ss-primary/15 text-ss-primary-light';
         case 'nonrealtime':  return 'bg-ss-secondary/15 text-ss-secondary';
-        case 'console':      return 'bg-ss-grey/40 text-ss-text-2';
+        case 'console':      return 'bg-ss-surface-highest/40 text-ss-on-surface-variant';
         default:             return 'bg-ss-success/15 text-ss-success';
     }
 }
@@ -114,8 +120,8 @@ function DetailBlock({
 
     return (
         <div>
-            <span className="text-ss-text-2 uppercase tracking-wide text-[10px]">{label}</span>
-            <pre className={`whitespace-pre-wrap break-words ${isError ? 'text-ss-error' : 'text-ss-text-1'}`}>
+            <span className="text-ss-on-surface-variant uppercase tracking-wide text-[10px]">{label}</span>
+            <pre className={`whitespace-pre-wrap break-words ${isError ? 'text-ss-error' : 'text-ss-on-surface'}`}>
                 {text}
             </pre>
         </div>

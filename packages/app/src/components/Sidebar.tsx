@@ -1,177 +1,241 @@
+import { useState, useEffect } from 'react';
+import { Settings, Loader2, FolderOpen } from 'lucide-react';
 import type { ValidationResult } from '@streamshapers/ograf-validator-core';
 import type { PackageEntry } from '../scanner/scan-packages.js';
+import type { RuntimeTestResult } from '../preview/runtime-test-types.js';
+
+interface RuntimeInfo { result?: RuntimeTestResult; running?: boolean }
 
 interface Props {
     rootName: string | null;
     packages: PackageEntry[];
     selectedPath: string | null;
     validationResults: Record<string, ValidationResult>;
+    runtimeResults?: Record<string, RuntimeInfo>;
     isScanning: boolean;
     onOpenDirectory: () => void;
     onSelectPackage: (entry: PackageEntry) => void;
+    isSettingsActive: boolean;
+    onOpenSettings: () => void;
+    onShowOverview: () => void;
 }
+
+type StatusFilter = 'all' | 'errors' | 'warnings' | 'valid';
 
 export default function Sidebar({
     rootName,
     packages,
     selectedPath,
     validationResults,
+    runtimeResults,
     isScanning,
     onOpenDirectory,
     onSelectPackage,
+    isSettingsActive,
+    onOpenSettings,
+    onShowOverview,
 }: Props) {
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+    // Reset filter when directory changes
+    useEffect(() => {
+        setStatusFilter('all');
+    }, [rootName]);
+
+    const filteredPackages = packages.filter((entry) => {
+        if (statusFilter === 'all') return true;
+        const result = validationResults[entry.path];
+        if (!result) return false;
+        if (statusFilter === 'errors') return result.errors.length > 0;
+        if (statusFilter === 'warnings') return result.warnings.length > 0 && result.errors.length === 0;
+        if (statusFilter === 'valid') return result.valid && result.warnings.length === 0;
+        return true;
+    });
+
+    const isFiltered = statusFilter !== 'all';
+    const countLabel = isFiltered
+        ? `${filteredPackages.length}/${packages.length}`
+        : String(packages.length);
+
     return (
-        <aside className="w-64 flex-shrink-0 bg-ss-dark-2 border-r border-ss-border flex flex-col">
-            {/* Open directory button */}
-            <div className="p-3 border-b border-ss-border">
+        <aside className="w-60 flex-shrink-0 bg-ss-surface-lowest flex flex-col"
+               style={{ borderRight: '1px solid var(--ss-border-subtle)' }}>
+
+            {/* PROJECT section */}
+            {rootName ? (
                 <button
-                    onClick={onOpenDirectory}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-ss-primary hover:bg-ss-primary-dark active:bg-ss-primary-dark text-ss-text-1 text-sm font-semibold transition-colors"
+                    onClick={onShowOverview}
+                    className="w-full text-left px-3 pt-3 pb-2.5 hover:bg-ss-surface-high/50 transition-colors group"
+                    style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}
+                    title="Back to package overview"
                 >
-                    <FolderOpenIcon />
-                    Open Directory
+                    <p className="text-[9px] font-semibold text-ss-on-surface-variant uppercase tracking-[0.1em] mb-1">Project</p>
+                    <p className="text-xs font-mono text-ss-on-surface truncate group-hover:text-ss-primary-container transition-colors" title={rootName}>{rootName}</p>
                 </button>
+            ) : null}
+
+            {/* ACTIVE PACKAGES header */}
+            <div className="px-3 pt-3 pb-1">
+                <span className="text-[9px] font-semibold text-ss-on-surface-variant uppercase tracking-[0.1em]">
+                    Active Packages ({countLabel})
+                </span>
             </div>
 
-            {/* Root label */}
-            {rootName && (
-                <div className="px-3 py-2 border-b border-ss-border">
-                    <p className="text-xs text-ss-text-2 uppercase tracking-wide font-semibold mb-0.5">Directory</p>
-                    <p className="text-sm text-ss-text-1 truncate font-mono" title={rootName}>{rootName}</p>
+            {/* Status filter chips */}
+            {packages.length > 0 && (
+                <div className="flex gap-1 px-2 pb-1.5">
+                    {(['all', 'errors', 'warnings', 'valid'] as const).map((status) => (
+                        <StatusChip
+                            key={status}
+                            label={status}
+                            active={statusFilter === status}
+                            onClick={() => setStatusFilter(status)}
+                        />
+                    ))}
                 </div>
             )}
 
             {/* Package list */}
             <div className="flex-1 overflow-y-auto">
                 {isScanning ? (
-                    <div className="flex items-center gap-2 px-3 py-4 text-sm text-ss-text-2">
-                        <Spinner />
+                    <div className="flex items-center gap-2 px-3 py-3 text-xs text-ss-on-surface-variant">
+                        <Loader2 size={14} className="animate-spin" />
                         Scanning…
                     </div>
                 ) : packages.length === 0 && rootName ? (
-                    <p className="px-3 py-4 text-sm text-ss-text-2">No OGraf packages found.</p>
+                    <p className="px-3 py-3 text-xs text-ss-on-surface-variant">No OGraf packages found.</p>
                 ) : packages.length === 0 ? (
-                    <EmptyHint />
+                    <button
+                        onClick={onOpenDirectory}
+                        className="w-full px-3 py-3 text-left flex items-center gap-2 text-xs text-ss-on-surface-variant hover:text-ss-on-surface transition-colors"
+                    >
+                        <FolderOpen size={13} />
+                        Open a directory…
+                    </button>
+                ) : filteredPackages.length === 0 ? (
+                    <p className="px-3 py-3 text-xs text-ss-on-surface-variant">No matches.</p>
                 ) : (
-                    <>
-                        <div className="px-3 py-2">
-                            <p className="text-xs text-ss-text-2 uppercase tracking-wide font-semibold">
-                                Packages ({packages.length})
-                            </p>
-                        </div>
-                        <ul>
-                            {packages.map((entry) => (
-                                <PackageItem
-                                    key={entry.path}
-                                    entry={entry}
-                                    isSelected={selectedPath === entry.path}
-                                    result={validationResults[entry.path]}
-                                    onClick={() => onSelectPackage(entry)}
-                                />
-                            ))}
-                        </ul>
-                    </>
+                    <ul className="flex flex-col gap-0.5 px-1 py-1">
+                        {filteredPackages.map((entry) => (
+                            <PackageItem
+                                key={entry.path}
+                                entry={entry}
+                                isSelected={selectedPath === entry.path}
+                                result={validationResults[entry.path]}
+                                runtimeInfo={runtimeResults?.[entry.path]}
+                                onClick={() => onSelectPackage(entry)}
+                            />
+                        ))}
+                    </ul>
                 )}
             </div>
+
+            {/* Footer: system settings */}
+            <button
+                onClick={onOpenSettings}
+                className={`w-full px-3 py-2.5 flex items-center gap-1.5 cursor-pointer transition-colors
+                    ${isSettingsActive ? 'bg-ss-surface-high' : 'hover:bg-ss-surface-high/40'}`}
+                style={{ borderTop: '1px solid var(--ss-border-subtle)' }}
+            >
+                <Settings size={12} className="text-ss-on-surface-variant/50 flex-shrink-0" />
+                <span className="text-[10px] font-semibold text-ss-on-surface-variant uppercase tracking-[0.08em]">
+                    System Settings
+                </span>
+            </button>
         </aside>
     );
 }
+
+// ─── Status chip ──────────────────────────────────────────────────────────────
+
+function StatusChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold transition-colors
+                ${active
+                    ? 'bg-ss-surface-high text-ss-on-surface'
+                    : 'text-ss-on-surface-variant/50 hover:bg-ss-surface-high/50 hover:text-ss-on-surface-variant'}
+            `}
+        >
+            {label}
+        </button>
+    );
+}
+
+// ─── Package item ─────────────────────────────────────────────────────────────
 
 interface ItemProps {
     entry: PackageEntry;
     isSelected: boolean;
     result: ValidationResult | undefined;
+    runtimeInfo?: RuntimeInfo;
     onClick: () => void;
 }
 
-function PackageItem({ entry, isSelected, result, onClick }: ItemProps) {
-    const selectedClass = isSelected ? 'bg-ss-dark-1' : 'hover:bg-ss-dark-1/60';
-
+function PackageItem({ entry, isSelected, result, runtimeInfo, onClick }: ItemProps) {
     return (
         <li>
             <button
                 onClick={onClick}
-                className={`w-full text-left px-3 py-2.5 flex items-start gap-2.5 transition-colors ${selectedClass}`}
+                className={`
+                    w-full text-left px-2 py-1.5 rounded flex items-center gap-2 transition-colors
+                    ${isSelected
+                        ? 'bg-ss-surface-high border-l-2 border-ss-primary-container pl-[6px]'
+                        : 'hover:bg-ss-surface-highest border-l-2 border-transparent pl-[6px]'}
+                `}
             >
-                <StatusDot result={result} />
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm text-ss-text-1 truncate font-mono" title={entry.path}>
+                <StatusDot result={result} runtimeInfo={runtimeInfo} />
+                <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
+                    <p className="text-xs text-ss-on-surface truncate font-mono leading-snug" title={entry.path}>
                         {entry.displayName}
                     </p>
-                    {result && <IssueSummary result={result} />}
+                    <ErrorCount result={result} />
                 </div>
             </button>
         </li>
     );
 }
 
-function StatusDot({ result }: { result: ValidationResult | undefined }) {
-    if (!result) return <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-ss-grey" />;
-    if (result.valid) return <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-ss-success" />;
-
-    return <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-ss-error" />;
+function StatusDot({ result, runtimeInfo }: { result: ValidationResult | undefined; runtimeInfo?: RuntimeInfo }) {
+    if (!result) {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
+    }
+    if (result.errors.length > 0) {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#cc5662' }} />;
+    }
+    // Runtime test failed → red even if statically valid
+    if (runtimeInfo?.result && !runtimeInfo.result.passed) {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#cc5662' }} />;
+    }
+    if (result.warnings.length > 0) {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#e2b06f' }} />;
+    }
+    // Runtime test still running → green with pulse
+    if (runtimeInfo?.running) {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full animate-pulse" style={{ backgroundColor: '#28af62' }} />;
+    }
+    if (result.valid) {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#28af62' }} />;
+    }
+    return <span className="h-2 w-2 flex-shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
 }
 
-function IssueSummary({ result }: { result: ValidationResult }) {
-    if (result.errors.length === 0 && result.warnings.length === 0 && result.infos.length === 0) {
-        return <p className="text-xs text-ss-success">Valid</p>;
-    }
-
-    const parts: React.ReactNode[] = [];
+function ErrorCount({ result }: { result: ValidationResult | undefined }) {
+    if (!result) return null;
     if (result.errors.length > 0) {
-        const n = result.errors.length;
-        parts.push(
-            <span key="e" className="text-ss-error">{n} {n === 1 ? 'error' : 'errors'}</span>,
+        return (
+            <span className="text-[10px] font-semibold font-mono flex-shrink-0" style={{ color: '#cc5662' }}>
+                {result.errors.length}
+            </span>
         );
     }
     if (result.warnings.length > 0) {
-        const n = result.warnings.length;
-        parts.push(
-            <span key="w" className="text-ss-secondary">{n} {n === 1 ? 'warning' : 'warnings'}</span>,
+        return (
+            <span className="text-[10px] font-semibold font-mono flex-shrink-0" style={{ color: '#e2b06f' }}>
+                {result.warnings.length}
+            </span>
         );
     }
-    if (result.infos.length > 0) {
-        const n = result.infos.length;
-        parts.push(
-            <span key="i" className="text-ss-primary">{n} {n === 1 ? 'info' : 'infos'}</span>,
-        );
-    }
-
-    return (
-        <p className="text-xs flex flex-wrap gap-x-1.5">
-            {parts.map((p, i) => (
-                <span key={i} className="inline-flex items-center gap-1.5">
-                    {i > 0 && <span className="text-ss-text-2/40">·</span>}
-                    {p}
-                </span>
-            ))}
-        </p>
-    );
-}
-
-function EmptyHint() {
-    return (
-        <div className="px-3 py-6 text-center">
-            <p className="text-xs text-ss-text-2 leading-relaxed">
-                Click <strong className="text-ss-text-1">Open Directory</strong> to select a folder containing an OGraf package.
-            </p>
-        </div>
-    );
-}
-
-function FolderOpenIcon() {
-    return (
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
-        </svg>
-    );
-}
-
-function Spinner() {
-    return (
-        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-    );
+    return null;
 }
