@@ -483,7 +483,12 @@ function validateGddField(field: unknown, path: string, fieldName: string): Vali
 
     const f = field as GddField;
 
-    if (!f.gddType) {
+    // Basic JSON Schema types are self-describing — gddType is only needed
+    // for extended semantic types (e.g. f-image, f-color, f-text-style).
+    const BASIC_TYPES = new Set<string>(['string', 'number', 'integer', 'boolean']);
+    const isBasicType = typeof f.type === 'string' && BASIC_TYPES.has(f.type);
+
+    if (!f.gddType && !isBasicType) {
         issues.push(info(
             'MISSING_GDD_TYPE',
             `GDD field "${fieldName}" has no "gddType". Adding this helps UI tools render the correct input widget.`,

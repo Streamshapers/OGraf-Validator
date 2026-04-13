@@ -46,7 +46,7 @@ export class BrowserFS implements VirtualFS {
     }
 
     private async resolveFile(path: string): Promise<FileSystemFileHandle> {
-        const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+        const parts = path.replace(/\\/g, '/').split('/').filter((p) => p.length > 0 && p !== '.');
         const fileName = parts.pop();
         if (!fileName) throw new Error(`Invalid file path: "${path}"`);
         let dir = this.root;
@@ -58,7 +58,7 @@ export class BrowserFS implements VirtualFS {
     }
 
     private async resolveDir(path: string): Promise<FileSystemDirectoryHandle> {
-        const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+        const parts = path.replace(/\\/g, '/').split('/').filter((p) => p.length > 0 && p !== '.');
         let dir = this.root;
         for (const segment of parts) {
             dir = await dir.getDirectoryHandle(segment);

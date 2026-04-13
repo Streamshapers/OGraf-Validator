@@ -41,6 +41,46 @@ function savePersisted(key: string, data: PersistedState): void {
     } catch { /* quota exceeded — ignore */ }
 }
 
+// ─── Render characteristics from manifest ────────────────────────────────────
+
+/** Pick a concrete number from a NumberConstraint: exact → ideal → min → max → fallback */
+function resolveNumberConstraint(
+    constraint: { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
+    fallback: number,
+): number {
+    if (!constraint) return fallback;
+    return constraint.exact ?? constraint.ideal ?? constraint.min ?? constraint.max ?? fallback;
+}
+
+/**
+ * Extract RenderCharacteristics from the first renderRequirements entry.
+ * Falls back to DEFAULT_RENDER_CHARACTERISTICS for any missing field.
+ */
+function extractRenderCharacteristics(manifest: unknown): RenderCharacteristics {
+    if (typeof manifest !== 'object' || manifest === null) return DEFAULT_RENDER_CHARACTERISTICS;
+    const m = manifest as Record<string, unknown>;
+    const reqs = m['renderRequirements'];
+    if (!Array.isArray(reqs) || reqs.length === 0) return DEFAULT_RENDER_CHARACTERISTICS;
+    const first = reqs[0] as Record<string, unknown> | undefined;
+    if (typeof first !== 'object' || first === null) return DEFAULT_RENDER_CHARACTERISTICS;
+
+    const resolution = first['resolution'] as Record<string, unknown> | undefined;
+    const width = resolveNumberConstraint(
+        resolution?.['width'] as { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
+        DEFAULT_RENDER_CHARACTERISTICS.width,
+    );
+    const height = resolveNumberConstraint(
+        resolution?.['height'] as { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
+        DEFAULT_RENDER_CHARACTERISTICS.height,
+    );
+    const frameRate = resolveNumberConstraint(
+        first['frameRate'] as { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
+        DEFAULT_RENDER_CHARACTERISTICS.frameRate,
+    );
+
+    return { width, height, frameRate };
+}
+
 interface UsePreviewGraphicOptions {
     swReady: boolean;
     manifest: unknown;
@@ -137,7 +177,7 @@ export function usePreviewGraphic({
             currentStep: undefined,
             currentData: persisted.currentData ?? buildPreviewData(manifest),
             renderType: persisted.renderType ?? (supportsRealTime ? 'realtime' : 'non-realtime'),
-            renderCharacteristics: persisted.renderCharacteristics ?? DEFAULT_RENDER_CHARACTERISTICS,
+            renderCharacteristics: persisted.renderCharacteristics ?? extractRenderCharacteristics(manifest),
             skipAnimationDefault: persisted.skipAnimationDefault ?? false,
             log: [],
             error: null,

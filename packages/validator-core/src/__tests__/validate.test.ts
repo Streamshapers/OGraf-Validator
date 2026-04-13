@@ -370,11 +370,20 @@ describe('validateManifest – GDD schema', () => {
         expect(hasCode(result, 'MISSING_GDD_PROPERTIES')).toBe(true);
     });
 
-    it('emits MISSING_GDD_TYPE info for fields without gddType', () => {
+    it('emits MISSING_GDD_TYPE info for non-basic fields without gddType', () => {
+        // object/array fields have no self-describing type — gddType hint is useful
         const result = validateManifest(validManifest({
-            schema: { type: 'object', properties: { headline: { type: 'string' } } },
+            schema: { type: 'object', properties: { style: { type: 'object' } } },
         }));
         expect(hasCode(result, 'MISSING_GDD_TYPE')).toBe(true);
+    });
+
+    it('does not emit MISSING_GDD_TYPE for basic types without gddType', () => {
+        // string/number/integer/boolean are self-describing — gddType is not required
+        const result = validateManifest(validManifest({
+            schema: { type: 'object', properties: { headline: { type: 'string' }, count: { type: 'number' } } },
+        }));
+        expect(hasCode(result, 'MISSING_GDD_TYPE')).toBe(false);
     });
 
     it('accepts valid GDD schema with gddType on all fields', () => {

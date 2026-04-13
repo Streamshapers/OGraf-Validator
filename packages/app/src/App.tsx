@@ -64,6 +64,18 @@ export default function App() {
             const main = (manifest as Record<string, unknown>)['main'];
             if (typeof main !== 'string') continue;
             try {
+                // Signal transition from "queued" → "actively running"
+                setState((prev) => {
+                    const existing = prev.packageCache[entry.path];
+                    if (!existing) return prev;
+                    return {
+                        ...prev,
+                        packageCache: {
+                            ...prev.packageCache,
+                            [entry.path]: { ...existing, runtimeTestSteps: [] },
+                        },
+                    };
+                });
                 const importUrl = buildImportUrl(main);
                 const rtResult = await runRuntimeTest(importUrl, manifest, entry.dirHandle, (step) => {
                     setState((prev) => {
@@ -276,9 +288,10 @@ export default function App() {
                             manifest,
                             previousManifest: existing?.manifest,
                             assets,
-                            // Preserve existing runtime test result; only mark running if we're about to test
+                            // Preserve runtime test state: if already queued/running keep it, otherwise mark as running if we're about to enqueue
                             runtimeTest: existing?.runtimeTest,
-                            runtimeTestRunning: result.valid && !alreadyTested,
+                            runtimeTestRunning: alreadyTested ? (existing?.runtimeTestRunning ?? false) : result.valid,
+                            runtimeTestSteps: existing?.runtimeTestSteps,
                         },
                     },
                 };
