@@ -50,7 +50,6 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
             const dataUrl = reader.result as string;
             // Warn if > ~3 MB as base64 (4 bytes per 3 raw bytes → ~4 MB base64 for 3 MB image)
             if (dataUrl.length > 4 * 1024 * 1024) {
-                // eslint-disable-next-line no-alert
                 window.alert('Image is too large (> ~3 MB). Please use a smaller file — large images may not persist between sessions.');
             }
             onChange({ type: 'image', dataUrl });

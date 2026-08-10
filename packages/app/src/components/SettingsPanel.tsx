@@ -13,16 +13,18 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
     return (
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
             {/* Header */}
-            <div className="flex-shrink-0 px-6 py-5 bg-ss-surface-dim" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+            <div className="flex-shrink-0 border-b border-ss-outline-variant/40 bg-ss-surface-dim px-3 py-4 sm:px-6 sm:py-5">
                 <div className="max-w-2xl mx-auto flex items-start justify-between">
                     <div>
                         <h2 className="text-base font-semibold text-ss-on-surface">Settings</h2>
-                        <p className="text-xs text-ss-on-surface-variant mt-0.5">Configure your local validation environment and UI preferences.</p>
+                        <p className="text-xs text-ss-on-surface-variant mt-0.5">Change how the validator works and looks.</p>
                     </div>
                     <button
+                        type="button"
                         onClick={onClose}
                         className="ml-4 p-1 rounded text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors"
                         title="Close settings"
+                        aria-label="Close settings"
                     >
                         <X size={16} />
                     </button>
@@ -30,16 +32,17 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
             </div>
 
             {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-6 pb-8 pt-6">
-                <div className="max-w-2xl mx-auto space-y-6">
+            <div className="flex-1 overflow-y-auto px-3 pb-8 pt-4 sm:px-6 sm:pt-6">
+                <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
                     {/* ── General ────────────────────────────────────── */}
                     <SectionHeader>General</SectionHeader>
 
                     <SettingRow
                         label="Theme"
-                        description="UI color scheme. Only dark mode is currently supported."
+                        description="Choose dark mode, light mode, or your system setting."
                     >
                         <SegmentGroup
+                            label="Theme"
                             options={[
                                 { value: 'dark', label: 'Dark' },
                                 { value: 'light', label: 'Light' },
@@ -52,7 +55,7 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
 
                     <SettingRow
                         label="Scan Depth"
-                        description="How many directory levels deep the package scanner should search (1–20)."
+                        description="How many folder levels to scan (1–20)."
                     >
                         <NumberStepper
                             value={settings.scanDepth}
@@ -62,19 +65,12 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
                         />
                     </SettingRow>
 
-                    <SettingRow
-                        label="Preview Service Worker"
-                        description="Force re-register the preview Service Worker if the live preview gets stuck."
-                    >
-                        <ResetSWButton onReset={onResetSW} />
-                    </SettingRow>
-
                     {/* ── Validation & Export ─────────────────────────── */}
-                    <SectionHeader>Validation &amp; Export</SectionHeader>
+                    <SectionHeader>Validation</SectionHeader>
 
                     <SettingRow
                         label="Severity Filter"
-                        description="Choose which issue severities to display. Errors are always shown."
+                        description="Hide warnings or info messages. Errors are always shown."
                     >
                         <div className="flex flex-col gap-2">
                             <SeverityToggle severity="error" label="Errors" checked disabled />
@@ -106,15 +102,17 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
                     </SettingRow>
 
                     <SettingRow
-                        label="Auto-Revalidate"
-                        description="Automatically re-run validation when source files change. Polls for file modifications at the selected interval."
+                        label="Auto revalidate"
+                        description="Check the folder again when a file changes."
                     >
-                        <div className="flex items-center gap-3">
+                        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
                             <ToggleSwitch
+                                label="Auto revalidate"
                                 checked={settings.autoRevalidate}
                                 onChange={(v) => onUpdateSettings({ autoRevalidate: v })}
                             />
                             <SegmentGroup
+                                label="Check interval"
                                 options={[
                                     { value: '2', label: '2s' },
                                     { value: '5', label: '5s' },
@@ -127,8 +125,17 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
                         </div>
                     </SettingRow>
 
+                    <SectionHeader>Troubleshooting</SectionHeader>
+
+                    <SettingRow
+                        label="Preview service"
+                        description="Reset this only if a preview stays blank or does not reload."
+                    >
+                        <ResetSWButton onReset={onResetSW} />
+                    </SettingRow>
+
                     {/* ── Workspace Sync ───────────────────────────────── */}
-                    <WorkspaceSyncCard />
+                    <LocalSettingsCard />
                 </div>
             </div>
         </main>
@@ -139,10 +146,7 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
     return (
-        <h3
-            className="text-[10px] font-semibold uppercase tracking-[0.08em] pt-2"
-            style={{ color: '#4ba1e2' }}
-        >
+        <h3 className="pt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-primary-container">
             {children}
         </h3>
     );
@@ -150,13 +154,12 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 function SettingRow({ label, description, children }: { label: string; description: string; children: React.ReactNode }) {
     return (
-        <div className="flex items-start justify-between gap-6 rounded px-4 py-3.5 bg-ss-surface"
-             style={{ border: '1px solid var(--ss-border-subtle)' }}>
+        <div className="flex flex-col items-stretch gap-3 rounded border border-ss-outline-variant/40 bg-ss-surface px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
             <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-ss-on-surface">{label}</p>
                 <p className="text-xs text-ss-on-surface-variant mt-0.5 leading-relaxed">{description}</p>
             </div>
-            <div className="flex-shrink-0 flex items-center">
+            <div className="flex w-full flex-shrink-0 items-center sm:w-auto sm:justify-end">
                 {children}
             </div>
         </div>
@@ -164,21 +167,14 @@ function SettingRow({ label, description, children }: { label: string; descripti
 }
 
 
-function WorkspaceSyncCard() {
+function LocalSettingsCard() {
     return (
-        <div
-            className="rounded px-4 py-3.5 bg-ss-surface flex items-start gap-3"
-            style={{
-                border: '1px solid var(--ss-border-subtle)',
-                borderLeft: '3px solid #4ba1e2',
-            }}
-        >
-            <Info size={16} className="flex-shrink-0 mt-0.5" style={{ color: '#4ba1e2' }} />
+        <div className="flex items-start gap-3 rounded border border-l-[3px] border-ss-outline-variant/40 border-l-ss-primary-container bg-ss-surface px-4 py-3.5">
+            <Info size={16} className="mt-0.5 flex-shrink-0 text-ss-primary-container" />
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-ss-on-surface">Workspace Sync</p>
+                <p className="text-sm font-semibold text-ss-on-surface">Saved in this browser</p>
                 <p className="text-xs text-ss-on-surface-variant mt-0.5 leading-relaxed">
-                    All settings are stored locally in your browser's <span className="font-mono text-ss-on-surface">localStorage</span>.
-                    They persist across sessions but are not synced between devices or browsers.
+                    These settings are not shared with other browsers or devices.
                 </p>
             </div>
         </div>
@@ -193,27 +189,32 @@ interface SegmentOption {
     disabled?: boolean;
 }
 
-function SegmentGroup({ options, value, onChange, disabled: groupDisabled }: { options: SegmentOption[]; value: string; onChange: (v: string) => void; disabled?: boolean }) {
+function SegmentGroup({ label, options, value, onChange, disabled: groupDisabled }: { label: string; options: SegmentOption[]; value: string; onChange: (v: string) => void; disabled?: boolean }) {
     return (
-        <div className={`flex rounded overflow-hidden transition-opacity ${groupDisabled ? 'opacity-40' : ''}`} style={{ border: '1px solid var(--ss-border-subtle)' }}>
+        <div
+            role="group"
+            aria-label={label}
+            className={`flex w-full overflow-hidden rounded border border-ss-outline-variant/40 transition-opacity sm:w-auto ${groupDisabled ? 'opacity-40' : ''}`}
+        >
             {options.map((opt) => {
                 const active = opt.value === value;
                 const disabled = groupDisabled || (opt.disabled ?? false);
                 return (
                     <button
+                        type="button"
                         key={opt.value}
                         onClick={() => !disabled && onChange(opt.value)}
                         disabled={disabled}
-                        style={active ? { backgroundColor: '#4ba1e2', color: '#ffffff' } : undefined}
-                        className={`px-3 py-1.5 text-xs font-medium transition-colors relative
+                        aria-pressed={active}
+                        className={`relative flex-1 px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none
                             ${active
-                                ? ''
+                                ? 'bg-ss-primary-container text-white'
                                 : 'bg-ss-surface-high text-ss-on-surface-variant hover:text-ss-on-surface'}
                             ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
                         `}
                     >
                         {opt.label}
-                        {disabled && (
+                        {opt.disabled && (
                             <Lock size={8} className="absolute top-1 right-1 text-ss-on-surface-variant/40" />
                         )}
                     </button>
@@ -225,10 +226,12 @@ function SegmentGroup({ options, value, onChange, disabled: groupDisabled }: { o
 
 function NumberStepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
     return (
-        <div className="flex items-center rounded overflow-hidden" style={{ border: '1px solid var(--ss-border-subtle)' }}>
+        <div className="flex items-center overflow-hidden rounded border border-ss-outline-variant/40">
             <button
+                type="button"
                 onClick={() => value > min && onChange(value - 1)}
                 disabled={value <= min}
+                aria-label="Decrease scan depth"
                 className="px-2 py-1.5 bg-ss-surface-high text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-highest transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
                 <Minus size={14} />
@@ -237,8 +240,10 @@ function NumberStepper({ value, min, max, onChange }: { value: number; min: numb
                 {value}
             </span>
             <button
+                type="button"
                 onClick={() => value < max && onChange(value + 1)}
                 disabled={value >= max}
+                aria-label="Increase scan depth"
                 className="px-2 py-1.5 bg-ss-surface-high text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-highest transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
                 <Plus size={14} />
@@ -247,16 +252,17 @@ function NumberStepper({ value, min, max, onChange }: { value: number; min: numb
     );
 }
 
-function ToggleSwitch({ checked, disabled, onChange }: { checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
+function ToggleSwitch({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
     return (
         <button
+            type="button"
             role="switch"
             aria-checked={checked}
+            aria-label={label}
             disabled={disabled}
             onClick={() => onChange(!checked)}
-            style={checked ? { backgroundColor: '#4ba1e2' } : undefined}
             className={`relative w-9 h-5 rounded-full transition-colors
-                ${checked ? '' : 'bg-ss-surface-highest'}
+                ${checked ? 'bg-ss-primary-container' : 'bg-ss-surface-highest'}
                 ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
             `}
         >
@@ -273,12 +279,12 @@ type SeverityLevel = 'error' | 'warning' | 'info';
 
 function SeverityIcon({ severity }: { severity: SeverityLevel }) {
     if (severity === 'error') {
-        return <XCircle size={14} style={{ color: '#cc5662' }} className="flex-shrink-0" />;
+        return <XCircle size={14} className="flex-shrink-0 text-ss-error" />;
     }
     if (severity === 'warning') {
-        return <AlertTriangle size={14} style={{ color: '#e2b06f' }} className="flex-shrink-0" />;
+        return <AlertTriangle size={14} className="flex-shrink-0 text-ss-warning" />;
     }
-    return <Info size={14} style={{ color: '#4ba1e2' }} className="flex-shrink-0" />;
+    return <Info size={14} className="flex-shrink-0 text-ss-info" />;
 }
 
 function SeverityToggle({
@@ -295,27 +301,38 @@ function SeverityToggle({
     onChange?: (show: boolean) => void;
 }) {
     return (
-        <label className={`inline-flex items-center gap-2 text-xs ${disabled ? 'opacity-60' : 'cursor-pointer'}`}>
-            <ToggleSwitch checked={checked} disabled={disabled} onChange={(v) => onChange?.(v)} />
+        <div className={`inline-flex items-center gap-2 text-xs ${disabled ? 'opacity-60' : ''}`}>
+            <ToggleSwitch
+                label={`Show ${label.toLowerCase()}`}
+                checked={checked}
+                disabled={disabled}
+                onChange={(v) => onChange?.(v)}
+            />
             <SeverityIcon severity={severity} />
             <span className="text-ss-on-surface-variant">{label}</span>
             {disabled && <Lock size={10} className="text-ss-on-surface-variant/40" />}
-        </label>
+        </div>
     );
 }
 
 function ResetSWButton({ onReset }: { onReset: () => Promise<void> }) {
-    const [state, setState] = useState<'idle' | 'resetting' | 'done'>('idle');
+    const [state, setState] = useState<'idle' | 'resetting' | 'done' | 'error'>('idle');
 
     const handleClick = async () => {
         setState('resetting');
-        await onReset();
-        setState('done');
-        setTimeout(() => setState('idle'), 2000);
+        try {
+            await onReset();
+            setState('done');
+            setTimeout(() => setState('idle'), 2000);
+        } catch (error) {
+            console.error('Could not reset the preview service.', error);
+            setState('error');
+        }
     };
 
     return (
         <button
+            type="button"
             onClick={() => void handleClick()}
             disabled={state === 'resetting'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface transition-colors disabled:opacity-50"
@@ -327,13 +344,18 @@ function ResetSWButton({ onReset }: { onReset: () => Promise<void> }) {
                 </>
             ) : state === 'done' ? (
                 <>
-                    <Check size={14} style={{ color: '#28af62' }} />
+                    <Check size={14} className="text-ss-success" />
                     Done
+                </>
+            ) : state === 'error' ? (
+                <>
+                    <XCircle size={14} className="text-ss-error" />
+                    Try again
                 </>
             ) : (
                 <>
                     <RotateCw size={14} />
-                    Reset Service Worker
+                    Reset preview
                 </>
             )}
         </button>

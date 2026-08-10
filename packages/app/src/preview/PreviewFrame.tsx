@@ -5,6 +5,11 @@ import type {
 } from '@streamshapers/ograf-validator-core';
 import { DEFAULT_BACKGROUND, type PreviewBackground } from './preview-types.js';
 import { usePreviewGraphic } from './use-preview-graphic.js';
+import {
+    getRenderRequirementOptions,
+    sameRenderCharacteristics,
+    type RenderRequirementOption,
+} from './render-requirements.js';
 import PreviewStage, { StatusBadge } from './PreviewStage.js';
 import PreviewLifecycleBar from './PreviewLifecycleBar.js';
 import PreviewBackgroundPicker from './PreviewBackgroundPicker.js';
@@ -56,15 +61,16 @@ interface Props {
     packagePath: string;
 }
 
-export default function PreviewFrame({ swReady, manifest, packagePath }: Props) {
+export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath }: Props) {
     const mainFile = readString(manifest, 'main');
     const supportsRealTime = readBool(manifest, 'supportsRealTime') ?? true;
     const supportsNonRealTime = readBool(manifest, 'supportsNonRealTime') ?? false;
     const stepCount = readNumber(manifest, 'stepCount');
     const schema = readSchema(manifest);
     const customActions = readCustomActions(manifest);
+    const renderRequirementOptions = getRenderRequirementOptions(manifest);
 
-    const preview = usePreviewGraphic({ swReady, manifest, packagePath });
+    const preview = usePreviewGraphic({ swReady, dirHandle, manifest, packagePath });
 
     const [background, setBackground] = useState<PreviewBackground>(loadBackground);
 
@@ -73,7 +79,7 @@ export default function PreviewFrame({ swReady, manifest, packagePath }: Props) 
     }, [background]);
 
     if (!mainFile) {
-        return <Notice icon="⚠" text='No "main" field in manifest – cannot preview.' />;
+        return <Notice icon="⚠" text='No "main" field in the manifest. Preview is not available.' />;
     }
     if (!swReady) {
         return <Notice icon="⏳" text="Registering Service Worker…" />;
@@ -90,6 +96,7 @@ export default function PreviewFrame({ swReady, manifest, packagePath }: Props) 
                      style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                     <RenderCharacteristicsRow
                         value={preview.state.renderCharacteristics}
+                        options={renderRequirementOptions}
                         onChange={preview.setRenderCharacteristics}
                     />
                     <div className="ml-auto flex items-center gap-3">
@@ -98,10 +105,10 @@ export default function PreviewFrame({ swReady, manifest, packagePath }: Props) 
                                 STEP{' '}
                                 <span className="text-ss-on-surface">
                                     {preview.state.currentStep === null
-                                        ? (stepCount === -1 ? '∞' : String(stepCount))
+                                        ? 'END'
                                         : preview.state.currentStep !== undefined
-                                            ? String(preview.state.currentStep + 1)
-                                            : '0'}
+                                            ? String(preview.state.currentStep)
+                                            : 'START'}
                                 </span>
                                 {' '}/{' '}
                                 {stepCount === -1 ? '∞' : stepCount}
@@ -263,31 +270,70 @@ function Notice({ icon, text }: { icon: string; text: string }) {
 
 function RenderCharacteristicsRow({
     value,
+    options,
     onChange,
 }: {
     value: import('./preview-types.js').RenderCharacteristics;
+    options: RenderRequirementOption[];
     onChange: (rc: import('./preview-types.js').RenderCharacteristics) => void;
 }) {
+    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     const inputCls =
         'w-16 px-1.5 py-0.5 rounded bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs ' +
         'focus:outline-none focus:border-ss-primary';
 
     const handleWidth = (raw: string) => {
         const n = parseInt(raw, 10);
-        if (!Number.isNaN(n) && n > 0) onChange({ ...value, width: n });
+        if (!Number.isNaN(n) && n > 0) {
+            setSelectedIndex(null);
+            onChange({ ...value, width: n });
+        }
     };
     const handleHeight = (raw: string) => {
         const n = parseInt(raw, 10);
-        if (!Number.isNaN(n) && n > 0) onChange({ ...value, height: n });
+        if (!Number.isNaN(n) && n > 0) {
+            setSelectedIndex(null);
+            onChange({ ...value, height: n });
+        }
     };
     const handleFrameRate = (raw: string) => {
         const n = parseFloat(raw);
-        if (!Number.isNaN(n) && n > 0) onChange({ ...value, frameRate: n });
+        if (!Number.isNaN(n) && n > 0) {
+            setSelectedIndex(null);
+            onChange({ ...value, frameRate: n });
+        }
     };
+    const explicitlySelected = selectedIndex === null
+        ? undefined
+        : options.find((option) => option.index === selectedIndex);
+    const selected = explicitlySelected && sameRenderCharacteristics(explicitlySelected.characteristics, value)
+        ? explicitlySelected
+        : options.find((option) => sameRenderCharacteristics(option.characteristics, value));
 
     return (
         <div className="flex items-center gap-2 text-[10px] text-ss-on-surface-variant">
             <span className="uppercase tracking-wide font-semibold">Render</span>
+            {options.length > 0 && (
+                <select
+                    value={selected ? String(selected.index) : ''}
+                    onChange={(event) => {
+                        const option = options.find((candidate) => String(candidate.index) === event.target.value);
+                        if (option) {
+                            setSelectedIndex(option.index);
+                            onChange(option.characteristics);
+                        } else {
+                            setSelectedIndex(null);
+                        }
+                    }}
+                    className="max-w-64 px-1.5 py-0.5 rounded bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface text-xs focus:outline-none focus:border-ss-primary"
+                    title={selected?.label ?? 'Custom render characteristics'}
+                >
+                    <option value="">Custom</option>
+                    {options.map((option) => (
+                        <option key={option.index} value={String(option.index)}>{option.label}</option>
+                    ))}
+                </select>
+            )}
             <input
                 type="number" min={1}
                 defaultValue={value.width} key={`w-${value.width}`}

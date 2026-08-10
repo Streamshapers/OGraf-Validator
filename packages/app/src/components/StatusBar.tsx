@@ -11,7 +11,7 @@ interface Props {
     specVersion?: string;
     lastScan: Date | null;
     autoRevalidate: boolean;
-    runtimeProgress?: { done: number; total: number } | null;
+    runtimeProgress?: { done: number; total: number; failed: number; inconclusive: number } | null;
 }
 
 export default function StatusBar({
@@ -31,47 +31,42 @@ export default function StatusBar({
 
     return (
         <div
-            className="flex-shrink-0 h-6 bg-ss-surface-lowest flex items-center justify-between px-3 select-none"
+            className="flex-shrink-0 h-6 bg-ss-surface-lowest flex items-center justify-between gap-2 px-2 sm:px-3 select-none overflow-hidden"
             style={{ borderTop: '1px solid var(--ss-border-subtle)' }}
         >
             {/* Left */}
-            <div className="flex items-center gap-3 font-mono text-[10px] text-ss-on-surface-variant">
-                <span>{packageCount} {packageCount === 1 ? 'package' : 'packages'}</span>
-                <Divider />
-                <span>Depth: {scanDepth}</span>
-                <Divider />
-                <span className="text-ss-on-surface-variant/70">{version}</span>
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3 font-mono text-[10px] text-ss-on-surface-variant">
+                <span className="whitespace-nowrap">{packageCount} {packageCount === 1 ? 'package' : 'packages'}</span>
+                <span className="hidden sm:contents">
+                    <Divider />
+                    <span>Depth: {scanDepth}</span>
+                    <Divider />
+                    <span className="text-ss-on-surface-variant/70">{version}</span>
+                </span>
             </div>
 
             {/* Right */}
-            <div className="flex items-center gap-3 font-mono text-[10px] text-ss-on-surface-variant">
+            <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3 font-mono text-[10px] text-ss-on-surface-variant">
                 {runtimeProgress && (
-                    <>
-                        <RuntimeProgressBar done={runtimeProgress.done} total={runtimeProgress.total} />
-                        <Divider />
-                    </>
+                    <RuntimeProgressBar {...runtimeProgress} />
                 )}
                 {autoRevalidate && lastScan && (
-                    <>
+                    <span className="hidden lg:contents">
                         <span className="flex items-center gap-1">
                             <RefreshCw size={9} className="opacity-60" />
                             <span className="opacity-70">Last scan: {relativeTime}</span>
                         </span>
-                        <Divider />
-                    </>
+                    </span>
                 )}
                 {hasIssues && (
-                    <>
-                        <IssueSummary
-                            errorCount={errorCount}
-                            warningCount={warningCount}
-                            infoCount={infoCount}
-                        />
-                        {specVersion && <Divider />}
-                    </>
+                    <IssueSummary
+                        errorCount={errorCount}
+                        warningCount={warningCount}
+                        infoCount={infoCount}
+                    />
                 )}
                 {specVersion && (
-                    <span className="text-ss-on-surface-variant/70 tracking-wide">{specVersion}</span>
+                    <span className="hidden sm:inline text-ss-on-surface-variant/70 tracking-wide">{specVersion}</span>
                 )}
             </div>
         </div>
@@ -132,26 +127,52 @@ function IssueSummary({ errorCount, warningCount }: {
     );
 }
 
-function RuntimeProgressBar({ done, total }: { done: number; total: number }) {
+function RuntimeProgressBar({ done, total, failed, inconclusive }: {
+    done: number;
+    total: number;
+    failed: number;
+    inconclusive: number;
+}) {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const finished = done === total;
+    const color = !finished
+        ? '#4ba1e2'
+        : failed > 0
+            ? '#cc5662'
+            : inconclusive > 0
+                ? '#e2b06f'
+                : '#28af62';
+    const title = failed > 0
+        ? `${failed} runtime test${failed === 1 ? '' : 's'} failed`
+            : inconclusive > 0
+                ? `${inconclusive} runtime test${inconclusive === 1 ? '' : 's'} inconclusive`
+                : finished ? 'All runtime tests passed' : 'Runtime tests in progress';
+    const outcomes = finished
+        ? [
+            failed > 0 ? `${failed} failed` : null,
+            inconclusive > 0 ? `${inconclusive} review` : null,
+        ].filter((value): value is string => value !== null)
+        : [];
 
     return (
-        <span className="flex items-center gap-1.5">
-            <span className="opacity-70">Runtime</span>
+        <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap" title={title}>
+            <span className="hidden sm:inline opacity-70">Runtime</span>
             {/* Bar */}
-            <span className="relative w-16 h-1.5 rounded-full overflow-hidden bg-ss-surface-highest">
+            <span className="relative hidden sm:inline-block w-16 h-1.5 rounded-full overflow-hidden bg-ss-surface-highest">
                 <span
                     className="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                     style={{
                         width: `${pct}%`,
-                        backgroundColor: finished ? '#28af62' : '#4ba1e2',
+                        backgroundColor: color,
                     }}
                 />
             </span>
-            <span className={finished ? 'opacity-70' : 'text-[#4ba1e2]'}>
+            <span style={{ color }}>
                 {done}/{total}
             </span>
+            {outcomes.map((outcome) => (
+                <span key={outcome} style={{ color }}>· {outcome}</span>
+            ))}
         </span>
     );
 }

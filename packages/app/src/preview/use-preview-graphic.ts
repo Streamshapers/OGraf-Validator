@@ -1,21 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { buildImportUrl, buildPreviewData } from './use-preview-sw.js';
 import {
-    DEFAULT_RENDER_CHARACTERISTICS,
+    NON_REALTIME_METHODS,
+    REQUIRED_METHODS,
+    validateSchedule,
+    type NormalizedReturnPayload,
+    type OgrafApiMethod,
+} from './preview-contract.js';
+import {
+    createPreviewRunner,
+    type PreviewRunner,
+} from './preview-runner-client.js';
+import { selectRuntimeRenderRequirement } from './render-requirements.js';
+import {
     MAX_LOG_ENTRIES,
-    type ApiMethod,
-    type CustomActionParams,
+    toOgrafRenderCharacteristics,
     type LogEntry,
-    type OgrafElement,
     type PlayActionParams,
-    type PlayActionReturnPayload,
     type PreviewState,
     type RenderCharacteristics,
     type ScheduleEntry,
     type StopActionParams,
 } from './preview-types.js';
-
-// ─── Session-storage persistence ─────────────────────────────────────────────
+import {
+    buildImportUrl,
+    buildPreviewData,
+    createPreviewSession,
+    type PreviewSession,
+} from './use-preview-sw.js';
 
 interface PersistedState {
     currentData: Record<string, unknown>;
@@ -24,154 +35,53 @@ interface PersistedState {
     skipAnimationDefault: boolean;
 }
 
-function loadPersisted(key: string): Partial<PersistedState> {
-    try {
-        const raw = sessionStorage.getItem(key);
-        if (!raw) return {};
-
-        return JSON.parse(raw) as Partial<PersistedState>;
-    } catch {
-        return {};
-    }
-}
-
-function savePersisted(key: string, data: PersistedState): void {
-    try {
-        sessionStorage.setItem(key, JSON.stringify(data));
-    } catch { /* quota exceeded — ignore */ }
-}
-
-// ─── Render characteristics from manifest ────────────────────────────────────
-
-/** Pick a concrete number from a NumberConstraint: exact → ideal → min → max → fallback */
-function resolveNumberConstraint(
-    constraint: { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
-    fallback: number,
-): number {
-    if (!constraint) return fallback;
-    return constraint.exact ?? constraint.ideal ?? constraint.min ?? constraint.max ?? fallback;
-}
-
-/**
- * Extract RenderCharacteristics from the first renderRequirements entry.
- * Falls back to DEFAULT_RENDER_CHARACTERISTICS for any missing field.
- */
-function extractRenderCharacteristics(manifest: unknown): RenderCharacteristics {
-    if (typeof manifest !== 'object' || manifest === null) return DEFAULT_RENDER_CHARACTERISTICS;
-    const m = manifest as Record<string, unknown>;
-    const reqs = m['renderRequirements'];
-    if (!Array.isArray(reqs) || reqs.length === 0) return DEFAULT_RENDER_CHARACTERISTICS;
-    const first = reqs[0] as Record<string, unknown> | undefined;
-    if (typeof first !== 'object' || first === null) return DEFAULT_RENDER_CHARACTERISTICS;
-
-    const resolution = first['resolution'] as Record<string, unknown> | undefined;
-    const width = resolveNumberConstraint(
-        resolution?.['width'] as { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
-        DEFAULT_RENDER_CHARACTERISTICS.width,
-    );
-    const height = resolveNumberConstraint(
-        resolution?.['height'] as { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
-        DEFAULT_RENDER_CHARACTERISTICS.height,
-    );
-    const frameRate = resolveNumberConstraint(
-        first['frameRate'] as { exact?: number; ideal?: number; min?: number; max?: number } | undefined,
-        DEFAULT_RENDER_CHARACTERISTICS.frameRate,
-    );
-
-    return { width, height, frameRate };
-}
-
-interface UsePreviewGraphicOptions {
+export interface UsePreviewGraphicOptions {
     swReady: boolean;
+    dirHandle: FileSystemDirectoryHandle;
     manifest: unknown;
     packagePath: string;
 }
 
-interface UsePreviewGraphicReturn {
+export interface UsePreviewGraphicReturn {
     state: PreviewState;
     containerRef: React.RefObject<HTMLDivElement>;
     isMounted: boolean;
     setCurrentData: (data: Record<string, unknown>) => void;
     setRenderType: (type: 'realtime' | 'non-realtime') => void;
-    setRenderCharacteristics: (rc: RenderCharacteristics) => void;
+    setRenderCharacteristics: (value: RenderCharacteristics) => void;
     setSkipAnimationDefault: (skip: boolean) => void;
     resetData: () => void;
     callLoad: () => Promise<void>;
     callDispose: () => Promise<void>;
-    callPlay: (opts?: PlayActionParams) => Promise<void>;
-    callStop: (opts?: StopActionParams) => Promise<void>;
-    callUpdate: (opts?: { skipAnimation?: boolean }) => Promise<void>;
-    callCustom: (id: string, payload: unknown, opts?: { skipAnimation?: boolean }) => Promise<void>;
+    callPlay: (options?: PlayActionParams) => Promise<void>;
+    callStop: (options?: StopActionParams) => Promise<void>;
+    callUpdate: (options?: { skipAnimation?: boolean }) => Promise<void>;
+    callCustom: (id: string, payload: unknown, options?: { skipAnimation?: boolean }) => Promise<void>;
     callGoToTime: (timestamp: number) => Promise<void>;
     callSetSchedule: (schedule: ScheduleEntry[]) => Promise<void>;
     clearLog: () => void;
     reMount: () => Promise<void>;
 }
 
-function getMainFile(manifest: unknown): string | undefined {
-    if (typeof manifest !== 'object' || manifest === null) return undefined;
-    const value = (manifest as Record<string, unknown>)['main'];
-
-    return typeof value === 'string' ? value : undefined;
-}
-
-// Returns: number = at step, null = at end (spec: currentStep undefined), undefined = not in result
-function extractCurrentStep(result: unknown): number | null | undefined {
-    if (typeof result !== 'object' || result === null) return undefined;
-    const r = result as Record<string, unknown>;
-
-    // Direct: { currentStep: X } or { currentStep: undefined }
-    if ('currentStep' in r) {
-        return typeof r['currentStep'] === 'number' ? r['currentStep'] as number : null;
-    }
-
-    // Nested: { result: { currentStep: X } }
-    const inner = r['result'];
-    if (typeof inner === 'object' && inner !== null) {
-        const ri = inner as Record<string, unknown>;
-        if ('currentStep' in ri) {
-            return typeof ri['currentStep'] === 'number' ? ri['currentStep'] as number : null;
-        }
-    }
-
-    return undefined;
-}
-
-function makeLogId(): string {
-    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export function usePreviewGraphic({
     swReady,
+    dirHandle,
     manifest,
     packagePath,
 }: UsePreviewGraphicOptions): UsePreviewGraphicReturn {
     const containerRef = useRef<HTMLDivElement>(null);
-    const elementRef = useRef<OgrafElement | null>(null);
-    // Once a class is registered we must reuse its tag name – Chrome throws
-    // NotSupportedError if customElements.define() is called again with it.
-    const registrationRef = useRef<{
-        tagName: string;
-        GraphicClass: new () => OgrafElement;
-    } | null>(null);
-    // Saved originals while console is patched
-    const consolePatchRef = useRef<{
-        log: typeof console.log;
-        warn: typeof console.warn;
-        error: typeof console.error;
-        info: typeof console.info;
-    } | null>(null);
-
+    const runnerRef = useRef<PreviewRunner | null>(null);
+    const sessionRef = useRef<PreviewSession | null>(null);
+    const abortRef = useRef<AbortController | null>(null);
+    const generationRef = useRef(0);
+    const teardownQueueRef = useRef<Promise<void>>(Promise.resolve());
     const sessionKey = `ograf-preview:${packagePath}`;
-
-    const supportsRealTime =
-        typeof manifest === 'object' && manifest !== null
-            ? (manifest as Record<string, unknown>)['supportsRealTime'] !== false
-            : true;
+    const supportsRealTime = readBoolean(manifest, 'supportsRealTime') !== false;
+    const supportsNonRealTime = readBoolean(manifest, 'supportsNonRealTime') === true;
+    const mainFile = readString(manifest, 'main');
 
     const [state, setState] = useState<PreviewState>(() => {
         const persisted = loadPersisted(sessionKey);
-
         return {
             phase: 'idle',
             currentStep: undefined,
@@ -183,11 +93,9 @@ export function usePreviewGraphic({
             error: null,
         };
     });
-
     const stateRef = useRef(state);
     stateRef.current = state;
 
-    // Persist user-editable state across page reloads (sessionStorage per package)
     useEffect(() => {
         savePersisted(sessionKey, {
             currentData: state.currentData,
@@ -197,372 +105,285 @@ export function usePreviewGraphic({
         });
     }, [sessionKey, state.currentData, state.renderType, state.renderCharacteristics, state.skipAnimationDefault]);
 
-    const mainFile = getMainFile(manifest);
-
     const appendLog = useCallback((entry: LogEntry) => {
-        setState((prev) => {
-            const nextLog = [entry, ...prev.log];
-            if (nextLog.length > MAX_LOG_ENTRIES) nextLog.length = MAX_LOG_ENTRIES;
-
-            return { ...prev, log: nextLog };
-        });
+        setState((previous) => ({
+            ...previous,
+            log: [entry, ...previous.log].slice(0, MAX_LOG_ENTRIES),
+        }));
     }, []);
 
-    const patchConsole = useCallback(() => {
-        if (consolePatchRef.current) return;
+    const teardownCurrent = useCallback(async (callDispose: boolean): Promise<void> => {
+        const runner = runnerRef.current;
+        const session = sessionRef.current;
+        runnerRef.current = null;
+        sessionRef.current = null;
 
-        const originals = {
-            log:   console.log.bind(console) as typeof console.log,
-            warn:  console.warn.bind(console) as typeof console.warn,
-            error: console.error.bind(console) as typeof console.error,
-            info:  console.info.bind(console) as typeof console.info,
+        const teardown = async () => {
+            if (runner) {
+                if (callDispose && runner.methods.includes('dispose')) {
+                    try {
+                        await runner.call('dispose', {}, { timeoutMs: 10_000 });
+                    } catch {
+                        // destroy() still removes the isolated browsing context.
+                    }
+                }
+                await runner.destroy();
+            }
+            session?.close();
         };
-        consolePatchRef.current = originals;
+        const queued = teardownQueueRef.current.then(teardown, teardown);
+        teardownQueueRef.current = queued.catch(() => undefined);
+        await queued;
+    }, []);
 
-        const capture = (level: 'log' | 'warn' | 'error' | 'info') =>
-            (...args: unknown[]): void => {
-                // Forward to the original so DevTools still see it
-                (originals[level] as (...a: unknown[]) => void)(...args);
-                appendLog({
-                    id: makeLogId(),
-                    timestamp: Date.now(),
-                    method: `console.${level}` as ApiMethod,
-                    params: args.length === 1 ? args[0] : args,
-                    durationMs: 0,
-                });
-            };
+    const invoke = useCallback(async (
+        method: OgrafApiMethod,
+        params: unknown,
+    ): Promise<NormalizedReturnPayload | undefined> => {
+        const runner = runnerRef.current;
+        const started = performance.now();
+        if (!runner || !runner.methods.includes(method)) {
+            const message = `${method}() is not implemented.`;
+            appendLog(logEntry(method, params, started, undefined, message));
+            setState((previous) => ({ ...previous, phase: 'error', error: message }));
+            return undefined;
+        }
 
-        console.log   = capture('log');
-        console.warn  = capture('warn');
-        console.error = capture('error');
-        console.info  = capture('info');
+        try {
+            const call = await runner.call(method, params, { timeoutMs: 10_000 });
+            if (!call.wasPromise) throw new Error(`${method}() must return a Promise.`);
+            if (!call.normalized.valid) throw new Error(call.normalized.error ?? 'Invalid return payload.');
+            if (!call.normalized.successful) {
+                throw new Error(
+                    `${method}() returned status ${call.normalized.statusCode}${
+                        call.normalized.statusMessage ? `: ${call.normalized.statusMessage}` : ''
+                    }.`,
+                );
+            }
+            appendLog(logEntry(method, params, started, call.normalized.raw));
+            return call.normalized;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            appendLog(logEntry(method, params, started, undefined, message));
+            setState((previous) => ({ ...previous, phase: 'error', error: message }));
+            return undefined;
+        }
     }, [appendLog]);
 
-    const restoreConsole = useCallback(() => {
-        if (!consolePatchRef.current) return;
-        const orig = consolePatchRef.current;
-        console.log   = orig.log;
-        console.warn  = orig.warn;
-        console.error = orig.error;
-        console.info  = orig.info;
-        consolePatchRef.current = null;
-    }, []);
+    const mount = useCallback(async (): Promise<void> => {
+        const container = containerRef.current;
+        if (!swReady || !mainFile || !container) return;
+        const generation = ++generationRef.current;
+        abortRef.current?.abort();
+        const abortController = new AbortController();
+        abortRef.current = abortController;
+        await teardownCurrent(true);
+        if (generation !== generationRef.current || abortController.signal.aborted) return;
+        container.replaceChildren();
 
-    /**
-     * Wrap an API call in timing + logging + error handling.
-     * Returns the result (or undefined on error).
-     */
-    const invoke = useCallback(
-        async <T>(
-            method: ApiMethod,
-            params: unknown,
-            fn: () => Promise<T | void> | T | void,
-        ): Promise<T | undefined> => {
-            const started = performance.now();
-            try {
-                const result = await fn();
-                const durationMs = Math.round(performance.now() - started);
-                appendLog({
-                    id: makeLogId(),
-                    timestamp: Date.now(),
-                    method,
-                    params,
-                    result,
-                    durationMs,
-                });
-
-                return result ?? undefined;
-            } catch (err) {
-                const durationMs = Math.round(performance.now() - started);
-                const message = err instanceof Error ? err.message : String(err);
-                appendLog({
-                    id: makeLogId(),
-                    timestamp: Date.now(),
-                    method,
-                    params,
-                    error: message,
-                    durationMs,
-                });
-                setState((prev) => ({ ...prev, phase: 'error', error: `${method}() failed: ${message}` }));
-
-                return undefined;
-            }
-        },
-        [appendLog],
-    );
-
-    // ─── Mount a new element instance from a registered graphic class ────────
-
-    const mountGraphicClass = useCallback(
-        async (GraphicClass: new () => OgrafElement): Promise<void> => {
-            const container = containerRef.current;
-            if (!container) return;
-
-            // Stop and remove any old element
-            if (elementRef.current?.stopAction) {
-                try { void elementRef.current.stopAction(); } catch { /* ignore */ }
-            }
-            elementRef.current = null;
-            container.innerHTML = '';
-            restoreConsole();
-
-            // Reuse the registered tag name for this class, or register a new one
-            let tagName: string;
-            const existing = registrationRef.current;
-            if (existing && existing.GraphicClass === GraphicClass) {
-                tagName = existing.tagName;
-            } else {
-                tagName = `ograf-preview-${Date.now()}`;
-                customElements.define(tagName, GraphicClass);
-                registrationRef.current = { tagName, GraphicClass };
-            }
-
-            const el = document.createElement(tagName) as OgrafElement;
-            el.style.cssText = 'display:block;width:100%;height:100%;';
-            elementRef.current = el;
-            patchConsole();
-            container.appendChild(el);
-
-            // Wait one frame so the browser computes layout before load() reads
-            // container dimensions (e.g. Lottie calls offsetWidth/offsetHeight).
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-            setState((prev) => ({ ...prev, phase: 'loading', error: null }));
-
-            if (!el.load) {
-                setState((prev) => ({ ...prev, phase: 'loaded' }));
-
-                return;
-            }
-
-            const snapshot = stateRef.current;
-            const params = {
-                data: snapshot.currentData,
-                renderType: snapshot.renderType,
-                renderCharacteristics: snapshot.renderCharacteristics,
-            };
-            const result = await invoke('load', params, () => el.load!(params));
-            if (result !== undefined || stateRef.current.phase !== 'error') {
-                setState((prev) => ({ ...prev, phase: 'loaded' }));
-            }
-        },
-        [invoke, patchConsole, restoreConsole],
-    );
-
-    // ─── Import the module once per package + SW ready ───────────────────────
-
-    useEffect(() => {
-        if (!swReady || !mainFile) return;
-
-        registrationRef.current = null;
-        setState((prev) => ({
-            ...prev,
+        const session = createPreviewSession(dirHandle);
+        sessionRef.current = session;
+        const importUrl = buildImportUrl(mainFile, session.sessionId);
+        setState((previous) => ({
+            ...previous,
             phase: 'importing',
             error: null,
             currentStep: undefined,
-            currentData: buildPreviewData(manifest),
         }));
 
-        const importUrl = buildImportUrl(mainFile);
-        let cancelled = false;
-
-        void (async () => {
-            try {
-                const mod = await import(/* @vite-ignore */ importUrl) as {
-                    default?: new () => OgrafElement;
-                };
-                if (cancelled) return;
-
-                const Cls = mod.default;
-                if (!Cls || typeof Cls !== 'function') {
-                    setState((prev) => ({
-                        ...prev,
-                        phase: 'error',
-                        error: 'Module has no default export (expected an HTMLElement class).',
-                    }));
-
-                    return;
-                }
-
-                await mountGraphicClass(Cls);
-            } catch (err) {
-                if (cancelled) return;
-                const message = err instanceof Error ? err.message : String(err);
-                setState((prev) => ({
-                    ...prev,
-                    phase: 'error',
-                    error: `Import failed: ${message}`,
-                }));
+        try {
+            const snapshot = stateRef.current;
+            const runner = await createPreviewRunner({
+                sessionId: session.sessionId,
+                importUrl,
+                mount: container,
+                width: snapshot.renderCharacteristics.width,
+                height: snapshot.renderCharacteristics.height,
+                timeoutMs: 10_000,
+                signal: abortController.signal,
+                onLog: ({ level, args }) => appendLog({
+                    id: makeLogId(),
+                    timestamp: Date.now(),
+                    method: `console.${level}`,
+                    params: args.length === 1 ? args[0] : args,
+                    durationMs: 0,
+                }),
+                onRuntimeError: (message) => {
+                    appendLog({
+                        id: makeLogId(),
+                        timestamp: Date.now(),
+                        method: 'console.error',
+                        params: message,
+                        error: message,
+                        durationMs: 0,
+                    });
+                    setState((previous) => ({ ...previous, phase: 'error', error: message }));
+                },
+            });
+            if (generation !== generationRef.current || abortController.signal.aborted) {
+                await runner.destroy();
+                session.close();
+                return;
             }
-        })();
+            runnerRef.current = runner;
+
+            const required = supportsNonRealTime
+                ? [...REQUIRED_METHODS, ...NON_REALTIME_METHODS]
+                : [...REQUIRED_METHODS];
+            const missing = required.filter((method) => !runner.methods.includes(method));
+            if (missing.length > 0) {
+                throw new Error(`Missing required method(s): ${missing.map((method) => `${method}()`).join(', ')}.`);
+            }
+
+            setState((previous) => ({ ...previous, phase: 'loading', error: null }));
+            const loaded = await invoke('load', {
+                data: snapshot.currentData,
+                renderType: snapshot.renderType,
+                renderCharacteristics: toOgrafRenderCharacteristics(snapshot.renderCharacteristics),
+            });
+            if (loaded && generation === generationRef.current) {
+                setState((previous) => ({ ...previous, phase: 'loaded', error: null }));
+            }
+        } catch (error) {
+            if (abortController.signal.aborted || generation !== generationRef.current) return;
+            const message = error instanceof Error ? error.message : String(error);
+            setState((previous) => ({ ...previous, phase: 'error', error: message }));
+            await teardownCurrent(true);
+        }
+    }, [appendLog, dirHandle, invoke, mainFile, supportsNonRealTime, swReady, teardownCurrent]);
+
+    useEffect(() => {
+        if (!swReady || !mainFile) return;
+        const persisted = loadPersisted(sessionKey);
+        const nextState: PreviewState = {
+            ...stateRef.current,
+            currentData: persisted.currentData ?? buildPreviewData(manifest),
+            renderCharacteristics: persisted.renderCharacteristics ?? extractRenderCharacteristics(manifest),
+            renderType: persisted.renderType ?? (supportsRealTime ? 'realtime' : 'non-realtime'),
+            skipAnimationDefault: persisted.skipAnimationDefault ?? stateRef.current.skipAnimationDefault,
+            currentStep: undefined,
+        };
+        stateRef.current = nextState;
+        setState(nextState);
+        void mount();
 
         return () => {
-            cancelled = true;
-            restoreConsole();
+            // Cleanup must invalidate the latest generation, not the value captured at mount time.
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            ++generationRef.current;
+            abortRef.current?.abort();
+            abortRef.current = null;
+            void teardownCurrent(true);
         };
+        // packagePath is the identity boundary; manifest object identity is intentionally ignored.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [swReady, mainFile, packagePath]);
-
-    // ─── Public action invokers ─────────────────────────────────────────────
-
-    const callLoad = useCallback(async (): Promise<void> => {
-        const reg = registrationRef.current;
-        if (!reg) return;
-        await mountGraphicClass(reg.GraphicClass);
-    }, [mountGraphicClass]);
+    }, [swReady, mainFile, packagePath, dirHandle]);
 
     const callDispose = useCallback(async (): Promise<void> => {
-        const el = elementRef.current;
-        if (!el) return;
+        if (!runnerRef.current) return;
+        const disposed = await invoke('dispose', {});
+        if (!disposed || stateRef.current.phase === 'error') return;
+        await teardownCurrent(false);
+        setState((previous) => previous.phase === 'error'
+            ? previous
+            : { ...previous, phase: 'disposed', currentStep: undefined });
+    }, [invoke, teardownCurrent]);
 
-        if (el.dispose) {
-            await invoke('dispose', {}, () => el.dispose!({}));
+    const callPlay = useCallback(async (options: PlayActionParams = {}): Promise<void> => {
+        const params: PlayActionParams = {
+            ...(options.goto !== undefined
+                ? { goto: options.goto }
+                : { delta: options.delta ?? 1 }),
+            skipAnimation: options.skipAnimation ?? stateRef.current.skipAnimationDefault,
+        };
+        setState((previous) => ({ ...previous, phase: 'playing' }));
+        const payload = await invoke('playAction', params);
+        setState((previous) => ({
+            ...previous,
+            phase: previous.phase === 'error' ? 'error' : 'loaded',
+            currentStep: payload?.hasCurrentStep ? payload.currentStep : previous.currentStep,
+        }));
+    }, [invoke]);
+
+    const callStop = useCallback(async (options: StopActionParams = {}): Promise<void> => {
+        await invoke('stopAction', {
+            skipAnimation: options.skipAnimation ?? stateRef.current.skipAnimationDefault,
+        });
+        setState((previous) => ({
+            ...previous,
+            phase: previous.phase === 'error' ? 'error' : 'stopped',
+        }));
+    }, [invoke]);
+
+    const callUpdate = useCallback(async (options: { skipAnimation?: boolean } = {}): Promise<void> => {
+        await invoke('updateAction', {
+            data: stateRef.current.currentData,
+            skipAnimation: options.skipAnimation ?? stateRef.current.skipAnimationDefault,
+        });
+    }, [invoke]);
+
+    const callCustom = useCallback(async (
+        id: string,
+        payload: unknown,
+        options: { skipAnimation?: boolean } = {},
+    ): Promise<void> => {
+        await invoke('customAction', {
+            id,
+            payload,
+            skipAnimation: options.skipAnimation ?? stateRef.current.skipAnimationDefault,
+        });
+    }, [invoke]);
+
+    const callGoToTime = useCallback(async (timestamp: number): Promise<void> => {
+        await invoke('goToTime', { timestamp });
+    }, [invoke]);
+
+    const callSetSchedule = useCallback(async (schedule: ScheduleEntry[]): Promise<void> => {
+        const errors = validateSchedule(schedule);
+        if (errors.length > 0) {
+            const message = errors.join(' ');
+            appendLog(logEntry('setActionsSchedule', { schedule }, performance.now(), undefined, message));
+            setState((previous) => ({ ...previous, phase: 'error', error: message }));
+            return;
         }
+        await invoke('setActionsSchedule', { schedule });
+    }, [appendLog, invoke]);
 
-        restoreConsole();
-        if (containerRef.current) containerRef.current.innerHTML = '';
-        elementRef.current = null;
-        setState((prev) => ({ ...prev, phase: 'disposed', currentStep: undefined }));
-    }, [invoke, restoreConsole]);
-
-    const callPlay = useCallback(
-        async (opts: PlayActionParams = {}): Promise<void> => {
-            const el = elementRef.current;
-            if (!el?.playAction) return;
-
-            const params: PlayActionParams = {
-                ...(opts.delta !== undefined ? { delta: opts.delta } : { delta: 1 }),
-                ...(opts.goto !== undefined ? { goto: opts.goto } : {}),
-                skipAnimation: opts.skipAnimation ?? stateRef.current.skipAnimationDefault,
-            };
-
-            setState((prev) => ({ ...prev, phase: 'playing' }));
-            const result = await invoke<PlayActionReturnPayload>(
-                'playAction',
-                params,
-                () => el.playAction!(params) as Promise<PlayActionReturnPayload | void>,
-            );
-
-            const nextStep = extractCurrentStep(result);
-            setState((prev) => ({
-                ...prev,
-                phase: prev.phase === 'error' ? 'error' : 'loaded',
-                // undefined = result had no step info → keep previous; null/number = use new value
-                currentStep: nextStep === undefined ? prev.currentStep : nextStep,
-            }));
-        },
-        [invoke],
-    );
-
-    const callStop = useCallback(
-        async (opts: StopActionParams = {}): Promise<void> => {
-            const el = elementRef.current;
-            if (!el?.stopAction) return;
-
-            const params: StopActionParams = {
-                skipAnimation: opts.skipAnimation ?? stateRef.current.skipAnimationDefault,
-            };
-
-            await invoke('stopAction', params, () => el.stopAction!(params));
-            setState((prev) => ({
-                ...prev,
-                phase: prev.phase === 'error' ? 'error' : 'stopped',
-            }));
-        },
-        [invoke],
-    );
-
-    const callUpdate = useCallback(
-        async (opts: { skipAnimation?: boolean } = {}): Promise<void> => {
-            const el = elementRef.current;
-            if (!el?.updateAction) return;
-
-            const params = {
-                data: stateRef.current.currentData,
-                skipAnimation: opts.skipAnimation ?? stateRef.current.skipAnimationDefault,
-            };
-            await invoke('updateAction', params, () => el.updateAction!(params));
-        },
-        [invoke],
-    );
-
-    const callCustom = useCallback(
-        async (id: string, payload: unknown, opts: { skipAnimation?: boolean } = {}): Promise<void> => {
-            const el = elementRef.current;
-            if (!el?.customAction) return;
-
-            const params: CustomActionParams = {
-                id,
-                payload,
-                skipAnimation: opts.skipAnimation ?? stateRef.current.skipAnimationDefault,
-            };
-            await invoke('customAction', params, () => el.customAction!(params));
-        },
-        [invoke],
-    );
-
-    const callGoToTime = useCallback(
-        async (timestamp: number): Promise<void> => {
-            const el = elementRef.current;
-            if (!el?.goToTime) return;
-            await invoke('goToTime', { timestamp }, () => el.goToTime!({ timestamp }));
-        },
-        [invoke],
-    );
-
-    const callSetSchedule = useCallback(
-        async (schedule: ScheduleEntry[]): Promise<void> => {
-            const el = elementRef.current;
-            if (!el?.setActionsSchedule) return;
-            await invoke('setActionsSchedule', { schedule }, () => el.setActionsSchedule!({ schedule }));
-        },
-        [invoke],
-    );
-
-    const reMount = useCallback(async (): Promise<void> => {
-        const reg = registrationRef.current;
-        if (!reg) return;
-        await mountGraphicClass(reg.GraphicClass);
-    }, [mountGraphicClass]);
-
-    // ─── Simple setters ────────────────────────────────────────────────────
-
-    const setCurrentData = useCallback((data: Record<string, unknown>) => {
-        setState((prev) => ({ ...prev, currentData: data }));
+    const setCurrentData = useCallback((currentData: Record<string, unknown>) => {
+        setState((previous) => ({ ...previous, currentData }));
     }, []);
-
-    const setRenderType = useCallback((type: 'realtime' | 'non-realtime') => {
-        setState((prev) => ({ ...prev, renderType: type }));
+    const setRenderType = useCallback((renderType: 'realtime' | 'non-realtime') => {
+        const next = { ...stateRef.current, renderType };
+        stateRef.current = next;
+        setState(next);
+        void mount();
+    }, [mount]);
+    const setRenderCharacteristics = useCallback((renderCharacteristics: RenderCharacteristics) => {
+        const next = { ...stateRef.current, renderCharacteristics };
+        stateRef.current = next;
+        setState(next);
+        void mount();
+    }, [mount]);
+    const setSkipAnimationDefault = useCallback((skipAnimationDefault: boolean) => {
+        setState((previous) => ({ ...previous, skipAnimationDefault }));
     }, []);
-
-    const setRenderCharacteristics = useCallback((rc: RenderCharacteristics) => {
-        setState((prev) => ({ ...prev, renderCharacteristics: rc }));
-    }, []);
-
-    const setSkipAnimationDefault = useCallback((skip: boolean) => {
-        setState((prev) => ({ ...prev, skipAnimationDefault: skip }));
-    }, []);
-
     const resetData = useCallback(() => {
-        setState((prev) => ({ ...prev, currentData: buildPreviewData(manifest) }));
+        setState((previous) => ({ ...previous, currentData: buildPreviewData(manifest) }));
     }, [manifest]);
-
     const clearLog = useCallback(() => {
-        setState((prev) => ({ ...prev, log: [] }));
+        setState((previous) => ({ ...previous, log: [] }));
     }, []);
-
-    const isMounted = elementRef.current !== null;
 
     return {
         state,
         containerRef,
-        isMounted,
+        isMounted: runnerRef.current !== null && state.phase !== 'disposed',
         setCurrentData,
         setRenderType,
         setRenderCharacteristics,
         setSkipAnimationDefault,
         resetData,
-        callLoad,
+        callLoad: mount,
         callDispose,
         callPlay,
         callStop,
@@ -571,6 +392,65 @@ export function usePreviewGraphic({
         callGoToTime,
         callSetSchedule,
         clearLog,
-        reMount,
+        reMount: mount,
     };
+}
+
+function loadPersisted(key: string): Partial<PersistedState> {
+    try {
+        const raw = sessionStorage.getItem(key);
+        return raw ? JSON.parse(raw) as Partial<PersistedState> : {};
+    } catch {
+        return {};
+    }
+}
+
+function savePersisted(key: string, value: PersistedState): void {
+    try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {
+        // Session persistence is optional.
+    }
+}
+
+export function extractRenderCharacteristics(manifest: unknown): RenderCharacteristics {
+    return selectRuntimeRenderRequirement(manifest).characteristics;
+}
+
+function logEntry(
+    method: OgrafApiMethod,
+    params: unknown,
+    started: number,
+    result?: unknown,
+    error?: string,
+): LogEntry {
+    return {
+        id: makeLogId(),
+        timestamp: Date.now(),
+        method,
+        params,
+        ...(result === undefined ? {} : { result }),
+        ...(error === undefined ? {} : { error }),
+        durationMs: Math.round(performance.now() - started),
+    };
+}
+
+function makeLogId(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function readString(value: unknown, key: string): string | undefined {
+    const candidate = record(value)[key];
+    return typeof candidate === 'string' ? candidate : undefined;
+}
+
+function readBoolean(value: unknown, key: string): boolean | undefined {
+    const candidate = record(value)[key];
+    return typeof candidate === 'boolean' ? candidate : undefined;
+}
+
+function record(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {};
 }

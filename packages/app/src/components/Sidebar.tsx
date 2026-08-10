@@ -1,15 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Settings, Loader2, FolderOpen } from 'lucide-react';
+import { Settings, Loader2, FolderOpen, X } from 'lucide-react';
 import type { ValidationResult } from '@streamshapers/ograf-validator-core';
 import type { PackageEntry } from '../scanner/scan-packages.js';
 import type { RuntimeTestResult } from '../preview/runtime-test-types.js';
+import {
+    derivePackageReadiness,
+    type PackageReadiness,
+    type RuntimeTestPhase,
+} from '../readiness/package-readiness.js';
 
-interface RuntimeInfo { result?: RuntimeTestResult; running?: boolean }
+interface RuntimeInfo {
+    result?: RuntimeTestResult;
+    phase?: RuntimeTestPhase;
+    readiness?: PackageReadiness;
+}
 
 interface Props {
     rootName: string | null;
     packages: PackageEntry[];
-    selectedPath: string | null;
+    selectedKey: string | null;
     validationResults: Record<string, ValidationResult>;
     runtimeResults?: Record<string, RuntimeInfo>;
     isScanning: boolean;
@@ -18,14 +27,15 @@ interface Props {
     isSettingsActive: boolean;
     onOpenSettings: () => void;
     onShowOverview: () => void;
+    onClose?: () => void;
 }
 
-type StatusFilter = 'all' | 'errors' | 'warnings' | 'valid';
+type StatusFilter = 'all' | 'errors' | 'warnings' | 'ready';
 
 export default function Sidebar({
     rootName,
     packages,
-    selectedPath,
+    selectedKey,
     validationResults,
     runtimeResults,
     isScanning,
@@ -34,6 +44,7 @@ export default function Sidebar({
     isSettingsActive,
     onOpenSettings,
     onShowOverview,
+    onClose,
 }: Props) {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
@@ -44,11 +55,15 @@ export default function Sidebar({
 
     const filteredPackages = packages.filter((entry) => {
         if (statusFilter === 'all') return true;
-        const result = validationResults[entry.path];
+        const result = validationResults[entry.key];
         if (!result) return false;
-        if (statusFilter === 'errors') return result.errors.length > 0;
-        if (statusFilter === 'warnings') return result.warnings.length > 0 && result.errors.length === 0;
-        if (statusFilter === 'valid') return result.valid && result.warnings.length === 0;
+        const runtimeInfo = runtimeResults?.[entry.key];
+        const readiness = runtimeInfo?.readiness ?? derivePackageReadiness(result, runtimeInfo?.result, runtimeInfo?.phase);
+        if (statusFilter === 'errors') {
+            return readiness.status === 'static-invalid' || readiness.status === 'runtime-failed';
+        }
+        if (statusFilter === 'warnings') return readiness.status === 'needs-review';
+        if (statusFilter === 'ready') return readiness.status === 'production-ready';
         return true;
     });
 
@@ -58,8 +73,23 @@ export default function Sidebar({
         : String(packages.length);
 
     return (
-        <aside className="w-60 flex-shrink-0 bg-ss-surface-lowest flex flex-col"
+        <aside className="w-64 lg:w-60 h-full flex-shrink-0 bg-ss-surface-lowest flex flex-col shadow-2xl lg:shadow-none"
                style={{ borderRight: '1px solid var(--ss-border-subtle)' }}>
+
+            <div className="lg:hidden flex h-11 items-center justify-between px-3"
+                 style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ss-on-surface-variant">
+                    Package navigation
+                </span>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded text-ss-on-surface-variant hover:bg-ss-surface-high hover:text-ss-on-surface transition-colors"
+                    aria-label="Close package navigation"
+                >
+                    <X size={16} />
+                </button>
+            </div>
 
             {/* PROJECT section */}
             {rootName ? (
@@ -84,7 +114,7 @@ export default function Sidebar({
             {/* Status filter chips */}
             {packages.length > 0 && (
                 <div className="flex gap-1 px-2 pb-1.5">
-                    {(['all', 'errors', 'warnings', 'valid'] as const).map((status) => (
+                    {(['all', 'errors', 'warnings', 'ready'] as const).map((status) => (
                         <StatusChip
                             key={status}
                             label={status}
@@ -118,11 +148,11 @@ export default function Sidebar({
                     <ul className="flex flex-col gap-0.5 px-1 py-1">
                         {filteredPackages.map((entry) => (
                             <PackageItem
-                                key={entry.path}
+                                key={entry.key}
                                 entry={entry}
-                                isSelected={selectedPath === entry.path}
-                                result={validationResults[entry.path]}
-                                runtimeInfo={runtimeResults?.[entry.path]}
+                                isSelected={selectedKey === entry.key}
+                                result={validationResults[entry.key]}
+                                runtimeInfo={runtimeResults?.[entry.key]}
                                 onClick={() => onSelectPackage(entry)}
                             />
                         ))}
@@ -187,10 +217,10 @@ function PackageItem({ entry, isSelected, result, runtimeInfo, onClick }: ItemPr
             >
                 <StatusDot result={result} runtimeInfo={runtimeInfo} />
                 <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
-                    <p className="text-xs text-ss-on-surface truncate font-mono leading-snug" title={entry.path}>
+                    <p className="text-xs text-ss-on-surface truncate font-mono leading-snug" title={entry.manifestPath}>
                         {entry.displayName}
                     </p>
-                    <ErrorCount result={result} />
+                    <IssueCount result={result} runtimeInfo={runtimeInfo} />
                 </div>
             </button>
         </li>
@@ -201,39 +231,40 @@ function StatusDot({ result, runtimeInfo }: { result: ValidationResult | undefin
     if (!result) {
         return <span className="h-2 w-2 flex-shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
     }
-    if (result.errors.length > 0) {
+    const readiness = runtimeInfo?.readiness ?? derivePackageReadiness(result, runtimeInfo?.result, runtimeInfo?.phase);
+    if (readiness.status === 'static-invalid' || readiness.status === 'runtime-failed') {
         return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#cc5662' }} />;
     }
-    // Runtime test failed → red even if statically valid
-    if (runtimeInfo?.result && !runtimeInfo.result.passed) {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#cc5662' }} />;
-    }
-    if (result.warnings.length > 0) {
+    if (readiness.status === 'needs-review') {
         return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#e2b06f' }} />;
     }
-    // Runtime test still running → green with pulse
-    if (runtimeInfo?.running) {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full animate-pulse" style={{ backgroundColor: '#28af62' }} />;
+    if (readiness.status === 'runtime-running') {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full animate-pulse" style={{ backgroundColor: '#4ba1e2' }} />;
     }
-    if (result.valid) {
+    if (readiness.status === 'runtime-pending') {
+        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#4ba1e2' }} />;
+    }
+    if (readiness.status === 'production-ready') {
         return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#28af62' }} />;
     }
     return <span className="h-2 w-2 flex-shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
 }
 
-function ErrorCount({ result }: { result: ValidationResult | undefined }) {
+function IssueCount({ result, runtimeInfo }: { result: ValidationResult | undefined; runtimeInfo?: RuntimeInfo }) {
     if (!result) return null;
-    if (result.errors.length > 0) {
+    const readiness = runtimeInfo?.readiness ?? derivePackageReadiness(result, runtimeInfo?.result, runtimeInfo?.phase);
+    if (readiness.totalIssues === 0) return null;
+    if (readiness.status === 'static-invalid' || readiness.status === 'runtime-failed') {
         return (
             <span className="text-[10px] font-semibold font-mono flex-shrink-0" style={{ color: '#cc5662' }}>
-                {result.errors.length}
+                {readiness.totalIssues}
             </span>
         );
     }
-    if (result.warnings.length > 0) {
+    if (readiness.status === 'needs-review') {
         return (
             <span className="text-[10px] font-semibold font-mono flex-shrink-0" style={{ color: '#e2b06f' }}>
-                {result.warnings.length}
+                {readiness.totalIssues}
             </span>
         );
     }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { validateSchedule } from './preview-contract.js';
 import type { ScheduleEntry } from './preview-types.js';
 
 const DURATION_KEY = 'ograf-preview-duration';
@@ -10,8 +11,8 @@ interface Props {
     onSetSchedule: (schedule: ScheduleEntry[]) => void;
 }
 
-const DEFAULT_SCHEDULE_JSON =
-    '[\n  { "timestamp": 0,    "action": { "method": "playAction", "params": { "delta": 1 } } },\n  { "timestamp": 2000, "action": { "method": "stopAction" } }\n]';
+export const DEFAULT_SCHEDULE_JSON =
+    '[\n  { "timestamp": 0,    "action": { "type": "playAction", "params": { "goto": 0 } } },\n  { "timestamp": 2000, "action": { "type": "stopAction", "params": {} } }\n]';
 
 export default function PreviewNonRealtimePanel({ disabled, manifest, onGoToTime, onSetSchedule }: Props) {
     const computed = computeMaxDuration(manifest);
@@ -44,44 +45,10 @@ export default function PreviewNonRealtimePanel({ disabled, manifest, onGoToTime
 }
 
 function computeMaxDuration(manifest: unknown): number {
-    if (typeof manifest !== 'object' || manifest === null) return 60000;
-    const m = manifest as Record<string, unknown>;
-
-    // Direct duration field (ms)
-    if (typeof m['duration'] === 'number') return m['duration'] as number;
-
-    // frameRate: spec defines it as OgrafNumberConstraint inside renderRequirement
-    // { renderRequirement: { frameRate: { max?: number, min?: number } } }
-    const frameRate = resolveFrameRate(m);
-
-    const markers = m['markers'];
-    if (Array.isArray(markers) && markers.length > 0) {
-        const last = markers[markers.length - 1] as Record<string, unknown>;
-        const tm = typeof last['tm'] === 'number' ? last['tm'] as number : 0;
-        const dr = typeof last['dr'] === 'number' ? last['dr'] as number : 0;
-        if (tm + dr > 0) return Math.ceil(((tm + dr) / frameRate) * 1000);
-    }
-
+    void manifest;
+    // OGraf v1 has no total timeline duration. actionDurations describe
+    // individual action animations and must not be treated as timeline length.
     return 60000;
-}
-
-function resolveFrameRate(m: Record<string, unknown>): number {
-    // Top-level direct number (non-spec but common shorthand)
-    if (typeof m['frameRate'] === 'number') return m['frameRate'] as number;
-
-    // Spec: renderRequirement.frameRate is an OgrafNumberConstraint { max?, min? }
-    const rr = m['renderRequirement'];
-    if (typeof rr === 'object' && rr !== null) {
-        const fr = (rr as Record<string, unknown>)['frameRate'];
-        if (typeof fr === 'number') return fr;
-        if (typeof fr === 'object' && fr !== null) {
-            const fc = fr as Record<string, unknown>;
-            const fps = fc['max'] ?? fc['min'];
-            if (typeof fps === 'number') return fps;
-        }
-    }
-
-    return 25; // fallback
 }
 
 const INPUT_CLS = 'px-1.5 py-0.5 rounded bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs focus:outline-none focus:border-ss-primary';
@@ -172,6 +139,11 @@ function ScheduleEditor({
             if (!Array.isArray(parsed)) {
                 setError('Schedule must be a JSON array.');
 
+                return;
+            }
+            const shapeErrors = validateSchedule(parsed);
+            if (shapeErrors.length > 0) {
+                setError(shapeErrors.join(' '));
                 return;
             }
             setError(null);

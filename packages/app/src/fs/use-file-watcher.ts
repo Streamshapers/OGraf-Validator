@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+const IGNORED_DIRECTORIES = new Set(['node_modules', '.git', '.idea', 'dist', 'build', '__pycache__']);
+
 /** Recursively collect { path → lastModified } for all files in a directory. */
 async function getSnapshot(
     handle: FileSystemDirectoryHandle,
@@ -12,6 +14,7 @@ async function getSnapshot(
             const file = await (entry as FileSystemFileHandle).getFile();
             snapshot.set(path, file.lastModified);
         } else if (entry.kind === 'directory') {
+            if (IGNORED_DIRECTORIES.has(name) || name.startsWith('.')) continue;
             const sub = await getSnapshot(entry as FileSystemDirectoryHandle, path);
             for (const [k, v] of sub) snapshot.set(k, v);
         }
@@ -50,25 +53,32 @@ export function useFileWatcher(
 
         let cancelled = false;
 
-        // Take initial snapshot without triggering a change
-        void getSnapshot(dirHandle).then((initial) => {
-            if (!cancelled) snapshotRef.current = initial;
-        });
+        let timer: ReturnType<typeof setTimeout> | undefined;
 
-        const id = setInterval(() => {
-            void getSnapshot(dirHandle).then((next) => {
+        // A chained timeout prevents two recursive snapshots from overlapping.
+        // Transient permission/deletion races are retried on the next interval.
+        const poll = async (): Promise<void> => {
+            try {
+                const next = await getSnapshot(dirHandle);
                 if (cancelled) return;
                 const prev = snapshotRef.current;
                 if (prev !== null && !snapshotsEqual(prev, next)) {
                     onChangedRef.current();
                 }
                 snapshotRef.current = next;
-            });
-        }, intervalMs);
+            } catch {
+                // The directory may be changing while it is traversed. Preserve
+                // the last complete snapshot and retry without an unhandled rejection.
+            } finally {
+                if (!cancelled) timer = setTimeout(() => void poll(), intervalMs);
+            }
+        };
+
+        void poll();
 
         return () => {
             cancelled = true;
-            clearInterval(id);
+            if (timer !== undefined) clearTimeout(timer);
             snapshotRef.current = null;
         };
     }, [dirHandle, enabled, intervalMs]);

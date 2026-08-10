@@ -178,7 +178,7 @@ function GotoSelect({ value, onChange, stepCount }: { value: string; onChange: (
             <select value={value} onChange={(e) => onChange(e.target.value)} className={SELECT_CLS}>
                 <option value="">auto</option>
                 {Array.from({ length: stepCount }, (_, i) => (
-                    <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
+                    <option key={i} value={String(i)}>{i}</option>
                 ))}
             </select>
         </label>

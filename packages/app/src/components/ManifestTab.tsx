@@ -7,8 +7,11 @@ interface Props {
 
 export default function ManifestTab({ manifest }: Props) {
     return (
-        <div className="font-mono text-sm leading-relaxed">
-            <JsonNode value={manifest} depth={0} />
+        <div className="overflow-x-auto rounded bg-ss-surface"
+             style={{ border: '1px solid var(--ss-border-subtle)' }}>
+            <div className="min-w-max p-3 sm:p-4 font-mono text-xs leading-relaxed">
+                <JsonNode value={manifest} depth={0} />
+            </div>
         </div>
     );
 }

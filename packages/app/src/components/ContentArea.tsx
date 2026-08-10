@@ -1,28 +1,34 @@
-import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Info, Loader2, FolderOpen, Cpu, History, FileCode2 } from 'lucide-react';
+import { lazy, Suspense, useState, useEffect } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Loader2, FolderOpen, Cpu, History, FileCode2 } from 'lucide-react';
 
-declare const __APP_VERSION__: string;
 declare const __CORE_VERSION__: string;
 import type { ValidationResult } from '@streamshapers/ograf-validator-core';
 import type { PackageEntry } from '../scanner/scan-packages.js';
 import IssueList from './IssueList.js';
 
-import ManifestTab from './ManifestTab.js';
-import GddTab from './GddTab.js';
-import AssetsTab from './AssetsTab.js';
-import InspectTab from './InspectTab.js';
 import PreviewFrame from '../preview/PreviewFrame.js';
 import PackageOverview from './PackageOverview.js';
 import RuntimeTestCard from './RuntimeTestCard.js';
 import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
+import {
+    derivePackageReadiness,
+    type PackageReadiness,
+    type RuntimeTestPhase,
+} from '../readiness/package-readiness.js';
+import {
+    createValidationReport,
+    renderValidationReportHtml,
+} from '../readiness/validation-report.js';
 
 export interface PackageCache {
     validationResult: ValidationResult;
+    /** Unfiltered result used for readiness and reports when UI severities are hidden. */
+    fullValidationResult?: ValidationResult;
     manifest: unknown;
     previousManifest?: unknown;
     assets: string[];
     runtimeTest?: RuntimeTestResult;
-    runtimeTestRunning?: boolean;
+    runtimeTestPhase?: RuntimeTestPhase;
     runtimeTestSteps?: RuntimeTestStep[];
 }
 
@@ -34,9 +40,12 @@ const TABS: { id: Tab; label: string }[] = [
     { id: 'preview', label: 'Preview' },
 ];
 
+const InspectTab = lazy(() => import('./InspectTab.js'));
+
 interface Props {
     selectedPackage: PackageEntry | null;
     cache: PackageCache | null;
+    packageReadiness?: PackageReadiness | null;
     isValidating: boolean;
     validationError: string | null;
     swReady: boolean;
@@ -52,13 +61,13 @@ interface Props {
     onSelectPackage: (entry: PackageEntry) => void;
 }
 
-export default function ContentArea({ selectedPackage, cache, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
+export default function ContentArea({ selectedPackage, cache, packageReadiness, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>('validation');
 
     // Reset to validation tab whenever a different package is selected
     useEffect(() => {
         setActiveTab('validation');
-    }, [selectedPackage?.path]);
+    }, [selectedPackage?.key]);
 
     if (!selectedPackage && rootName) {
         return (
@@ -76,35 +85,66 @@ export default function ContentArea({ selectedPackage, cache, isValidating, vali
 
     const version = readManifestVersion(cache?.manifest);
     const stability = readManifestStability(cache?.manifest);
+    const readiness = cache
+        ? packageReadiness ?? derivePackageReadiness(
+            cache.fullValidationResult ?? cache.validationResult,
+            cache.runtimeTest,
+            cache.runtimeTestPhase,
+        )
+        : null;
 
     return (
-        <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
+        <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
             {/* Package header */}
-            <div className="flex-shrink-0 px-6 pt-4 pb-0 bg-ss-surface-dim">
-                <div className="flex items-center gap-2.5 mb-3">
-                    <h2 className="text-sm font-semibold text-ss-on-surface font-mono">
-                        {selectedPackage.displayName}{version ? `-v${version}` : ''}
-                    </h2>
-                    {stability && <StabilityBadge label={stability} />}
-                    {cache && <ValidityBadge valid={cache.validationResult.valid} />}
-                    <span className="text-[10px] text-ss-on-surface-variant font-mono ml-1">
-                        {selectedPackage.manifestFilename}
-                    </span>
-                    <PackageSizeBadge result={cache?.validationResult} />
+            <div className="flex-shrink-0 px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 pb-0 bg-ss-surface-dim">
+                <div className="flex items-start justify-between gap-3 sm:gap-4 mb-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                            <h2 className="min-w-0 truncate text-sm font-semibold text-ss-on-surface font-mono" title={selectedPackage.displayName}>
+                                {selectedPackage.displayName}{version ? `-v${version}` : ''}
+                            </h2>
+                            <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                                {stability && <StabilityBadge label={stability} />}
+                                {readiness && <ReadinessBadge readiness={readiness} />}
+                            </div>
+                        </div>
+                        {cache && readiness && (
+                            <div className="flex items-center gap-x-2 gap-y-1 mt-1.5 text-[10px] text-ss-on-surface-variant font-mono flex-wrap">
+                                <HeaderStatus
+                                    label={`Manifest ${cache.validationResult.valid ? 'Valid' : 'Invalid'}`}
+                                    tone={cache.validationResult.valid ? 'success' : 'error'}
+                                />
+                                <span className="text-ss-on-surface-variant/30">·</span>
+                                <HeaderStatus
+                                    label={`Runtime ${readiness.runtimeLabel}`}
+                                    tone={runtimeHeaderTone(readiness.runtimeStatus)}
+                                    pulse={readiness.runtimeStatus === 'running'}
+                                />
+                                <span className="hidden md:inline text-ss-on-surface-variant/30">·</span>
+                                <span className="hidden md:inline truncate max-w-72" title={selectedPackage.manifestFilename}>{selectedPackage.manifestFilename}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="hidden md:block flex-shrink-0">
+                        <PackageSizeBadge result={cache?.validationResult} />
+                    </div>
                 </div>
 
                 {/* Tab bar */}
-                <div className="flex gap-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
-                    {TABS.map((tab) => (
-                        <TabButton
-                            key={tab.id}
-                            label={tab.label}
-                            active={activeTab === tab.id}
-                            badge={tab.id === 'validation' && cache ? issueBadge(cache.validationResult) : undefined}
-                            disabled={!cache && !isValidating}
-                            onClick={() => setActiveTab(tab.id)}
-                        />
-                    ))}
+                <div className="overflow-x-auto" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                    <div className="flex gap-0 min-w-max">
+                        {TABS.map((tab) => (
+                            <TabButton
+                                key={tab.id}
+                                label={tab.label}
+                                active={activeTab === tab.id}
+                                badge={tab.id === 'validation' && readiness ? issueBadge(readiness) : undefined}
+                                badgeTone={readiness ? issueBadgeTone(readiness) : undefined}
+                                disabled={!cache && !isValidating}
+                                onClick={() => setActiveTab(tab.id)}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -114,7 +154,17 @@ export default function ContentArea({ selectedPackage, cache, isValidating, vali
                     {isValidating && cache && <RevalidatingOverlay />}
                     {!cache && isValidating && <InlineSpinner />}
                     {cache && (
-                        <InspectTab manifest={cache.manifest} previousManifest={cache.previousManifest} assets={cache.assets} dirHandle={selectedPackage.dirHandle} />
+                        <Suspense fallback={<InlineSpinner />}>
+                            <InspectTab
+                                key={selectedPackage.key}
+                                manifest={cache.manifest}
+                                previousManifest={cache.previousManifest}
+                                assets={cache.assets}
+                                dirHandle={selectedPackage.dirHandle}
+                                validationResult={cache.validationResult}
+                                onShowValidation={() => setActiveTab('validation')}
+                            />
+                        </Suspense>
                     )}
                 </div>
             ) : activeTab === 'preview' ? (
@@ -126,46 +176,43 @@ export default function ContentArea({ selectedPackage, cache, isValidating, vali
                             swReady={swReady}
                             dirHandle={selectedPackage.dirHandle}
                             manifest={cache.manifest}
-                            packagePath={selectedPackage.path}
+                            packagePath={selectedPackage.key}
                         />
                     )}
                 </div>
             ) : (
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                    {!cache && isValidating && <InlineSpinner />}
+                <div className="flex-1 overflow-y-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+                    <div className="w-full max-w-[1280px] mx-auto">
+                        {!cache && isValidating && <InlineSpinner />}
 
-                    {validationError && !isValidating && (
-                        <div className="rounded border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-300">
-                            <strong className="font-semibold">Error: </strong>
-                            {validationError}
-                        </div>
-                    )}
-
-                    {cache && activeTab === 'validation' && (
-                        <div className={`flex flex-col gap-4 transition-opacity ${isValidating ? 'opacity-50' : 'opacity-100'}`}>
-                            {/* Summary row */}
-                            <div className="flex items-center justify-between gap-4 flex-wrap">
-                                <SummaryBar result={cache.validationResult} />
-                                <div className="flex items-center gap-2">
-                                    {isValidating && <Spinner />}
-                                    <ExportButtons
-                                        result={cache.validationResult}
-                                        packageName={selectedPackage.displayName}
-                                    />
-                                </div>
+                        {validationError && !isValidating && (
+                            <div className="rounded border border-red-800 bg-red-950/40 px-3 sm:px-4 py-3 text-sm text-red-300">
+                                <strong className="font-semibold">Error: </strong>
+                                {validationError}
                             </div>
-                            <IssueList result={cache.validationResult} />
-                            {/* Runtime test results */}
-                            <RuntimeTestCard
-                                result={cache.runtimeTest}
-                                running={cache.runtimeTestRunning}
-                                liveSteps={cache.runtimeTestSteps}
-                                onRerun={onRerunRuntimeTest}
-                            />
-                            {/* Bottom stats */}
-                            <ValidationStats result={cache.validationResult} />
-                        </div>
-                    )}
+                        )}
+
+                        {cache && activeTab === 'validation' && (
+                            <div className={`flex flex-col gap-3 sm:gap-4 transition-opacity ${isValidating ? 'opacity-50' : 'opacity-100'}`}>
+                                <ValidationOverview
+                                    readiness={readiness!}
+                                    result={cache.validationResult}
+                                    fullResult={cache.fullValidationResult}
+                                    isValidating={isValidating}
+                                    packageName={selectedPackage.displayName}
+                                    runtimeResult={cache.runtimeTest}
+                                    runtimePhase={cache.runtimeTestPhase}
+                                />
+                                <IssueList result={cache.validationResult} />
+                                <RuntimeTestCard
+                                    result={cache.runtimeTest}
+                                    phase={cache.runtimeTestPhase}
+                                    liveSteps={cache.runtimeTestSteps}
+                                    onRerun={onRerunRuntimeTest}
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </main>
@@ -202,12 +249,14 @@ function TabButton({
     label,
     active,
     badge,
+    badgeTone,
     disabled,
     onClick,
 }: {
     label: string;
     active: boolean;
     badge?: string;
+    badgeTone?: 'error' | 'warning';
     disabled: boolean;
     onClick: () => void;
 }) {
@@ -225,7 +274,11 @@ function TabButton({
         >
             {label}
             {badge && (
-                <span className="px-1.5 py-px rounded-full text-[9px] font-semibold font-mono leading-none bg-red-950 text-red-400 border border-red-900">
+                <span className={`px-1.5 py-px rounded-full text-[9px] font-semibold font-mono leading-none border ${
+                    badgeTone === 'warning'
+                        ? 'bg-ss-warning/10 text-ss-warning border-ss-warning/30'
+                        : 'bg-ss-error/10 text-ss-error border-ss-error/30'
+                }`}>
                     {badge}
                 </span>
             )}
@@ -233,8 +286,13 @@ function TabButton({
     );
 }
 
-function issueBadge(result: ValidationResult): string | undefined {
-    if (result.errors.length > 0) return String(result.errors.length);
+function issueBadge(readiness: PackageReadiness): string | undefined {
+    return readiness.totalIssues > 0 ? String(readiness.totalIssues) : undefined;
+}
+
+function issueBadgeTone(readiness: PackageReadiness): 'error' | 'warning' | undefined {
+    if (readiness.staticErrors + readiness.runtimeErrors > 0) return 'error';
+    if (readiness.staticWarnings + readiness.runtimeWarnings > 0) return 'warning';
     return undefined;
 }
 
@@ -263,99 +321,183 @@ function StabilityBadge({ label }: { label: string }) {
     );
 }
 
-function ValidityBadge({ valid }: { valid: boolean }) {
-    return valid ? (
-        <span className="inline-flex items-center gap-1 px-2 py-px rounded-full text-[10px] font-semibold bg-ss-success/15 text-ss-success border border-ss-success/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-ss-success" />
-            Valid
-        </span>
-    ) : (
-        <span className="inline-flex items-center gap-1 px-2 py-px rounded-full text-[10px] font-semibold bg-ss-error/15 text-ss-error border border-ss-error/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-ss-error" />
-            Invalid
+function ReadinessBadge({ readiness }: { readiness: PackageReadiness }) {
+    const pulse = readiness.status === 'runtime-running' ? 'animate-pulse' : '';
+    return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${readinessClass(readiness.status)}`}>
+            <span className={`h-1.5 w-1.5 rounded-full bg-current ${pulse}`} />
+            {readiness.label}
         </span>
     );
 }
 
-function SummaryBar({ result }: { result: ValidationResult }) {
-    const issueCount = result.errors.length + result.warnings.length;
-    if (issueCount === 0) {
-        return (
-            <div className="flex items-center gap-2 text-ss-success text-sm">
-                <CheckCircle2 size={16} />
-                No issues found.
-            </div>
-        );
-    }
-
+function HeaderStatus({ label, tone, pulse = false }: {
+    label: string;
+    tone: 'success' | 'warning' | 'error' | 'info' | 'muted';
+    pulse?: boolean;
+}) {
+    const color = {
+        success: 'text-ss-success',
+        warning: 'text-ss-warning',
+        error: 'text-ss-error',
+        info: 'text-ss-primary-container',
+        muted: 'text-ss-on-surface-variant',
+    }[tone];
     return (
-        <div className="flex items-center gap-4 flex-wrap">
-            {result.errors.length > 0 && (
-                <span className="flex items-center gap-1.5 text-sm text-ss-error">
-                    <XCircle size={16} />
-                    <strong>{result.errors.length}</strong> error{result.errors.length !== 1 ? 's' : ''}
-                </span>
-            )}
-            {result.warnings.length > 0 && (
-                <span className="flex items-center gap-1.5 text-sm text-ss-warning">
-                    <AlertTriangle size={16} />
-                    <strong>{result.warnings.length}</strong> warning{result.warnings.length !== 1 ? 's' : ''}
-                </span>
-            )}
-        </div>
+        <span className={`inline-flex items-center gap-1.5 ${color}`}>
+            <span className={`h-1.5 w-1.5 rounded-full bg-current ${pulse ? 'animate-pulse' : ''}`} />
+            {label}
+        </span>
     );
 }
 
-function ValidationStats({ result }: { result: ValidationResult }) {
-    const errors = result.errors.length;
-    const warnings = result.warnings.length;
-    const issueCount = errors + warnings; // Infos are not "issues"
-    // Score: 100% if no issues, deduct per error (errors count double)
-    const maxPenalty = 100;
-    const penalty = Math.min(maxPenalty, errors * 15 + warnings * 5);
-    const score = Math.max(0, 100 - penalty);
-    const scoreColor = score >= 90 ? 'text-ss-success' : score >= 70 ? 'text-ss-warning' : 'text-ss-error';
-    const barColor = score >= 90 ? 'bg-ss-success' : score >= 70 ? 'bg-ss-warning' : 'bg-ss-error';
-    const env = errors === 0 ? 'Production-Ready' : errors <= 2 ? 'Review Required' : 'Not Production-Ready';
-    const envColor = errors === 0 ? 'text-ss-success border-ss-success/30 bg-ss-success/10'
-        : errors <= 2 ? 'text-ss-warning border-ss-warning/30 bg-ss-warning/10'
-        : 'text-ss-error border-ss-error/30 bg-ss-error/10';
+function runtimeHeaderTone(status: PackageReadiness['runtimeStatus']): 'success' | 'warning' | 'error' | 'info' | 'muted' {
+    if (status === 'passed') return 'success';
+    if (status === 'failed') return 'error';
+    if (status === 'inconclusive') return 'warning';
+    if (status === 'pending' || status === 'running') return 'info';
+    return 'muted';
+}
+
+function ValidationOverview({
+    readiness,
+    result,
+    fullResult,
+    isValidating,
+    packageName,
+    runtimeResult,
+    runtimePhase,
+}: {
+    readiness: PackageReadiness;
+    result: ValidationResult;
+    fullResult?: ValidationResult;
+    isValidating: boolean;
+    packageName: string;
+    runtimeResult?: RuntimeTestResult;
+    runtimePhase?: RuntimeTestPhase;
+}) {
+    const hiddenWarnings = Math.max(
+        0,
+        (fullResult?.warnings.length ?? result.warnings.length) - result.warnings.length,
+    );
+    const staticFindings = readiness.staticErrors + readiness.staticWarnings;
+    const runtimeFindings = readiness.runtimeErrors + readiness.runtimeWarnings;
+    const staticSummary = readiness.staticErrors > 0
+        ? `Static validation found ${readiness.staticErrors} error${readiness.staticErrors === 1 ? '' : 's'}.`
+        : readiness.staticWarnings > 0
+            ? `Static validation needs review: ${readiness.staticWarnings} warning${readiness.staticWarnings === 1 ? '' : 's'}.`
+            : 'Static validation passed.';
+    const statusTone = readiness.status === 'production-ready'
+        ? 'text-ss-success'
+        : readiness.status === 'needs-review'
+            ? 'text-ss-warning'
+            : readiness.status === 'runtime-pending' || readiness.status === 'runtime-running'
+                ? 'text-ss-primary-container'
+                : 'text-ss-error';
 
     return (
-        <div className="grid grid-cols-3 gap-3 mt-2">
-            <StatCard label="Issues Found">
-                <span className="text-2xl font-semibold text-ss-on-surface font-mono">{issueCount}</span>
-                {issueCount > 0 && (
-                    <span className="text-[10px] text-ss-on-surface-variant">
-                        {errors} error{errors !== 1 ? 's' : ''} · {warnings} warning{warnings !== 1 ? 's' : ''}
-                    </span>
-                )}
-            </StatCard>
-            <StatCard label="Validation Score">
-                <span className={`text-2xl font-semibold font-mono ${scoreColor}`}>{score}%</span>
-                <div className="w-full h-1 rounded-full bg-ss-surface-highest mt-1">
-                    <div className={`h-1 rounded-full transition-all ${barColor}`} style={{ width: `${score}%` }} />
+        <section aria-label="Validation summary" className="overflow-hidden rounded bg-ss-surface"
+                 style={{ border: '1px solid var(--ss-border-subtle)' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 sm:px-4 py-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                    <ValidationStatusIcon readiness={readiness} />
+                    <div className="min-w-0">
+                        <h3 className="text-xs font-semibold text-ss-on-surface">Validation summary</h3>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-ss-on-surface-variant">
+                            {staticSummary}
+                            {hiddenWarnings > 0 && ` ${hiddenWarnings} warning${hiddenWarnings === 1 ? '' : 's'} hidden by settings.`}
+                        </p>
+                    </div>
                 </div>
-            </StatCard>
-            <StatCard label="Environment">
-                <span className={`my-auto w-fit text-sm font-semibold px-3 py-1 rounded-full border ${envColor}`}>
-                    {env}
-                </span>
-            </StatCard>
+                <div className="flex items-center gap-2 sm:flex-shrink-0">
+                    {isValidating && <Spinner />}
+                    <ExportButtons
+                        result={fullResult ?? result}
+                        packageName={packageName}
+                        runtimeResult={runtimeResult}
+                        runtimePhase={runtimePhase}
+                    />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-px bg-ss-outline-variant/20"
+                 style={{ borderTop: '1px solid var(--ss-border-subtle)' }}>
+                <OverviewMetric
+                    label="Overall readiness"
+                    value={readiness.label}
+                    detail={readiness.status === 'production-ready' ? 'Ready for production' : 'Action required'}
+                    valueClass={statusTone}
+                />
+                <OverviewMetric
+                    label="Static validation"
+                    value={`${readiness.staticScore}%`}
+                    detail={`${readiness.staticErrors} error${readiness.staticErrors === 1 ? '' : 's'} · ${readiness.staticWarnings} warning${readiness.staticWarnings === 1 ? '' : 's'}`}
+                    valueClass={readiness.staticErrors > 0 ? 'text-ss-error' : readiness.staticWarnings > 0 ? 'text-ss-warning' : 'text-ss-success'}
+                />
+                <OverviewMetric
+                    label="Runtime"
+                    value={readiness.runtimeLabel}
+                    detail={runtimeFindings > 0 ? `${runtimeFindings} runtime finding${runtimeFindings === 1 ? '' : 's'}` : 'No runtime findings'}
+                    valueClass={runtimeHeaderTone(readiness.runtimeStatus) === 'success'
+                        ? 'text-ss-success'
+                        : runtimeHeaderTone(readiness.runtimeStatus) === 'warning'
+                            ? 'text-ss-warning'
+                            : runtimeHeaderTone(readiness.runtimeStatus) === 'error'
+                                ? 'text-ss-error'
+                                : 'text-ss-primary-container'}
+                />
+                <OverviewMetric
+                    label="Findings"
+                    value={String(readiness.totalIssues)}
+                    detail={`Static ${staticFindings} · Runtime ${runtimeFindings}`}
+                    valueClass={readiness.staticErrors + readiness.runtimeErrors > 0
+                        ? 'text-ss-error'
+                        : readiness.totalIssues > 0 ? 'text-ss-warning' : 'text-ss-success'}
+                />
+            </div>
+        </section>
+    );
+}
+
+function ValidationStatusIcon({ readiness }: { readiness: PackageReadiness }) {
+    if (readiness.status === 'production-ready') {
+        return <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-ss-success" />;
+    }
+    if (readiness.status === 'needs-review') {
+        return <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-ss-warning" />;
+    }
+    if (readiness.status === 'runtime-pending' || readiness.status === 'runtime-running') {
+        return <Loader2 size={16} className={`mt-0.5 flex-shrink-0 text-ss-primary-container ${readiness.status === 'runtime-running' ? 'animate-spin' : ''}`} />;
+    }
+    return <XCircle size={16} className="mt-0.5 flex-shrink-0 text-ss-error" />;
+}
+
+function OverviewMetric({ label, value, detail, valueClass }: {
+    label: string;
+    value: string;
+    detail: string;
+    valueClass: string;
+}) {
+    return (
+        <div className="min-w-0 bg-ss-surface px-3 sm:px-4 py-3">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">{label}</p>
+            <p className={`mt-1 truncate text-xs font-semibold font-mono ${valueClass}`} title={value}>{value}</p>
+            <p className="mt-0.5 truncate text-[10px] text-ss-on-surface-variant/70" title={detail}>{detail}</p>
         </div>
     );
 }
 
-function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div className="flex flex-col gap-1.5 px-4 py-3 rounded bg-ss-surface"
-             style={{ border: '1px solid var(--ss-border-subtle)' }}>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
-                {label}
-            </span>
-            {children}
-        </div>
-    );
+function readinessClass(status: PackageReadiness['status']): string {
+    if (status === 'production-ready') {
+        return 'text-ss-success border-ss-success/30 bg-ss-success/10';
+    }
+    if (status === 'needs-review') {
+        return 'text-ss-warning border-ss-warning/30 bg-ss-warning/10';
+    }
+    if (status === 'runtime-pending' || status === 'runtime-running') {
+        return 'text-ss-primary-container border-ss-primary-container/30 bg-ss-primary-container/10';
+    }
+    return 'text-ss-error border-ss-error/30 bg-ss-error/10';
 }
 
 function WelcomeScreen({ onOpenDirectory, onReopenLastDirectory }: { onOpenDirectory: () => void; onReopenLastDirectory: () => void }) {
@@ -378,9 +520,9 @@ function WelcomeScreen({ onOpenDirectory, onReopenLastDirectory }: { onOpenDirec
                         Open a directory to get started
                     </h2>
                     <p className="text-sm text-ss-on-surface-variant leading-relaxed mb-6">
-                        Select any folder containing one or more{' '}
+                        Select a folder with one or more{' '}
                         <code className="font-mono text-ss-primary-container bg-ss-surface-high px-1 py-0.5 rounded text-xs">OGraf</code>
-                        {' '}packages to begin the validation process. Our architect will scan for schema integrity and cross-references.
+                        {' '}packages. The validator will find and check them.
                     </p>
                     <button
                         onClick={onOpenDirectory}
@@ -446,19 +588,24 @@ function Spinner() {
 function ExportButtons({
     result,
     packageName,
+    runtimeResult,
+    runtimePhase,
 }: {
     result: ValidationResult;
     packageName: string;
+    runtimeResult?: RuntimeTestResult;
+    runtimePhase?: RuntimeTestPhase;
 }) {
     const slug = packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const report = () => createValidationReport(packageName, result, runtimeResult, runtimePhase);
 
-    const btnCls = 'px-2.5 py-1 rounded text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface transition-colors';
+    const btnCls = 'inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1.5 sm:py-1 rounded text-[11px] sm:text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors';
     const btnStyle = { border: '1px solid rgba(64, 72, 80, 0.5)' };
 
     return (
-        <div className="flex gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <button
-                onClick={() => downloadJson(result, slug)}
+                onClick={() => downloadJson(report(), slug)}
                 className={btnCls}
                 style={btnStyle}
                 title="Download validation result as JSON"
@@ -466,7 +613,7 @@ function ExportButtons({
                 Export JSON
             </button>
             <button
-                onClick={() => downloadHtml(result, packageName)}
+                onClick={() => downloadHtml(report(), slug)}
                 className={btnCls}
                 style={btnStyle}
                 title="Download validation report as HTML"
@@ -486,67 +633,14 @@ function triggerDownload(blob: Blob, filename: string): void {
     URL.revokeObjectURL(url);
 }
 
-function downloadJson(result: ValidationResult, slug: string): void {
-    const data = JSON.stringify(result, null, 2);
-    triggerDownload(new Blob([data], { type: 'application/json' }), `${slug}-validation.json`);
+function downloadJson(report: ReturnType<typeof createValidationReport>, slug: string): void {
+    const data = JSON.stringify(report, null, 2);
+    triggerDownload(new Blob([data], { type: 'application/json' }), `${slug}-validation-report.json`);
 }
 
-function downloadHtml(result: ValidationResult, packageName: string): void {
-    const date = new Date().toLocaleString();
-    const statusColor = result.valid ? '#22c55e' : '#ef4444';
-    const statusLabel = result.valid ? 'Valid' : 'Invalid';
-
-    const renderIssues = (issues: ValidationResult['errors'], color: string, label: string) => {
-        if (issues.length === 0) return '';
-
-        const rows = issues.map((i) => `
-            <tr>
-                <td><code>${escHtml(i.code)}</code></td>
-                <td>${i.path ? `<code>${escHtml(i.path)}</code>` : '—'}</td>
-                <td>${escHtml(i.message)}</td>
-            </tr>`).join('');
-
-        return `
-            <h2 style="color:${color};margin-top:2rem">${label} (${issues.length})</h2>
-            <table>
-                <thead><tr><th>Code</th><th>Path</th><th>Message</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
-    };
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>OGraf Validation – ${escHtml(packageName)}</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1f2937; }
-  h1 { font-size: 1.25rem; margin-bottom: 0.25rem; }
-  .meta { color: #6b7280; font-size: 0.85rem; margin-bottom: 1.5rem; }
-  .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; color: #fff; background: ${statusColor}; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-  th { text-align: left; padding: 0.5rem 0.75rem; background: #f3f4f6; border-bottom: 2px solid #e5e7eb; }
-  td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
-  code { font-family: monospace; font-size: 0.8rem; background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 3px; }
-  .ok { color: #16a34a; font-weight: 600; }
-</style>
-</head>
-<body>
-<h1>${escHtml(packageName)} <span class="badge">${statusLabel}</span></h1>
-<p class="meta">Generated ${escHtml(date)} · OGraf Validator</p>
-${result.issues.length === 0
-    ? '<p class="ok">No issues found – the package is fully valid.</p>'
-    : renderIssues(result.errors, '#ef4444', 'Errors') +
-      renderIssues(result.warnings, '#f59e0b', 'Warnings') +
-      renderIssues(result.infos, '#3b82f6', 'Infos')}
-</body>
-</html>`;
-
-    triggerDownload(new Blob([html], { type: 'text/html' }), `${packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-validation.html`);
-}
-
-function escHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function downloadHtml(report: ReturnType<typeof createValidationReport>, slug: string): void {
+    const html = renderValidationReportHtml(report);
+    triggerDownload(new Blob([html], { type: 'text/html' }), `${slug}-validation-report.html`);
 }
 
 function PackageSizeBadge({ result }: { result: ValidationResult | undefined }) {

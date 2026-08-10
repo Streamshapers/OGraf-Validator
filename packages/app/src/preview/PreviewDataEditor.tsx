@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { GddField, GddSchema } from '@streamshapers/ograf-validator-core';
+import {
+    getKnownGddType,
+    getSelectMultipleOptions,
+    orderedGddEntries,
+} from '../gdd/gdd-utils.js';
+import { buildSchemaEditorValue } from './schema-defaults.js';
 
 interface Props {
     schema: GddSchema | undefined;
@@ -49,7 +55,7 @@ interface GddFormProps {
 }
 
 function GddForm({ properties, value, onChange }: GddFormProps) {
-    const entries = Object.entries(properties);
+    const entries = orderedGddEntries(properties);
 
     return (
         <div className="flex flex-col gap-2.5">
@@ -102,32 +108,40 @@ function determineComponent(
     value: unknown,
     onChange: (next: unknown) => void,
 ): React.ReactNode {
-    const gddType = (field.gddType ?? '').toLowerCase();
+    const gddType = getKnownGddType(field);
 
-    // Enum / dropdown (validValues or enum)
+    // Legacy validValues remain supported explicitly, independent of public gddType names.
     if (Array.isArray(field.validValues) && field.validValues.length > 0) {
         return <DropdownInput field={field} value={value} onChange={onChange} />;
     }
-    if (gddType.includes('dropdown') || (Array.isArray(field.enum) && field.enum.length > 0)) {
+    if (gddType === 'select') {
+        return <DropdownInput field={field} value={value} onChange={onChange} />;
+    }
+    if (gddType === 'select-multiple') {
+        return <MultiSelectInput field={field} value={value} onChange={onChange} />;
+    }
+    if (gddType === undefined && Array.isArray(field.enum) && field.enum.length > 0) {
         return <DropdownInput field={field} value={value} onChange={onChange} />;
     }
 
-    // Specific gddType patterns (longest/most-specific first)
-    if (gddType.includes('file-path/image-path')) return <TextInput value={value} onChange={onChange} placeholder="image path" />;
-    if (gddType.includes('file-path'))            return <TextInput value={value} onChange={onChange} placeholder="file path" />;
-    if (gddType.includes('rrggbb') || gddType.includes('color')) {
-        return <ColorInput value={value} onChange={onChange} />;
-    }
-    if (gddType.includes('multi-line'))  return <TextAreaInput value={value} onChange={onChange} />;
-    if (gddType.includes('single-line')) return <TextInput value={value} onChange={onChange} />;
-    if (gddType.includes('date'))        return <BasicInput type="date" value={value} onChange={onChange} />;
-    if (gddType.includes('url'))         return <BasicInput type="url" value={value} onChange={onChange} />;
-    if (gddType.includes('email'))       return <BasicInput type="email" value={value} onChange={onChange} />;
-    if (gddType.includes('number') || gddType.includes('integer')) {
-        return <NumberInput field={field} value={value} onChange={onChange} />;
-    }
-    if (gddType.includes('checkbox') || gddType.includes('boolean')) {
-        return <BooleanInput value={value} onChange={onChange} />;
+    switch (gddType) {
+        case 'file-path/image-path':
+            return <TextInput value={value} onChange={onChange} placeholder="image path" />;
+        case 'file-path':
+            return <TextInput value={value} onChange={onChange} placeholder="file path" />;
+        case 'color-rrggbb':
+            return <ColorInput value={value} onChange={onChange} />;
+        case 'color-rrggbbaa':
+            return <ColorInput value={value} onChange={onChange} alpha />;
+        case 'multi-line':
+            return <TextAreaInput value={value} onChange={onChange} />;
+        case 'single-line':
+            return <TextInput value={value} onChange={onChange} />;
+        case 'percentage':
+        case 'duration-ms':
+            return <NumberInput field={field} value={value} onChange={onChange} />;
+        case undefined:
+            break;
     }
 
     // Fall back to basic JSON Schema types
@@ -142,8 +156,6 @@ function determineComponent(
             return <ArrayInput field={field} value={value} onChange={onChange} />;
         case 'object':
             return <ObjectInput field={field} value={value} onChange={onChange} />;
-        case 'null':
-            return <span className="text-xs text-ss-on-surface-variant italic">null</span>;
         case 'string':
         default:
             return <TextInput value={value} onChange={onChange} />;
@@ -154,6 +166,9 @@ function fieldHint(field: GddField): string {
     const parts: string[] = [];
     if (field.gddType) parts.push(field.gddType);
     else if (field.type) parts.push(String(field.type));
+    const metadata = field as GddField & { hidden?: boolean; order?: number };
+    if (typeof metadata.order === 'number') parts.push(`order ${metadata.order}`);
+    if (metadata.hidden === true) parts.push('hidden from generated labels');
 
     return parts.join(' · ');
 }
@@ -201,25 +216,6 @@ function TextAreaInput({
     );
 }
 
-function BasicInput({
-    type,
-    value,
-    onChange,
-}: {
-    type: 'date' | 'url' | 'email';
-    value: unknown;
-    onChange: (next: unknown) => void;
-}) {
-    return (
-        <input
-            type={type}
-            className={INPUT_CLS}
-            value={typeof value === 'string' ? value : value == null ? '' : String(value)}
-            onChange={(e) => onChange(e.target.value)}
-        />
-    );
-}
-
 function NumberInput({
     field,
     value,
@@ -229,7 +225,7 @@ function NumberInput({
     value: unknown;
     onChange: (next: unknown) => void;
 }) {
-    const isInteger = field.type === 'integer' || (field.gddType ?? '').toLowerCase().includes('integer');
+    const isInteger = field.type === 'integer';
 
     return (
         <input
@@ -274,19 +270,25 @@ function BooleanInput({
 function ColorInput({
     value,
     onChange,
+    alpha = false,
 }: {
     value: unknown;
     onChange: (next: unknown) => void;
+    alpha?: boolean;
 }) {
     const str = typeof value === 'string' ? value : '#000000';
-    const hex = /^#[0-9a-f]{6}$/i.test(str) ? str : `#${str.replace(/^#/, '').padEnd(6, '0').slice(0, 6)}`;
+    const normalized = str.replace(/^#/, '');
+    const hex = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(str)
+        ? str.slice(0, 7)
+        : `#${normalized.padEnd(6, '0').slice(0, 6)}`;
+    const currentAlpha = /^[0-9a-f]{8}$/i.test(normalized) ? normalized.slice(6) : 'ff';
 
     return (
         <div className="flex items-center gap-2">
             <input
                 type="color"
                 value={hex}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => onChange(alpha ? `${e.target.value}${currentAlpha}` : e.target.value)}
                 className="h-7 w-10 rounded border border-ss-outline-variant/40 bg-ss-surface cursor-pointer"
             />
             <input
@@ -312,7 +314,12 @@ function DropdownInput({
     if (Array.isArray(field.validValues)) {
         for (const v of field.validValues) options.push({ value: v.value, label: v.label });
     } else if (Array.isArray(field.enum)) {
-        for (const v of field.enum) options.push({ value: v, label: String(v) });
+        const labels = (field as GddField & {
+            gddOptions?: { labels?: Record<string, string> };
+        }).gddOptions?.labels;
+        for (const v of field.enum) {
+            options.push({ value: v, label: labels?.[String(v)] ?? String(v) });
+        }
     }
 
     const selectedIdx = options.findIndex((o) => JSON.stringify(o.value) === JSON.stringify(value));
@@ -331,6 +338,52 @@ function DropdownInput({
                 <option key={i} value={String(i)}>{opt.label}</option>
             ))}
         </select>
+    );
+}
+
+function MultiSelectInput({
+    field,
+    value,
+    onChange,
+}: {
+    field: GddField;
+    value: unknown;
+    onChange: (next: unknown) => void;
+}) {
+    const options = getSelectMultipleOptions(field);
+    const selected = Array.isArray(value) ? value : [];
+
+    if (options.length === 0) {
+        return <ArrayInput field={field} value={value} onChange={onChange} />;
+    }
+
+    return (
+        <div className="flex flex-col gap-1.5 rounded border border-ss-outline-variant/40 bg-ss-surface p-2">
+            {options.map((option) => {
+                const checked = selected.some((item) => Object.is(item, option.value));
+
+                return (
+                    <label key={`${typeof option.value}:${String(option.value)}`} className="flex items-center gap-2 text-xs text-ss-on-surface">
+                        <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                                if (event.target.checked) {
+                                    onChange([...selected, option.value]);
+                                } else {
+                                    onChange(selected.filter((item) => !Object.is(item, option.value)));
+                                }
+                            }}
+                            className="accent-ss-primary"
+                        />
+                        <span>{option.label}</span>
+                        <span className="ml-auto font-mono text-[10px] text-ss-on-surface-variant/60">
+                            {String(option.value)}
+                        </span>
+                    </label>
+                );
+            })}
+        </div>
     );
 }
 
@@ -405,7 +458,7 @@ function ArrayInput({
                 </div>
             ))}
             <button
-                onClick={() => onChange([...items, itemSchema.default ?? null])}
+                onClick={() => onChange([...items, buildSchemaEditorValue(itemSchema)])}
                 className="text-xs text-ss-primary hover:text-ss-primary-dark"
             >
                 + Add item
