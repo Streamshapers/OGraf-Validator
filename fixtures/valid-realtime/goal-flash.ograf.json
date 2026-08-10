@@ -1,0 +1,43 @@
+{
+  "$schema": "https://ograf.ebu.io/v1/specification/json-schemas/graphics/schema.json",
+  "id": "com.example.goal-flash",
+  "version": "1.0.0",
+  "name": "Goal Flash",
+  "author": {
+    "name": "StreamShapers"
+  },
+  "main": "goal-flash.mjs",
+  "supportsRealTime": true,
+  "supportsNonRealTime": false,
+  "stepCount": 0,
+  "customActions": [],
+  "thumbnails": [
+    {
+      "file": "thumbnail.png",
+      "resolution": { "width": 1672, "height": 941 }
+    }
+  ],
+  "schema": {
+    "type": "object",
+    "properties": {
+      "scorer": {
+        "type": "string",
+        "label": "Scorer",
+        "gddType": "single-line",
+        "default": "Alex Morgan",
+        "order": 1
+      },
+      "team": {
+        "type": "string",
+        "label": "Team",
+        "gddType": "single-line",
+        "default": "Home",
+        "order": 2
+      }
+    }
+  },
+  "actionDurations": [
+    { "type": "playAction", "duration": 600 },
+    { "type": "stopAction", "duration": 300 }
+  ]
+}

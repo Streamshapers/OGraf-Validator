@@ -1,8 +1,12 @@
 # @streamshapers/ograf-validator-core
 
-> Validates [OGraf Graphics Package](https://ograf.ebu.io/v1/specification/docs/Specification.html) manifests against the EBU OGraf specification. Works in Node.js and the browser. Zero runtime dependencies.
+Validate OGraf Graphics v1 manifests and package references in Node.js or a
+browser. The published package has zero runtime dependencies.
 
-Part of [OGraf Validator](https://github.com/streamshapers/ograf-validator) by [StreamShapers](https://streamshapers.com).
+This package is part of [OGraf Validator](https://github.com/streamshapers/ograf-validator)
+by [StreamShapers](https://streamshapers.com). It is pinned to EBU OGraf commit
+[`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b)
+from 7 August 2026.
 
 ## Installation
 
@@ -10,32 +14,33 @@ Part of [OGraf Validator](https://github.com/streamshapers/ograf-validator) by [
 npm install @streamshapers/ograf-validator-core
 ```
 
+The package exports a library only. It has no `bin` entry and is not an `npx`
+CLI.
+
 ## Usage
 
-### Validate a manifest object
-
-Use `validateManifest` when you already have the parsed JSON in memory - no file I/O needed.
+### Validate an in-memory manifest
 
 ```ts
 import { validateManifest } from '@streamshapers/ograf-validator-core';
 
-const manifest = JSON.parse(await fs.readFile('package.ograf.json', 'utf8'));
 const result = validateManifest(manifest);
 
-console.log(result.valid);      // true | false
-console.log(result.errors);     // ValidationIssue[]
-console.log(result.warnings);   // ValidationIssue[]
-console.log(result.infos);      // ValidationIssue[]
+console.log(result.valid);
+console.log(result.errors);
+console.log(result.warnings);
+console.log(result.infos);
 ```
 
-### Validate a full package (manifest + file references)
+### Validate a manifest and its package files
 
-Use `validatePackage` to also check that files referenced in the manifest (e.g. `main`) actually exist in the package. Implement the `VirtualFS` interface for your environment.
+Implement `VirtualFS` for the environment that owns the package files, then
+pass the parsed manifest and optional manifest filename:
 
 ```ts
 import { validatePackage } from '@streamshapers/ograf-validator-core';
 import type { VirtualFS } from '@streamshapers/ograf-validator-core';
-import { readFile, access, readdir } from 'node:fs/promises';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 class NodeFS implements VirtualFS {
@@ -56,54 +61,39 @@ class NodeFS implements VirtualFS {
 
     async listFiles(): Promise<string[]> {
         const entries = await readdir(this.root, { recursive: true });
-        return entries.filter((e) => typeof e === 'string') as string[];
+        return entries.filter((entry): entry is string => typeof entry === 'string');
+    }
+
+    async getFileSize(path: string): Promise<number> {
+        return (await stat(join(this.root, path))).size;
     }
 }
 
-const fs = new NodeFS('./my-package');
-const manifestText = await fs.readFile('package.ograf.json');
-const manifest = JSON.parse(manifestText);
+const packageFs = new NodeFS('./my-package');
+const manifestFilename = 'lower-third.ograf.json';
+const manifest = JSON.parse(await packageFs.readFile(manifestFilename));
+const result = await validatePackage(manifest, packageFs, manifestFilename);
 
-const result = await validatePackage(manifest, fs);
-
-if (!result.valid) {
-    for (const error of result.errors) {
-        console.error(`[${error.code}] ${error.path ?? ''} ${error.message}`);
-    }
-    process.exit(1);
-}
-```
-
-### Working with results
-
-```ts
-import type { ValidationResult, ValidationIssue } from '@streamshapers/ograf-validator-core';
-
-function printResult(result: ValidationResult): void {
-    if (result.valid) {
-        console.log('Package is valid.');
-    }
-
-    for (const issue of result.issues) {
-        const prefix = issue.severity === 'error' ? '✗' :
-                       issue.severity === 'warning' ? '⚠' : 'ℹ';
-        const path = issue.path ? ` (${issue.path})` : '';
-        console.log(`${prefix} [${issue.code}]${path} ${issue.message}`);
-    }
+for (const issue of result.issues) {
+    console.log(`${issue.severity} [${issue.code}] ${issue.path ?? ''} ${issue.message}`);
 }
 ```
 
----
+`validatePackage` checks the `main` module, package-relative thumbnails, and
+recursive file-path defaults in the manifest GDD, custom-action schemas, and
+array items. It also reports package file counts, total size when available,
+and file-access failures.
 
-## API Reference
+## Public API
 
 ### `validateManifest(manifest: unknown): ValidationResult`
 
-Validates a manifest object in memory. Fast, synchronous-style (returns a plain object, no async needed).
+Validates a parsed manifest in memory and returns synchronously.
 
-### `validatePackage(manifest: unknown, fs: VirtualFS): Promise<ValidationResult>`
+### `validatePackage(manifest: unknown, fs: VirtualFS, manifestFilename?: string): Promise<ValidationResult>`
 
-Validates a manifest and checks that files referenced in the manifest exist via `fs`. Superset of `validateManifest`.
+Runs manifest validation and package-file checks. The optional filename is
+validated when supplied and preserves the existing API shape.
 
 ### `VirtualFS`
 
@@ -112,94 +102,174 @@ interface VirtualFS {
     readFile(path: string): Promise<string>;
     fileExists(path: string): Promise<boolean>;
     listFiles(path?: string): Promise<string[]>;
+    getFileSize?(path: string): Promise<number>;
 }
 ```
 
-Implement this interface to adapt the validator to any file source - local filesystem, zip archive, in-memory map, browser File System Access API, etc.
+Both validators accept arbitrary `unknown` input. Malformed objects and failing
+or malformed `VirtualFS` results are converted to validation issues instead of
+escaping as uncaught errors.
 
----
+### `ValidationResult`
 
-## Validation rules
+```ts
+interface ValidationResult {
+    valid: boolean;
+    issues: ValidationIssue[];
+    errors: ValidationIssue[];
+    warnings: ValidationIssue[];
+    infos: ValidationIssue[];
+}
 
-### Errors — set `valid: false`
+interface ValidationIssue {
+    severity: 'error' | 'warning' | 'info';
+    code: string;
+    message: string;
+    path?: string;
+    specRef?: string;
+}
+```
 
-| Code | Description |
-|------|-------------|
-| `INVALID_MANIFEST` | Input is not a JSON object |
-| `MISSING_FIELD` | Required field missing (`$schema`, `id`, `name`, `main`, `supportsRealTime`, `supportsNonRealTime`) |
-| `INVALID_TYPE` | Field has the wrong type |
+`valid` is false exactly when `errors` is non-empty. `ValidationIssue.code`
+remains `string` for source compatibility; the exported `ValidationIssueCode`
+type enumerates built-in codes.
+
+## Validation model
+
+Validation is applied in three layers:
+
+1. the pinned official manifest and GDD JSON schemas;
+2. normative prose and cross-field rules;
+3. package file checks and tooling diagnostics.
+
+The core understands `actionDurations`, local and external `thumbnails`, all
+`renderRequirements` alternatives including `engine`, recursive GDD structures,
+`hidden`, `order`, `select-multiple`, vendor `v_*` extensions, and nested
+file-path defaults.
+
+Normative additions include:
+
+- `$schema` must be the exact official URL;
+- unknown fields must use the `v_*` prefix;
+- at least one runtime support flag must be true;
+- `stepCount` must be `-1` or a non-negative integer even though the pinned
+  upstream JSON Schema currently uses `number`;
+- `author.name` is required when `author` is present;
+- `customActions[].schema` may be an object or `null`.
+
+A missing GDD is informational. The core deliberately does not emit a semver
+recommendation or a generic missing-`gddType` message.
+
+## Issue codes
+
+### Errors
+
+| Code | Meaning |
+| --- | --- |
+| `INVALID_MANIFEST` | Input is not a safe JSON object or cannot be inspected |
+| `MISSING_FIELD` | A required manifest or nested field is missing |
+| `INVALID_TYPE` | A field has an invalid type, including non-integer `stepCount` |
 | `INVALID_ID` | `id` is empty or contains `/` |
 | `INVALID_NAME` | `name` is empty |
 | `INVALID_MAIN` | `main` is empty |
-| `INVALID_AUTHOR` | `author` is present but not an object |
-| `INVALID_CUSTOM_ACTIONS` | `customActions` is present but not an array |
-| `INVALID_CUSTOM_ACTION` | A `customActions` entry is missing `id` or `name`, or is not an object |
-| `DUPLICATE_CUSTOM_ACTION_ID` | Two `customActions` entries share the same `id` |
-| `INVALID_STEP_COUNT` | `stepCount` is less than `-1` |
-| `INVALID_RENDER_REQUIREMENTS` | `renderRequirements` is present but not an array of objects |
-| `INVALID_GDD` | `schema` is present but not an object |
-| `INVALID_GDD_TYPE` | GDD root `type` is not `"object"` |
-| `MISSING_GDD_PROPERTIES` | GDD `schema` has no `properties` object |
-| `INVALID_GDD_FIELD` | A GDD field definition is not an object |
-| `MISSING_ASSET` | The `main` entry point file does not exist in the package |
+| `UNUSUAL_MAIN_EXTENSION` | `main` is not a `.js` or `.mjs` module |
+| `INVALID_SCHEMA_REF` | `$schema` is not the exact official URL |
+| `UNKNOWN_FIELD` | A non-standard field lacks the `v_*` prefix |
+| `NO_RUNTIME_SUPPORT` | Both runtime support flags are false |
+| `INVALID_AUTHOR` | `author` is not an object |
+| `MISSING_AUTHOR_NAME` | A present author object lacks `name` |
+| `INVALID_CUSTOM_ACTIONS` | `customActions` is not an array |
+| `INVALID_CUSTOM_ACTION` | A custom-action declaration is malformed |
+| `DUPLICATE_CUSTOM_ACTION_ID` | Custom actions reuse an ID |
+| `INVALID_ACTION_DURATION` | An action duration or step duration is malformed |
+| `DUPLICATE_ACTION_DURATION` | An action, custom action, step, or fallback has multiple duration entries |
+| `UNKNOWN_CUSTOM_ACTION_DURATION` | A duration references an undeclared custom action |
+| `INVALID_STEP_COUNT` | `stepCount` is below `-1` |
+| `INVALID_RENDER_REQUIREMENT` | A render, engine, or constraint declaration is malformed |
+| `INVALID_GDD` | A manifest or custom-action GDD is invalid |
+| `INVALID_THUMBNAIL` | A thumbnail, image extension, or resolution is invalid |
+| `INVALID_MANIFEST_FILENAME` | A supplied filename does not end in `.ograf.json` |
+| `MISSING_ASSET` | The package-relative `main` file does not exist |
+| `MISSING_THUMBNAIL_ASSET` | A package-relative thumbnail does not exist |
+| `FILE_ACCESS_ERROR` | A `VirtualFS` operation failed or returned malformed data |
 
-### Warnings — `valid` stays `true`
+### Warnings
 
-| Code | Description |
-|------|-------------|
-| `INVALID_SCHEMA_REF` | `$schema` is not the exact official OGraf schema URL |
-| `NO_RUNTIME_SUPPORT` | Both `supportsRealTime` and `supportsNonRealTime` are `false` — the graphic cannot be rendered |
-| `UNUSUAL_MAIN_EXTENSION` | `main` has an unexpected file extension (expected `.js`, `.mjs`, or `.html`) |
-| `EMPTY_PACKAGE` | Package directory contains no files besides the manifest |
-| `LARGE_FILE` | A file in the package exceeds 10 MB |
-| `MISSING_DEFAULT_ASSET` | A GDD field with `gddType: "file-path"` has a `default` value pointing to a non-existent file |
+| Code | Meaning |
+| --- | --- |
+| `EMPTY_PACKAGE` | The directory contains no files except manifests |
+| `LARGE_FILE` | A package file exceeds 10 MB |
+| `MISSING_DEFAULT_ASSET` | A package-relative file-path GDD default does not exist |
 
-### Infos — informational only
+### Information
 
-| Code | Description |
-|------|-------------|
-| `MISSING_GDD` | No `schema` defined — valid but limits tooling support |
-| `MISSING_GDD_TYPE` | A GDD field has no `gddType` hint |
-| `INVALID_VERSION_FORMAT` | `version` does not follow semver (not required by spec) |
-| `PACKAGE_FILE_COUNT` | Reports the total number of files in the package |
-| `PACKAGE_TOTAL_SIZE` | Reports the total size of all files in the package |
+| Code | Meaning |
+| --- | --- |
+| `MISSING_GDD` | No manifest GDD `schema` is defined |
+| `PACKAGE_FILE_COUNT` | Number of files returned by `VirtualFS` |
+| `PACKAGE_TOTAL_SIZE` | Aggregate size when `getFileSize` is available |
 
----
+For compatibility, `ValidationIssueCode` still contains several legacy names
+that the current validator does not emit. New integrations should use the
+canonical singular `INVALID_RENDER_REQUIREMENT` and consolidated `INVALID_GDD`
+codes listed above.
 
-## TypeScript types
+## Exported TypeScript types
 
-All types are exported from the package root:
+The package root exports manifest, GDD, validation, and file-system types,
+including:
 
 ```ts
 import type {
     OgrafManifest,
+    OgrafVendorExtensions,
     OgrafAuthor,
     OgrafCustomAction,
+    OgrafActionDuration,
+    OgrafActionStepDuration,
+    OgrafPlayActionDuration,
+    OgrafUpdateActionDuration,
+    OgrafStopActionDuration,
+    OgrafCustomActionDuration,
     OgrafRenderRequirement,
+    OgrafEngineRequirement,
+    OgrafEngineVersionRequirement,
+    OgrafThumbnail,
     GddSchema,
     GddField,
+    GddOptions,
     ValidationResult,
     ValidationIssue,
+    ValidationIssueCode,
     ValidationSeverity,
     VirtualFS,
 } from '@streamshapers/ograf-validator-core';
 ```
 
----
+## Offline specification maintenance
+
+The immutable source snapshot lives at
+`spec/ebu-ograf-v1-d42afced/`. Ajv 8.17.1 in 2020-12 mode is a development dependency and
+compiles the vendored schemas into
+`src/generated/ograf-manifest-validator.ts`; published runtime code does not
+import Ajv or load network resources.
+
+From this package directory:
+
+```bash
+npm run generate:validator
+npm run spec:check
+```
+
+`spec:check` verifies `SHA256SUMS` and fails when regenerated standalone code
+differs from the checked-in artifact.
 
 ## Compatibility
 
-| Environment | Support |
-|-------------|---------|
-| Node.js 18+ | Yes |
-| Node.js 16 | Yes (ESM mode) |
-| Browser (modern) | Yes |
-| Deno | Yes (via npm specifier) |
-
-No native modules, no filesystem access in the library itself — all I/O goes through `VirtualFS`.
-
----
+The package provides ESM, CommonJS, and TypeScript declarations. The supported
+repository toolchain is Node.js 20+ and npm 10+. Browser consumers should use a
+modern bundler; all file access remains behind `VirtualFS`.
 
 ## License
 
-MIT © [StreamShapers](https://streamshapers.com)
+MIT - [StreamShapers](https://streamshapers.com)

@@ -4,9 +4,51 @@
   "version": "1.0.0",
   "name": "Lower Third",
   "description": "A simple lower third graphic",
+  "author": {
+    "name": "StreamShapers"
+  },
   "main": "graphic.mjs",
   "supportsRealTime": true,
   "supportsNonRealTime": false,
+  "stepCount": 1,
+  "customActions": [
+    {
+      "id": "clear",
+      "name": "Clear text",
+      "schema": null
+    }
+  ],
+  "actionDurations": [
+    {
+      "type": "playAction",
+      "duration": 250,
+      "steps": [
+        { "step": 0, "duration": 250 },
+        { "duration": 150 }
+      ]
+    },
+    { "type": "updateAction", "duration": 0 },
+    { "type": "stopAction", "duration": 200 },
+    { "type": "customAction", "customActionId": "clear", "duration": 0 }
+  ],
+  "renderRequirements": [
+    {
+      "resolution": {
+        "width": { "ideal": 1920 },
+        "height": { "ideal": 1080 }
+      },
+      "frameRate": { "ideal": 50 },
+      "engine": [
+        { "type": "CEF", "version": { "min": "139" } }
+      ]
+    }
+  ],
+  "thumbnails": [
+    {
+      "file": "https://example.com/lower-third.webp",
+      "resolution": { "width": 640, "height": 360 }
+    }
+  ],
   "schema": {
     "type": "object",
     "properties": {
@@ -14,13 +56,16 @@
         "type": "string",
         "label": "Headline",
         "default": "John Doe",
-        "gddType": "single-line"
+        "gddType": "single-line",
+        "order": 1
       },
       "subline": {
         "type": "string",
         "label": "Subline",
         "default": "Reporter",
-        "gddType": "single-line"
+        "gddType": "single-line",
+        "order": 2,
+        "hidden": true
       }
     }
   }

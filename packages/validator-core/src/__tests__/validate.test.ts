@@ -8,14 +8,10 @@ import type { VirtualFS, ValidationResult } from '../types.js';
 
 const FIXTURES_DIR = resolve(__dirname, '../../../../fixtures');
 
-function loadFixture(name: string): unknown {
-    // Support both manifest.ograf.json and any *.ograf.json in the fixture dir
-    const candidates = ['manifest.ograf.json'];
-    for (const filename of candidates) {
-        const path = join(FIXTURES_DIR, name, filename);
-        if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf-8'));
-    }
-    throw new Error(`No *.ograf.json found in fixture "${name}"`);
+function loadFixture(name: string, filename = 'manifest.ograf.json'): unknown {
+    const path = join(FIXTURES_DIR, name, filename);
+    if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf-8'));
+    throw new Error(`Fixture manifest "${name}/${filename}" was not found.`);
 }
 
 function collectFilesRecursive(dir: string, prefix = ''): string[] {
@@ -111,6 +107,14 @@ describe('validateManifest – valid fixtures', () => {
     it('accepts valid-realtime manifest', () => {
         expectValid(validateManifest(loadFixture('valid-realtime')));
     });
+
+    it('accepts the second manifest in the shared valid-realtime directory', () => {
+        expectValid(validateManifest(loadFixture('valid-realtime', 'goal-flash.ograf.json')));
+    });
+
+    it('keeps the invalid-runtime fixture statically valid', () => {
+        expectValid(validateManifest(loadFixture('invalid-runtime')));
+    });
 });
 
 // ─── validateManifest: invalid fixture ───────────────────────────────────────
@@ -140,8 +144,8 @@ describe('validateManifest – invalid fixture', () => {
         expect(hasCode(validateManifest(loadFixture('invalid-missing-fields')), 'NO_RUNTIME_SUPPORT')).toBe(true);
     });
 
-    it('reports INVALID_VERSION_FORMAT info for non-semver version', () => {
-        expect(hasCode(validateManifest(loadFixture('invalid-missing-fields')), 'INVALID_VERSION_FORMAT')).toBe(true);
+    it('does not enforce a version format because the spec leaves it open', () => {
+        expect(hasCode(validateManifest(loadFixture('invalid-missing-fields')), 'INVALID_VERSION_FORMAT')).toBe(false);
     });
 
     it('reports INVALID_GDD for schema that is not an object', () => {
@@ -178,18 +182,17 @@ describe('validateManifest – edge cases', () => {
         expectValid(result);
     });
 
-    it('emits INVALID_VERSION_FORMAT info for non-semver version', () => {
+    it('accepts arbitrary string version descriptors', () => {
         const result = validateManifest(validManifest({ version: 'v1' }));
-        expect(hasCode(result, 'INVALID_VERSION_FORMAT')).toBe(true);
-        // Still valid – semver is a best practice, not a spec requirement
+        expect(hasCode(result, 'INVALID_VERSION_FORMAT')).toBe(false);
         expectValid(result);
     });
 
-    it('warns NO_RUNTIME_SUPPORT when both support flags are false', () => {
+    it('errors NO_RUNTIME_SUPPORT when both support flags are false', () => {
         const result = validateManifest(validManifest({ supportsRealTime: false, supportsNonRealTime: false }));
         expect(hasCode(result, 'NO_RUNTIME_SUPPORT')).toBe(true);
-        // Should still be valid (warning only)
-        expectValid(result);
+        expectInvalid(result);
+        expect(result.errors.some((entry) => entry.code === 'NO_RUNTIME_SUPPORT')).toBe(true);
     });
 
     it('reports MISSING_FIELD for each missing required field individually', () => {
@@ -298,7 +301,7 @@ describe('validateManifest – optional fields', () => {
 
     it('errors when renderRequirements is not an array', () => {
         const result = validateManifest(validManifest({ renderRequirements: {} }));
-        expect(hasCode(result, 'INVALID_RENDER_REQUIREMENTS')).toBe(true);
+        expect(hasCode(result, 'INVALID_RENDER_REQUIREMENT')).toBe(true);
     });
 
     it('accepts a basic renderRequirements array', () => {
@@ -362,20 +365,20 @@ describe('validateManifest – vendor-specific fields', () => {
 describe('validateManifest – GDD schema', () => {
     it('validates GDD schema type must be object', () => {
         const result = validateManifest(validManifest({ schema: { type: 'array', properties: {} } }));
-        expect(hasCode(result, 'INVALID_GDD_TYPE')).toBe(true);
+        expect(hasCode(result, 'INVALID_GDD')).toBe(true);
     });
 
     it('requires GDD schema to have properties', () => {
         const result = validateManifest(validManifest({ schema: { type: 'object' } }));
-        expect(hasCode(result, 'MISSING_GDD_PROPERTIES')).toBe(true);
+        expect(hasCode(result, 'INVALID_GDD')).toBe(true);
     });
 
-    it('emits MISSING_GDD_TYPE info for non-basic fields without gddType', () => {
-        // object/array fields have no self-describing type — gddType hint is useful
+    it('does not require gddType for object fields', () => {
         const result = validateManifest(validManifest({
-            schema: { type: 'object', properties: { style: { type: 'object' } } },
+            schema: { type: 'object', properties: { style: { type: 'object', properties: {} } } },
         }));
-        expect(hasCode(result, 'MISSING_GDD_TYPE')).toBe(true);
+        expect(hasCode(result, 'MISSING_GDD_TYPE')).toBe(false);
+        expectValid(result);
     });
 
     it('does not emit MISSING_GDD_TYPE for basic types without gddType', () => {
@@ -407,6 +410,26 @@ describe('validatePackage – asset checks', () => {
     it('valid-realtime: main file exists', async () => {
         const manifest = loadFixture('valid-realtime');
         const result = await validatePackage(manifest, nodeFs(join(FIXTURES_DIR, 'valid-realtime')));
+        expectValid(result);
+    });
+
+    it('valid-realtime: shared-directory second manifest and assets exist', async () => {
+        const manifest = loadFixture('valid-realtime', 'goal-flash.ograf.json');
+        const result = await validatePackage(
+            manifest,
+            nodeFs(join(FIXTURES_DIR, 'valid-realtime')),
+            'goal-flash.ograf.json',
+        );
+        expectValid(result);
+    });
+
+    it('invalid-runtime remains statically valid before runtime API checks', async () => {
+        const manifest = loadFixture('invalid-runtime');
+        const result = await validatePackage(
+            manifest,
+            nodeFs(join(FIXTURES_DIR, 'invalid-runtime')),
+            'manifest.ograf.json',
+        );
         expectValid(result);
     });
 

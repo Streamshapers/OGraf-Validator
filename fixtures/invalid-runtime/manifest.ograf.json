@@ -1,0 +1,14 @@
+{
+  "$schema": "https://ograf.ebu.io/v1/specification/json-schemas/graphics/schema.json",
+  "id": "invalid-runtime-api",
+  "name": "Invalid Runtime API",
+  "version": "1.0.0",
+  "author": {
+    "name": "StreamShapers"
+  },
+  "main": "graphic.mjs",
+  "supportsRealTime": true,
+  "supportsNonRealTime": false,
+  "stepCount": 0,
+  "customActions": []
+}

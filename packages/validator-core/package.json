@@ -1,33 +1,35 @@
 {
   "name": "@streamshapers/ograf-validator-core",
-  "version": "0.1.0",
-  "description": "Validate ograf Graphics Package manifests – for use in CI/CD pipelines and the OGraf Validator DevTool",
+  "version": "0.2.0",
+  "description": "Validate OGraf v1 Graphics Packages in Node.js and browsers with zero runtime dependencies",
   "keywords": ["ograf", "broadcast", "graphics", "validator", "ebu"],
   "license": "MIT",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "spec"],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.esm.json && tsc -p tsconfig.build.cjs.json && node scripts/finalize-dist.mjs",
+    "dev": "tsc -p tsconfig.build.esm.json --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "generate:validator": "node scripts/generate-standalone-validator.mjs",
+    "spec:check": "node scripts/check-spec.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src scripts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "tsup": "^8.0.0",
+    "ajv": "8.20.0",
     "typescript": "^5.4.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {},
   "publishConfig": {

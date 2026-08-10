@@ -4,9 +4,77 @@
   "version": "2.1.0",
   "name": "Football Scoreboard",
   "description": "Real-time football scoreboard with team names and score",
+  "author": {
+    "name": "StreamShapers"
+  },
   "main": "graphic.mjs",
   "supportsRealTime": true,
   "supportsNonRealTime": true,
+  "stepCount": 2,
+  "customActions": [
+    {
+      "id": "set-period",
+      "name": "Set period",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "gddType": "select",
+            "enum": ["first", "second", "extra"],
+            "gddOptions": {
+              "labels": {
+                "first": "1st Half",
+                "second": "2nd Half",
+                "extra": "Extra Time"
+              }
+            },
+            "default": "first"
+          }
+        }
+      }
+    }
+  ],
+  "actionDurations": [
+    {
+      "type": "playAction",
+      "duration": 300,
+      "steps": [
+        { "step": 0, "duration": 300 },
+        { "step": 1, "duration": 200 },
+        { "duration": 150 }
+      ]
+    },
+    { "type": "updateAction", "duration": 100 },
+    { "type": "stopAction", "duration": 250 },
+    { "type": "customAction", "customActionId": "set-period", "duration": 100 }
+  ],
+  "renderRequirements": [
+    {
+      "resolution": {
+        "width": { "exact": 1920 },
+        "height": { "exact": 1080 }
+      },
+      "frameRate": { "ideal": 50 },
+      "accessToPublicInternet": { "ideal": false },
+      "engine": [
+        { "type": "CEF", "version": { "min": "139" } }
+      ]
+    },
+    {
+      "resolution": {
+        "width": { "ideal": 1280 },
+        "height": { "ideal": 720 }
+      },
+      "frameRate": { "ideal": 50 }
+    }
+  ],
+  "thumbnails": [
+    {
+      "file": "thumbnail.png",
+      "resolution": { "width": 1672, "height": 941 }
+    }
+  ],
   "schema": {
     "type": "object",
     "properties": {
@@ -14,36 +82,60 @@
         "type": "string",
         "label": "Home Team",
         "default": "Home",
-        "gddType": "single-line"
+        "gddType": "single-line",
+        "order": 1
       },
       "awayTeam": {
         "type": "string",
         "label": "Away Team",
         "default": "Away",
-        "gddType": "single-line"
+        "gddType": "single-line",
+        "order": 2
       },
       "homeScore": {
         "type": "integer",
         "label": "Home Score",
         "default": 0,
-        "gddType": "number"
+        "order": 3
       },
       "awayScore": {
         "type": "integer",
         "label": "Away Score",
         "default": 0,
-        "gddType": "number"
+        "order": 4
       },
       "period": {
         "type": "string",
         "label": "Period",
-        "default": "1st Half",
-        "gddType": "dropdown",
-        "validValues": [
-          { "value": "1st Half", "label": "1st Half" },
-          { "value": "2nd Half", "label": "2nd Half" },
-          { "value": "Extra Time", "label": "Extra Time" }
-        ]
+        "default": "first",
+        "gddType": "select",
+        "enum": ["first", "second", "extra"],
+        "gddOptions": {
+          "labels": {
+            "first": "1st Half",
+            "second": "2nd Half",
+            "extra": "Extra Time"
+          }
+        },
+        "order": 5
+      },
+      "visibleStats": {
+        "type": "array",
+        "label": "Visible statistics",
+        "gddType": "select-multiple",
+        "items": {
+          "type": "string",
+          "enum": ["score", "period", "cards"]
+        },
+        "gddOptions": {
+          "labels": {
+            "score": "Score",
+            "period": "Period",
+            "cards": "Cards"
+          }
+        },
+        "default": ["score", "period"],
+        "order": 6
       }
     }
   }
