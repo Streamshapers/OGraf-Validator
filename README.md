@@ -1,90 +1,74 @@
 # OGraf Validator
 
-> Validate, inspect and preview [OGraf Graphics Packages](https://ograf.ebu.io/v1/specification/docs/Specification.html) — directly in the browser.
+Validate, inspect, and safely preview [OGraf Graphics Packages](https://ograf.ebu.io/v1/specification/docs/Specification.html) directly in a Chromium browser.
 
-Built by [StreamShapers](https://streamshapers.com) as a community tool for the EBU OGraf ecosystem.
+OGraf Validator is an open-source [StreamShapers](https://streamshapers.com) community tool. Package files stay on the local machine; no backend or upload is involved.
 
-**Live app**: [validator.streamshapers.com](https://validator.streamshapers.com)  
-**npm**: [`@streamshapers/ograf-validator-core`](https://www.npmjs.com/package/@streamshapers/ograf-validator-core)
+- Live app: [validator.streamshapers.com](https://validator.streamshapers.com)
+- Core package: [`@streamshapers/ograf-validator-core`](https://www.npmjs.com/package/@streamshapers/ograf-validator-core)
+- Specification snapshot: EBU OGraf v1 commit [`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b), 7 August 2026
 
----
+## What it covers
 
-## What it does
+The validator checks the pinned OGraf v1 manifest and GDD schemas, additional normative prose rules, and local package references in three explicit stages. It understands, among other fields:
 
-OGraf packages are Web Components. They must implement a specific JavaScript API, carry a manifest file, and declare their data contract via GDD. Getting all of that right by eye is tedious.
+- `actionDurations`, including step fallbacks and custom-action references;
+- local and external `thumbnails` plus declared resolution;
+- all `renderRequirements` alternatives, `engine`, and `accessToPublicInternet`;
+- recursive GDD schemas, `hidden`, `order`, `select`, and typed `select-multiple`;
+- nested file-path defaults and custom-action payload schemas;
+- multiple independent `*.ograf.json` manifests in one shared asset directory.
 
-OGraf Validator loads a package directory from your local file system and tells you exactly what is wrong, what looks suspicious, and what is informational, without uploading anything to a server.
+Validation is split into errors, warnings, and tooling information. Incorrect `$schema` values, unknown non-`v_*` fields, both runtime flags being false, and non-integer `stepCount` values are errors. A missing GDD is tooling information only. Every statically valid Graphic is queued automatically for a sequential runtime test.
 
----
+## Inspector and preview
 
-## Features
+The Inspector shows manifest data, GDD fields, assets, thumbnails, render alternatives, custom actions, and resolved duration declarations. External thumbnails are metadata-only until the user explicitly loads one.
 
-### Validation
+Graphic JavaScript runs only inside a transient `<iframe sandbox="allow-scripts">` with an opaque origin. Each load/reload uses a new session URL namespace:
 
-- Checks every required field, type, and constraint from the OGraf v1 spec
-- Reports **errors** (package is invalid), **warnings** (valid but suspicious), and **infos** (best-practice hints)
-- All packages in a directory are validated automatically on open, no manual trigger needed
-- Export the full report as **JSON** (CI-friendly) or **HTML** (human-readable)
+```text
+/__ograf_preview__/<sessionId>/<package-relative-path>
+```
 
-### Inspection
+Session and tab tokens isolate packages, tabs, reloads, and complete ESM dependency graphs. The file bridge blocks absolute paths and parent traversal, handles Unicode and spaces, supplies media MIME types, and supports `HEAD` and byte-range requests. Graphic code cannot access the validator DOM, origin storage, or same-origin APIs.
 
-| Tab | What you see |
-|-----|-------------|
-| Validation | All issues with error codes, paths, and messages |
-| Manifest | Full JSON tree of the manifest file |
-| GDD | Parsed Graphics Data Definition schema |
-| Assets | All files in the package with their validation status |
+The opaque sandbox receives package modules through an in-frame Blob/import-map graph. Static imports, export-from declarations, literal and package-local variable dynamic imports, and literal `new URL(..., import.meta.url)` assets retain package-relative resolution without giving the Graphic access to the validator origin. Directory bases such as `new URL('./assets/', import.meta.url)` stay hierarchical; package files requested below them are read lazily through the validated session MessagePort.
 
-### Preview
+Local CSS `@import` and `url(...)` references work in linked stylesheets,
+`<style>` elements, style attributes, and direct `element.style` changes.
+Package candidates in `srcset` keep their density or width descriptor. Module
+and classic Dedicated Workers support local imports, `importScripts()`, and
+package `fetch()` calls. If a Graphic starts a non-static Worker entry or a
+`SharedWorker`, the runtime test reports an inconclusive preview limitation,
+not an OGraf validation error. Unused Worker code in libraries has no effect.
 
-The Preview tab is a full OGraf API test harness. Mount the graphic in a real browser context and drive every spec method interactively.
+The interactive harness covers:
 
-**Lifecycle**
-- `load` / `dispose` with configurable render type and render characteristics (width × height × fps)
-- Reload without full page refresh
+- `load`, `dispose`, `playAction`, `stopAction`, `updateAction`, and `customAction`;
+- `goToTime` and `setActionsSchedule` for non-realtime Graphics;
+- zero-based top-level `currentStep`, exact ReturnPayload validation, 2xx success handling, and concurrent action Promises;
+- separate RT and NRT lifecycle sessions for dual-mode Graphics;
+- default-derived custom-action payloads, with an explicit skip reason when defaults cannot build one;
+- normative schedule entries using `action.type` and `action.params`;
+- native render surfaces that are scaled only for display.
 
-**Actions**
-- `playAction` — with `delta`, `goto`, and per-call `skipAnimation` override
-- `stopAction` — with `skipAnimation` override
-- `updateAction` — sends the current data form state
-- `customAction` — auto-discovered from `manifest.customActions`, each with its own payload editor
+Automatic tests use the first locally representable render alternative. Engine and internet conditions that the browser cannot verify are reported as such. Runtime operations use `skipAnimation: true`; their 10-second safety timeout is an inconclusive warning, not a static specification error.
 
-**Non-realtime** *(shown when `supportsNonRealTime: true`)*
-- `goToTime` — slider + numeric input, 0–60 000 ms
-- `setActionsSchedule` — JSON editor with example skeleton
+## Browser requirements
 
-**Data editor**
-- Dynamic form built from the GDD schema — no manual JSON editing needed for known fields
-- Supports all `gddType` values: `single-line`, `multi-line`, `dropdown`, `number`, `integer`, `boolean`, `color`, `date`, `url`, `email`, `file-path`, and more
-- Nested objects and arrays with add/remove controls
-- Raw JSON escape hatch at the bottom, always in sync
-- Resets to schema defaults with one click
+Use a current Chromium-based browser such as Chrome or Edge. The File System Access API and Service Workers are required. Firefox is intentionally outside the supported browser scope.
 
-**Event log**
-- Every API call logged with method, params, result, and duration
-- `console.log/warn/error/info` from the graphic captured inline
-- Console entries can be filtered out with a single toggle
-- Collapsible detail view per entry
+1. Open the app.
+2. Select a directory containing one or more `*.ograf.json` files.
+3. Validation and background runtime tests start automatically.
+4. Select a Graphic to inspect it or use the interactive preview.
 
-**Manifest diff**
-- When you re-select a package and the manifest has changed, a git-style unified diff appears automatically
-- 3-line context, collapsed unchanged sections, toggle with a checkbox
+The scanner keeps every manifest independent by its complete path relative to the selected root. Manifests in the same directory share their asset listing. Root changes and watched file changes abort stale scans and runtime sessions before results can reach the new selection.
 
----
+## Core library
 
-## Using the app
-
-1. Open [validator.streamshapers.com](https://validator.streamshapers.com) in a Chromium-based browser (Chrome, Edge)
-2. Click **Open Directory** and select a folder containing one or more OGraf packages
-3. All packages are validated immediately, pick one in the sidebar to inspect it
-
-> The File System Access API is required. Firefox is not supported.
-
----
-
-## Using validator-core in CI/CD
-
-The validation logic is published as a standalone npm package with zero runtime dependencies.
+Install the library in a Node.js or browser project:
 
 ```bash
 npm install @streamshapers/ograf-validator-core
@@ -93,83 +77,71 @@ npm install @streamshapers/ograf-validator-core
 ```ts
 import { validateManifest, validatePackage } from '@streamshapers/ograf-validator-core';
 
-// Validate a manifest object in memory
-const result = validateManifest(manifest);
-console.log(result.valid);   // true | false
-console.log(result.errors);  // ValidationIssue[]
+const manifestResult = validateManifest(manifest);
 
-// Validate a full package (manifest + file references)
-// Implement VirtualFS to provide file access for your environment
-const result = await validatePackage(manifest, fs);
+const packageResult = await validatePackage(
+    manifest,
+    fs,
+    'lower-third.ograf.json', // optional, retained for API compatibility
+);
 ```
 
-`VirtualFS` is a simple interface - implement it for `node:fs`, a zip archive, or any other source:
+`VirtualFS` keeps file access host-independent:
 
 ```ts
 interface VirtualFS {
-    fileExists(path: string): Promise<boolean>;
     readFile(path: string): Promise<string>;
-    listFiles(): Promise<string[]>;
+    fileExists(path: string): Promise<boolean>;
+    listFiles(path?: string): Promise<string[]>;
+    getFileSize?(path: string): Promise<number>;
 }
 ```
 
----
-
-## Monorepo structure
-
-```
-ograf-validator/
-├── packages/
-│   ├── validator-core/    # @streamshapers/ograf-validator-core — pure TS, zero deps
-│   └── app/               # Web app — React + Vite + Tailwind CSS
-├── fixtures/
-│   ├── valid-basic/       # Simple lower-third (realtime)
-│   ├── valid-realtime/    # Football scoreboard (realtime + non-realtime, GDD with dropdown)
-└── └── invalid-missing-fields/  # Deliberately broken package for test coverage
-```
-
----
+Both public validators accept arbitrary `unknown` input. Malformed objects and `VirtualFS` failures are returned as issues rather than thrown. The published core has no runtime dependencies. It does not expose a CLI or `bin` entry.
 
 ## Local development
 
 ```bash
-# Install all dependencies
-npm install
-
-# Start the app dev server
+npm install          # Node.js 20.19 or newer
 npm run dev          # http://localhost:3000
-
-# Run validator-core unit tests
-npm run test:core    # 47 tests
-
-# Type-check all packages
+npm run spec:check   # Snapshot hashes and generated standalone validator
+npm test             # Core and app unit tests
 npm run typecheck
-
-# Build everything
 npm run build
+npm run smoke:core   # ESM/CJS/types package-export smoke
+npm run test:e2e     # Playwright using installed Chrome
+npm run audit        # Full dependency audit, including development tools
+npm run release:check
 ```
 
----
+`npm run release:check` runs lint, type checking, unit tests, the pinned-spec
+check, production builds, the installed-package smoke test, Chromium tests, and
+both production-only and full dependency audits.
 
-## Tech stack
+The vendored specification is never downloaded at application runtime. Updating it is an explicit manual process; `npm run spec:check` verifies the snapshot and generated validator artifacts.
 
-| Layer | Technology |
-|-------|-----------|
-| Build | Vite 5 |
-| UI | React 18 + TypeScript |
-| Styling | Tailwind CSS v3 |
-| Validator | TypeScript, zero dependencies |
-| Tests | Vitest |
+Production is deployed as static files to ALL-INKL web hosting. Deployment is
+manual and is not part of the repository scripts.
 
----
+## Repository layout
+
+```text
+ograf-validator/
+├── packages/
+│   ├── validator-core/   # Pure TypeScript validation library
+│   │   └── spec/         # Immutable EBU d42afced snapshot
+│   └── app/              # React/Vite browser application
+├── fixtures/             # Valid, invalid-static, and invalid-runtime packages
+└── scripts/              # Package and specification checks
+```
+
+## Scope
+
+This repository targets the stable OGraf Graphics v1 specification. The separate OGraf Server API, ZIP import, accounts, backend services, and non-OGraf template formats are out of scope.
 
 ## Contributing
 
-Issues and pull requests are welcome. Please follow the [Conventional Commits](https://www.conventionalcommits.org/) format for commit messages.
-
-The OGraf specification is the source of truth: [ograf.ebu.io/v1/specification](https://ograf.ebu.io/v1/specification/docs/Specification.html)
-
----
+Issues and pull requests are welcome. Use Conventional Commits and keep relative ESM imports suffixed with `.js`.
 
 ## License
 

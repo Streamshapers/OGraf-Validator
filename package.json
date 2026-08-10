@@ -2,7 +2,7 @@
   "name": "ograf-validator-monorepo",
   "private": true,
   "version": "0.0.0",
-  "description": "OGraf Validator – browser-based validation, inspection and preview tool for ograf Graphics Packages",
+  "description": "OGraf Validator – browser-based validation, inspection and sandboxed preview for OGraf Graphics Packages",
   "workspaces": [
     "packages/*"
   ],
@@ -11,16 +11,36 @@
     "build": "npm run build --workspace=packages/validator-core && npm run build --workspace=packages/app",
     "test": "npm run test --workspaces --if-present",
     "test:core": "npm run test --workspace=packages/validator-core",
-    "lint": "npm run lint --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace=packages/app",
+    "smoke:core": "npm run build --workspace=packages/validator-core && node scripts/core-package-smoke.mjs",
+    "spec:check": "npm run spec:check --workspace=packages/validator-core",
+    "audit": "npm audit --audit-level=low",
+    "audit:prod": "npm audit --omit=dev --audit-level=low",
+    "release:check": "npm run lint && npm run typecheck && npm test && npm run spec:check && npm run build && npm run smoke:core && npm run test:e2e && npm run audit:prod && npm run audit",
+    "lint": "eslint packages scripts",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=20.19.0",
     "npm": ">=10.0.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/streamshapers/ograf-validator.git"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.9.0",
+    "postcss": "8.5.26",
+    "typescript-eslint": "^8.67.0"
+  },
+  "overrides": {
+    "@babel/core": "$@babel/core",
+    "postcss": "$postcss"
+  }
 }
