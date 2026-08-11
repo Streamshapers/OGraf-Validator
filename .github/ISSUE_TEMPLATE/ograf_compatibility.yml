@@ -3,7 +3,9 @@ description: Report a package that behaves differently from the OGraf v1 specifi
 title: "[OGraf] "
 body:
   - type: checkboxes
+    id: confirmations
     attributes:
+      label: Before you submit
       options:
         - label: I checked the current OGraf v1 specification.
           required: true
