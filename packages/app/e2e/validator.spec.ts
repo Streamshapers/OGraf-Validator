@@ -29,6 +29,58 @@ test.beforeEach(async ({ context, page }) => {
     await writeOpfsFixture(page, fixtureFiles());
 });
 
+test('applies the initial theme before app CSS and JavaScript load', async ({ browser }) => {
+    const readInitialPaint = async (
+        theme?: 'light' | 'system',
+        colorScheme: 'light' | 'dark' = 'dark',
+    ) => {
+        const context = await browser.newContext({ serviceWorkers: 'block', colorScheme });
+        if (theme) {
+            await context.addInitScript((savedTheme) => {
+                localStorage.setItem('ograf-settings', JSON.stringify({ theme: savedTheme }));
+            }, theme);
+        }
+        await context.route('**/assets/*.css', (route) => route.fulfill({
+            contentType: 'text/css',
+            body: '',
+        }));
+        await context.route('**/assets/*.js', (route) => route.fulfill({
+            contentType: 'application/javascript',
+            body: '',
+        }));
+
+        const page = await context.newPage();
+        await page.goto('http://127.0.0.1:3000/');
+        const paint = await page.evaluate(() => ({
+            htmlClass: document.documentElement.className,
+            htmlBackground: getComputedStyle(document.documentElement).backgroundColor,
+            bodyBackground: getComputedStyle(document.body).backgroundColor,
+            rootBackground: getComputedStyle(document.querySelector('#root')!).backgroundColor,
+            bodyColor: getComputedStyle(document.body).color,
+        }));
+        await context.close();
+        return paint;
+    };
+
+    await expect(readInitialPaint()).resolves.toEqual({
+        htmlClass: 'h-full',
+        htmlBackground: 'rgb(19, 19, 19)',
+        bodyBackground: 'rgb(19, 19, 19)',
+        rootBackground: 'rgb(19, 19, 19)',
+        bodyColor: 'rgb(238, 238, 238)',
+    });
+    await expect(readInitialPaint('light')).resolves.toMatchObject({
+        htmlClass: expect.stringContaining('theme-light'),
+        bodyBackground: 'rgb(246, 246, 246)',
+        bodyColor: 'rgb(24, 24, 24)',
+    });
+    await expect(readInitialPaint('system', 'light')).resolves.toMatchObject({
+        htmlClass: expect.stringContaining('theme-system'),
+        bodyBackground: 'rgb(246, 246, 246)',
+        bodyColor: 'rgb(24, 24, 24)',
+    });
+});
+
 test('isolates packages, tabs, reloads, Unicode imports, and parent origin', async ({ context, page }) => {
     const teardownResourceErrors: string[] = [];
     const automaticAlphaDisposals: string[] = [];

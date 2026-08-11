@@ -4,6 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#4ba1e2" />
+    <style>
+      html {
+        color-scheme: dark;
+        background: #131313;
+      }
+
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        background: #131313;
+        color: #eeeeee;
+      }
+
+      html.theme-light {
+        color-scheme: light;
+      }
+
+      html.theme-light,
+      html.theme-light body,
+      html.theme-light #root {
+        background: #f6f6f6;
+        color: #181818;
+      }
+
+      html.theme-system {
+        color-scheme: light dark;
+      }
+
+      @media (prefers-color-scheme: light) {
+        html.theme-system,
+        html.theme-system body,
+        html.theme-system #root {
+          background: #f6f6f6;
+          color: #181818;
+        }
+      }
+    </style>
+    <script>
+      try {
+        const settings = JSON.parse(localStorage.getItem('ograf-settings') || '{}');
+        if (settings.theme === 'light') document.documentElement.classList.add('theme-light');
+        if (settings.theme === 'system') document.documentElement.classList.add('theme-system');
+      } catch {
+        // Use the dark default when saved settings cannot be read.
+      }
+    </script>
     <meta name="description" content="Validate OGraf v1 packages in your browser. Check manifests and GDD, inspect files, and test realtime and non-realtime graphics without uploading them." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="OGraf Validator" />
