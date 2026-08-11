@@ -6,13 +6,16 @@
     <base id="ograf-base" href="/">
     <title>OGraf sandbox runner</title>
     <style>
-        html, body, #viewport { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+        html, body, #viewport { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+        /* Prevent a white opaque-frame flash until INIT applies the selected background. */
+        html, body { background: #1a1a1a; }
+        #viewport { position: relative; background: transparent; }
         #stage { position: absolute; left: 0; top: 0; transform-origin: left top; overflow: hidden; }
         #stage > * { display: block; width: 100%; height: 100%; }
     </style>
 </head>
 <body>
 <div id="viewport"><div id="stage"></div></div>
-<script src="/preview-runner.js"></script>
+<script src="/preview-runner.js?protocol=4"></script>
 </body>
 </html>

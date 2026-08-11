@@ -406,6 +406,72 @@ test('keeps package overview and preview inside the target viewports', async ({ 
     }
 });
 
+test('renders preview backgrounds inside the sandbox without restarting the Graphic', async ({ page }) => {
+    await openFixture(page);
+    await selectGraphic(page, 'Beta Dual');
+    await page.getByRole('button', { name: 'Preview', exact: true }).click();
+
+    const runner = page.frameLocator('iframe[aria-label="OGraf graphic preview"]');
+    const viewport = runner.locator('#viewport');
+    await expect(runner.locator('#stage > *'))
+        .toContainText('BETA:realtime');
+
+    const sessionId = await currentGraphicSession(page);
+    expect(sessionId).toMatch(/^[a-f0-9-]{16,}$/u);
+
+    await expect(viewport).toHaveAttribute('data-background-type', 'checker');
+    const checker = await previewCenterPixel(page);
+    expect(checker.r).toBeGreaterThan(10);
+    expect(checker.r).toBeLessThan(80);
+    expect(Math.abs(checker.r - checker.g)).toBeLessThanOrEqual(2);
+    expect(Math.abs(checker.g - checker.b)).toBeLessThanOrEqual(2);
+
+    await page.getByTitle('Black', { exact: true }).click();
+    await expect(viewport).toHaveAttribute('data-background-type', 'color');
+    await expect(viewport).toHaveAttribute('data-background-color', '#000000');
+    await expect.poll(async () => previewCenterPixel(page)).toEqual({ r: 0, g: 0, b: 0 });
+    expect(await currentGraphicSession(page)).toBe(sessionId);
+
+    await page.getByTitle('White', { exact: true }).click();
+    await expect(viewport).toHaveAttribute('data-background-type', 'color');
+    await expect(viewport).toHaveAttribute('data-background-color', '#ffffff');
+    await expect.poll(async () => previewCenterPixel(page)).toEqual({ r: 255, g: 255, b: 255 });
+    expect(await currentGraphicSession(page)).toBe(sessionId);
+
+    const image = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="#ff00ff"/></svg>';
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+        name: 'preview-background.svg',
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from(image),
+    });
+    await expect(viewport).toHaveAttribute('data-background-type', 'image');
+    await expect.poll(async () => previewCenterPixel(page)).toEqual({ r: 255, g: 0, b: 255 });
+    expect(await currentGraphicSession(page)).toBe(sessionId);
+
+    const imageIsHiddenFromLightDom = await (await currentPreviewFrame(page))?.evaluate(() =>
+        !document.documentElement.outerHTML.includes('data:image/'),
+    );
+    expect(imageIsHiddenFromLightDom).toBe(true);
+
+    await page.getByTitle('Transparent (checker)', { exact: true }).click();
+    await expect(viewport).toHaveAttribute('data-background-type', 'checker');
+    await expect(viewport).not.toHaveAttribute('data-background-color', /.+/u);
+    await expect.poll(async () => (await previewCenterPixel(page)).r).toBeGreaterThan(10);
+    expect(await currentGraphicSession(page)).toBe(sessionId);
+
+    const frame = await currentPreviewFrame(page);
+    expect(await frame?.evaluate(() => {
+        const viewport = document.querySelector<HTMLElement>('#viewport');
+        if (!viewport || viewport.shadowRoot !== null) return false;
+        try {
+            viewport.attachShadow({ mode: 'open' });
+            return false;
+        } catch {
+            return true;
+        }
+    })).toBe(true);
+});
+
 test('runs committed valid fixtures and explains the committed runtime-invalid fixture', async ({ page }) => {
     test.slow();
     await writeOpfsFiles(page, repositoryFixtureFiles());
@@ -585,6 +651,33 @@ async function currentGraphicSession(page: Page): Promise<string | undefined> {
 async function currentPreviewFrame(page: Page) {
     const iframe = await page.locator('iframe[aria-label="OGraf graphic preview"]').elementHandle();
     return iframe?.contentFrame() ?? undefined;
+}
+
+async function previewCenterPixel(page: Page): Promise<{ r: number; g: number; b: number }> {
+    const screenshot = await page.locator('iframe[aria-label="OGraf graphic preview"]').screenshot();
+    return page.evaluate(async (base64) => {
+        const binary = atob(base64);
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not read the preview screenshot.');
+        context.drawImage(bitmap, 0, 0);
+        const pixel = context.getImageData(
+            Math.floor(bitmap.width / 2),
+            Math.floor(bitmap.height / 2),
+            1,
+            1,
+        ).data;
+        bitmap.close();
+        return {
+            r: pixel[0] ?? 0,
+            g: pixel[1] ?? 0,
+            b: pixel[2] ?? 0,
+        };
+    }, screenshot.toString('base64'));
 }
 
 function fixtureFiles(): Record<string, string> {
