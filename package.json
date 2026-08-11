@@ -8,17 +8,21 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=packages/app",
-    "build": "npm run build --workspace=packages/validator-core && npm run build --workspace=packages/app",
-    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build:core && npm run build:app",
+    "build:core": "npm run build --workspace=packages/validator-core",
+    "build:app": "npm run build --workspace=packages/app",
+    "test": "npm run build:core && npm run test:workspaces",
+    "test:workspaces": "npm run test --workspaces --if-present",
     "test:core": "npm run test --workspace=packages/validator-core",
     "test:e2e": "npm run test:e2e --workspace=packages/app",
-    "smoke:core": "npm run build --workspace=packages/validator-core && node scripts/core-package-smoke.mjs",
+    "smoke:core": "npm run build:core && node scripts/core-package-smoke.mjs",
     "spec:check": "npm run spec:check --workspace=packages/validator-core",
     "audit": "npm audit --audit-level=low",
     "audit:prod": "npm audit --omit=dev --audit-level=low",
-    "release:check": "npm run lint && npm run typecheck && npm test && npm run spec:check && npm run build && npm run smoke:core && npm run test:e2e && npm run audit:prod && npm run audit",
+    "release:check": "npm run lint && npm run build:core && npm run typecheck:workspaces && npm run test:workspaces && npm run spec:check && npm run build:app && npm run smoke:core && npm run test:e2e && npm run audit:prod && npm run audit",
     "lint": "eslint packages scripts",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run build:core && npm run typecheck:workspaces",
+    "typecheck:workspaces": "npm run typecheck --workspaces --if-present"
   },
   "engines": {
     "node": ">=20.19.0",
