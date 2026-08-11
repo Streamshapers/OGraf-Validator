@@ -3,6 +3,15 @@
   "version": "0.2.0",
   "description": "Validate OGraf v1 Graphics Packages in Node.js and browsers with zero runtime dependencies",
   "keywords": ["ograf", "broadcast", "graphics", "validator", "ebu"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Richardpwe/OGraf-Validator.git",
+    "directory": "packages/validator-core"
+  },
+  "homepage": "https://github.com/Richardpwe/OGraf-Validator/tree/master/packages/validator-core#readme",
+  "bugs": {
+    "url": "https://github.com/Richardpwe/OGraf-Validator/issues"
+  },
   "license": "MIT",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -14,7 +23,7 @@
       "require": "./dist/cjs/index.js"
     }
   },
-  "files": ["dist", "spec"],
+  "files": ["dist", "spec", "CHANGELOG.md"],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.esm.json && tsc -p tsconfig.build.cjs.json && node scripts/finalize-dist.mjs",
     "dev": "tsc -p tsconfig.build.esm.json --watch",
@@ -31,7 +40,6 @@
     "typescript": "^5.4.0",
     "vitest": "^4.1.10"
   },
-  "peerDependencies": {},
   "publishConfig": {
     "access": "public"
   }

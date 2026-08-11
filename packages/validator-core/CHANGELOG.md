@@ -12,7 +12,7 @@ All notable changes to `@streamshapers/ograf-validator-core` are documented here
 - Recursive GDD validation for nested schemas, defaults, selections, colors, percentages, durations, and file references.
 - Public manifest, action-duration, thumbnail, engine-requirement, GDD-option, and vendor-extension TypeScript types.
 - Regression tests that ensure malformed input and file-system failures return validation issues instead of throwing.
-- Package-export smoke tests for installed ESM, CJS, declarations, public APIs, and the bundled specification snapshot.
+- Package-export smoke tests for installed ESM, CJS, declarations, public APIs, the bundled specification snapshot, license, and changelog.
 
 ### Changed
 

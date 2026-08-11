@@ -8,8 +8,12 @@ dist/
 !.env.example
 coverage/
 .turbo/
+playwright-report/
+test-results/
+*.log
+*.tgz
+*.tsbuildinfo
+.eslintcache
 
-# Claude Code
-.claude/
-CLAUDE.md
+# Local agent instructions
 AGENTS.md

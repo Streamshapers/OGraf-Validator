@@ -3,10 +3,10 @@
 Validate OGraf Graphics v1 manifests and package references in Node.js or a
 browser. The published package has zero runtime dependencies.
 
-This package is part of [OGraf Validator](https://github.com/streamshapers/ograf-validator)
-by [StreamShapers](https://streamshapers.com). It is pinned to EBU OGraf commit
-[`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b)
-from 7 August 2026.
+This package is part of
+[OGraf Validator](https://github.com/Richardpwe/OGraf-Validator) by
+[StreamShapers](https://streamshapers.com). It validates the stable
+[OGraf Graphics v1 specification](https://ograf.ebu.io/v1/specification/docs/Specification.html).
 
 See the [validator core changelog](CHANGELOG.md) for package-specific release notes.
 
@@ -251,7 +251,9 @@ import type {
 ## Offline specification maintenance
 
 The immutable source snapshot lives at
-`spec/ebu-ograf-v1-d42afced/`. Ajv 8.17.1 in 2020-12 mode is a development dependency and
+`spec/ebu-ograf-v1-d42afced/`. It comes from EBU OGraf commit
+[`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b)
+from 7 August 2026. Ajv 8.20.0 in 2020-12 mode is a development dependency and
 compiles the vendored schemas into
 `src/generated/ograf-manifest-validator.ts`; published runtime code does not
 import Ajv or load network resources.
@@ -274,4 +276,4 @@ modern bundler; all file access remains behind `VirtualFS`.
 
 ## License
 
-MIT - [StreamShapers](https://streamshapers.com)
+[MIT](LICENSE) - [StreamShapers](https://streamshapers.com)

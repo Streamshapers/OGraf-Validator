@@ -83,6 +83,9 @@ try {
     await access(resolve(installedRoot, 'dist/esm/index.js'));
     await access(resolve(installedRoot, 'dist/cjs/index.js'));
     await access(resolve(installedRoot, 'dist/types/index.d.ts'));
+    const installedLicense = await readFile(resolve(installedRoot, 'LICENSE'), 'utf8');
+    assert.match(installedLicense, /MIT License/);
+    await access(resolve(installedRoot, 'CHANGELOG.md'));
     await access(resolve(
         installedRoot,
         'spec/ebu-ograf-v1-d42afced/json-schemas/graphics/schema.json',
@@ -100,7 +103,7 @@ try {
 
     console.log(
         `Core package tarball smoke passed for ${packageJson.name}@${packageJson.version} ` +
-        '(ESM, CJS, declarations, API, offline install).',
+        '(ESM, CJS, declarations, API, license, changelog, offline install).',
     );
 } finally {
     await removeTemporaryRoot(temporaryRoot, temporaryParent, temporaryPrefix);
