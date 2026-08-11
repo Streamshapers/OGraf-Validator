@@ -5,12 +5,12 @@
   "keywords": ["ograf", "broadcast", "graphics", "validator", "ebu"],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Richardpwe/OGraf-Validator.git",
+    "url": "git+https://github.com/Streamshapers/OGraf-Validator.git",
     "directory": "packages/validator-core"
   },
-  "homepage": "https://github.com/Richardpwe/OGraf-Validator/tree/master/packages/validator-core#readme",
+  "homepage": "https://github.com/Streamshapers/OGraf-Validator/tree/master/packages/validator-core#readme",
   "bugs": {
-    "url": "https://github.com/Richardpwe/OGraf-Validator/issues"
+    "url": "https://github.com/Streamshapers/OGraf-Validator/issues"
   },
   "license": "MIT",
   "main": "./dist/cjs/index.js",

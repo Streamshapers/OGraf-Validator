@@ -4,7 +4,7 @@ Validate OGraf Graphics v1 manifests and package references in Node.js or a
 browser. The published package has zero runtime dependencies.
 
 This package is part of
-[OGraf Validator](https://github.com/Richardpwe/OGraf-Validator) by
+[OGraf Validator](https://github.com/Streamshapers/OGraf-Validator) by
 [StreamShapers](https://streamshapers.com). It validates the stable
 [OGraf Graphics v1 specification](https://ograf.ebu.io/v1/specification/docs/Specification.html).
 

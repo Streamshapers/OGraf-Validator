@@ -31,11 +31,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Richardpwe/OGraf-Validator.git"
+    "url": "git+https://github.com/Streamshapers/OGraf-Validator.git"
   },
   "homepage": "https://validator.streamshapers.com",
   "bugs": {
-    "url": "https://github.com/Richardpwe/OGraf-Validator/issues"
+    "url": "https://github.com/Streamshapers/OGraf-Validator/issues"
   },
   "license": "MIT",
   "devDependencies": {
