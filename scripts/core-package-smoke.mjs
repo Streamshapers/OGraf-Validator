@@ -5,6 +5,7 @@ import {
     mkdir,
     mkdtemp,
     readFile,
+    readdir,
     rm,
     writeFile,
 } from 'node:fs/promises';
@@ -16,6 +17,7 @@ import {
     resolve,
 } from 'node:path';
 import { tmpdir } from 'node:os';
+import { validateSnapshotMetadata } from '../packages/validator-core/scripts/spec-snapshot.mjs';
 
 const require = createRequire(import.meta.url);
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -86,10 +88,24 @@ try {
     const installedLicense = await readFile(resolve(installedRoot, 'LICENSE'), 'utf8');
     assert.match(installedLicense, /MIT License/);
     await access(resolve(installedRoot, 'CHANGELOG.md'));
-    await access(resolve(
-        installedRoot,
-        'spec/ebu-ograf-v1-d42afced/json-schemas/graphics/schema.json',
-    ));
+    const installedSpecRoot = resolve(installedRoot, 'spec');
+    const installedSnapshotDirectories = (await readdir(installedSpecRoot, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith('ebu-ograf-v1-'));
+    assert.equal(
+        installedSnapshotDirectories.length,
+        1,
+        'The package must contain exactly one EBU OGraf v1 snapshot.',
+    );
+    const installedSnapshotDirectory = installedSnapshotDirectories[0]?.name;
+    assert.equal(typeof installedSnapshotDirectory, 'string');
+    const installedSnapshotRoot = resolve(installedSpecRoot, installedSnapshotDirectory);
+    const installedSnapshotMetadata = JSON.parse(
+        await readFile(resolve(installedSnapshotRoot, 'SNAPSHOT.json'), 'utf8'),
+    );
+    validateSnapshotMetadata(installedSnapshotMetadata, installedSnapshotDirectory);
+    await access(resolve(installedSnapshotRoot, 'SNAPSHOT.md'));
+    await access(resolve(installedSnapshotRoot, 'SHA256SUMS'));
+    await access(resolve(installedSnapshotRoot, 'json-schemas/graphics/schema.json'));
 
     run(process.execPath, ['esm-smoke.mjs'], consumerDirectory);
     run(process.execPath, ['cjs-smoke.cjs'], consumerDirectory);

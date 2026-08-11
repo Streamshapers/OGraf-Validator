@@ -1,8 +1,7 @@
 /**
  * Public types for EBU OGraf v1 manifests.
  *
- * The normative schema snapshot is pinned in
- * `spec/ebu-ograf-v1-d42afced`.
+ * The normative schema snapshot and its upstream commit are included in `spec/`.
  */
 
 export interface OgrafVendorExtensions {

@@ -265,8 +265,9 @@ npm run generate:validator
 npm run spec:check
 ```
 
-`spec:check` verifies `SHA256SUMS` and fails when regenerated standalone code
-differs from the checked-in artifact.
+`spec:check` verifies the snapshot metadata, current documentation,
+`SHA256SUMS`, and generated standalone code. It fails if any of them refers to
+a different EBU commit.
 
 ## Compatibility
 

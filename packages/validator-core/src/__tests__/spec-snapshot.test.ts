@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateManifest, validatePackage } from '../index.js';
@@ -13,7 +13,17 @@ import type {
 } from '../index.js';
 
 const OFFICIAL_SCHEMA_URL = 'https://ograf.ebu.io/v1/specification/json-schemas/graphics/schema.json';
-const SNAPSHOT_ROOT = resolve(__dirname, '../../spec/ebu-ograf-v1-d42afced');
+const SPEC_ROOT = resolve(__dirname, '../../spec');
+const SNAPSHOT_DIRECTORIES = readdirSync(SPEC_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('ebu-ograf-v1-'));
+if (SNAPSHOT_DIRECTORIES.length !== 1 || SNAPSHOT_DIRECTORIES[0] === undefined) {
+    throw new Error('Expected exactly one vendored EBU OGraf v1 snapshot.');
+}
+const SNAPSHOT_ROOT = resolve(SPEC_ROOT, SNAPSHOT_DIRECTORIES[0].name);
+const SNAPSHOT_METADATA = JSON.parse(readFileSync(
+    resolve(SNAPSHOT_ROOT, 'SNAPSHOT.json'),
+    'utf8',
+)) as { commit: string; sourceDate: string };
 
 function manifest(overrides: Record<string, unknown> = {}): unknown {
     return {
@@ -60,7 +70,7 @@ function memoryFs(
     };
 }
 
-describe('vendored EBU d42afced snapshot', () => {
+describe(`vendored EBU ${SNAPSHOT_METADATA.commit.slice(0, 8)} snapshot`, () => {
     it('pins the full upstream commit and the new schema fields', () => {
         const snapshot = readFileSync(resolve(SNAPSHOT_ROOT, 'SNAPSHOT.md'), 'utf8');
         const schema = JSON.parse(readFileSync(
@@ -68,7 +78,8 @@ describe('vendored EBU d42afced snapshot', () => {
             'utf8',
         )) as { properties: Record<string, unknown> };
 
-        expect(snapshot).toContain('d42afcedf9348e05e35b2009b04fb9552785e35b');
+        expect(snapshot).toContain(SNAPSHOT_METADATA.commit);
+        expect(snapshot).toContain(SNAPSHOT_METADATA.sourceDate);
         expect(schema.properties).toHaveProperty('actionDurations');
         expect(schema.properties).toHaveProperty('thumbnails');
         expect(schema.properties).toHaveProperty('renderRequirements');

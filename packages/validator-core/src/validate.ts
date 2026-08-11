@@ -1,7 +1,4 @@
-/**
- * Public validator API for the EBU OGraf v1 schema pinned at
- * d42afcedf9348e05e35b2009b04fb9552785e35b.
- */
+/** Public validator API for the pinned EBU OGraf v1 schema snapshot. */
 
 import type { ValidationIssue, ValidationResult, VirtualFS } from './types.js';
 import { validateAssets } from './package-validation.js';

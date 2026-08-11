@@ -136,8 +136,8 @@ Validation uses a local snapshot of the stable OGraf Graphics v1 specification:
 - Local files: [`packages/validator-core/spec/ebu-ograf-v1-d42afced`](packages/validator-core/spec/ebu-ograf-v1-d42afced)
 
 The app never downloads schemas at runtime. Spec updates are reviewed and added
-manually. `npm run spec:check` verifies the stored hashes and generated
-standalone validator.
+manually. `npm run spec:check` verifies that the documented EBU commit,
+snapshot metadata, stored hashes, and generated standalone validator agree.
 
 ## Local development
 
