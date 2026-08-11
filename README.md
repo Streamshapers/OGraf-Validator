@@ -1,6 +1,7 @@
 # OGraf Validator
 
 [![Open OGraf Validator](https://img.shields.io/badge/Open_Validator-Live-4ba1e2)](https://validator.streamshapers.com)
+[![CI](https://github.com/Richardpwe/OGraf-Validator/actions/workflows/ci.yml/badge.svg)](https://github.com/Richardpwe/OGraf-Validator/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40streamshapers%2Fograf-validator-core?label=validator-core)](https://www.npmjs.com/package/@streamshapers/ograf-validator-core)
 [![OGraf v1](https://img.shields.io/badge/OGraf-v1-2d5ac3)](https://ograf.ebu.io/v1/specification/docs/Specification.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -191,8 +192,9 @@ The app and core library are versioned separately:
 
 ## Contributing
 
-Issues and pull requests are welcome. Use Conventional Commits and keep `.js`
-extensions on relative ESM imports, including imports written in TypeScript.
+Issues and pull requests are welcome. Read the
+[contribution guide](CONTRIBUTING.md) before starting a change. Use
+[private vulnerability reporting](SECURITY.md) for security problems.
 
 ## License
 

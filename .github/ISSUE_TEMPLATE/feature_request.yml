@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest an improvement to OGraf Validator.
+title: "[Feature] "
+body:
+  - type: checkboxes
+    attributes:
+      options:
+        - label: I searched the existing issues first.
+          required: true
+        - label: This request is related to OGraf Graphics v1 validation, inspection, or preview.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested change
+      description: Explain the smallest change that would solve the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Describe any workaround or other approach you considered.
+
+  - type: textarea
+    id: spec
+    attributes:
+      label: Related OGraf specification section
+      description: Add a link when the request depends on the OGraf v1 specification.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional information

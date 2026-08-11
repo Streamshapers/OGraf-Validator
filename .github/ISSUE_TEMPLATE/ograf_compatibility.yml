@@ -1,0 +1,63 @@
+name: OGraf compatibility problem
+description: Report a package that behaves differently from the OGraf v1 specification.
+title: "[OGraf] "
+body:
+  - type: checkboxes
+    attributes:
+      options:
+        - label: I checked the current OGraf v1 specification.
+          required: true
+        - label: I searched the existing issues first.
+          required: true
+        - label: I can share the attached package or reproduction publicly.
+          required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: Validator result
+      options:
+        - Static validation error
+        - Static validation warning
+        - Runtime failure
+        - Runtime inconclusive
+        - Inspector or preview problem
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: package
+    attributes:
+      label: Package or minimal reproduction
+      description: Link a small public package or paste only the relevant manifest and Graphic code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validator
+    attributes:
+      label: What does the validator report?
+    validations:
+      required: true
+
+  - type: textarea
+    id: spec
+    attributes:
+      label: What does OGraf v1 require?
+      description: Link the relevant specification section and explain the difference.
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Validator version and browser
+      placeholder: Copy the app version and browser version
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional information

@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a problem with the validator app or core library.
+title: "[Bug] "
+body:
+  - type: checkboxes
+    attributes:
+      options:
+        - label: I searched the existing issues first.
+          required: true
+        - label: I removed private data, credentials, and licensed assets from the report.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Browser app
+        - Validator core library
+        - Documentation
+        - Build or tests
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem in a few clear sentences.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. See...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Validator version
+      placeholder: Copy the version shown in the app footer or package.json
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, operating system, and Node.js version
+      placeholder: Chrome, Windows 11, Node.js 20
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Add validation output, runtime steps, console errors, or a small public reproduction.
+      render: shell
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional information
