@@ -14,7 +14,7 @@ export default function PreviewEventLog({ log, onClear }: Props) {
     return (
         <>
             {/* Title bar — replaces outer RightSection header */}
-            <div className="flex-shrink-0 flex items-center justify-between px-4 h-10 bg-ss-surface"
+            <div className="shrink-0 flex items-center justify-between px-4 h-10 bg-ss-surface"
                  style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
                     Event Log {log.length > 0 && `(${filtered.length})`}
@@ -32,7 +32,7 @@ export default function PreviewEventLog({ log, onClear }: Props) {
                     <button
                         onClick={onClear}
                         disabled={log.length === 0}
-                        className="px-3 py-1 rounded text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="px-3 py-1 rounded-sm text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                         Clear
                     </button>
@@ -88,7 +88,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
 function MethodBadge({ method, isError }: { method: ApiMethod; isError: boolean }) {
     const bg = badgeClass(method, isError);
 
-    return <span className={`px-1.5 py-0.5 rounded font-mono ${bg}`}>{method}</span>;
+    return <span className={`px-1.5 py-0.5 rounded-sm font-mono ${bg}`}>{method}</span>;
 }
 
 function badgeClass(method: ApiMethod, isError: boolean): string {

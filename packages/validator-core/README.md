@@ -271,7 +271,7 @@ differs from the checked-in artifact.
 ## Compatibility
 
 The package provides ESM, CommonJS, and TypeScript declarations. The supported
-repository toolchain is Node.js 20+ and npm 10+. Browser consumers should use a
+repository toolchain is Node.js 24+ and npm 11+. Browser consumers should use a
 modern bundler; all file access remains behind `VirtualFS`.
 
 ## License

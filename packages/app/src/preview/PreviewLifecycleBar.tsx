@@ -102,7 +102,7 @@ function LifecycleButton({
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`px-3 py-1 rounded text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${variantCls}`}
+            className={`px-3 py-1 rounded-sm text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${variantCls}`}
         >
             {label}
         </button>

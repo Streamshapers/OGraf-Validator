@@ -1,3 +1,58 @@
+@import "tailwindcss" source(none);
+
+@source "../index.html";
+@source "./";
+
+@theme inline {
+  /* StreamShapers colors */
+  --color-ss-primary: rgb(var(--ss-primary));
+  --color-ss-primary-container: rgb(var(--ss-primary-container));
+  --color-ss-primary-dark: rgb(var(--ss-primary-dark));
+  --color-ss-primary-light: rgb(var(--ss-primary-light));
+  --color-ss-secondary: rgb(var(--ss-secondary));
+  --color-ss-secondary-dark: rgb(var(--ss-secondary-dark));
+  --color-ss-secondary-light: rgb(var(--ss-secondary-light));
+  --color-ss-warning: rgb(var(--ss-warning));
+  --color-ss-success: rgb(var(--ss-success));
+  --color-ss-error: rgb(var(--ss-error));
+  --color-ss-error-container: rgb(var(--ss-error-container));
+  --color-ss-info: rgb(var(--ss-info));
+  --color-ss-surface-dim: rgb(var(--ss-surface-dim));
+  --color-ss-surface-lowest: rgb(var(--ss-surface-lowest));
+  --color-ss-surface: rgb(var(--ss-surface));
+  --color-ss-surface-high: rgb(var(--ss-surface-high));
+  --color-ss-surface-highest: rgb(var(--ss-surface-highest));
+  --color-ss-surface-variant: rgb(var(--ss-surface-variant));
+  --color-ss-grey: rgb(var(--ss-grey));
+  --color-ss-dark-1: rgb(var(--ss-surface-high));
+  --color-ss-dark-2: rgb(var(--ss-surface));
+  --color-ss-dark-3: rgb(var(--ss-surface-dim));
+  --color-ss-text-1: rgb(var(--ss-on-surface));
+  --color-ss-on-surface: rgb(var(--ss-on-surface));
+  --color-ss-on-surface-variant: rgb(var(--ss-on-surface-variant));
+  --color-ss-text-2: rgb(var(--ss-text-2));
+  --color-ss-border: rgb(var(--ss-border));
+  --color-ss-outline-variant: rgb(var(--ss-outline-variant));
+
+  /* Typography */
+  --font-sans: "Open Sans", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Roboto Mono", monospace;
+  --text-label-sm: 0.6875rem;
+  --text-label-sm--line-height: 1rem;
+  --text-label-sm--letter-spacing: 0.05em;
+  --text-body-sm: 0.75rem;
+  --text-body-sm--line-height: 1.125rem;
+  --text-title-sm: 0.875rem;
+  --text-title-sm--line-height: 1.25rem;
+  --text-title-sm--font-weight: 500;
+  --text-headline-sm: 1.5rem;
+  --text-headline-sm--line-height: 2rem;
+
+  /* Preserve the radius values used by Tailwind 3. */
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+}
+
 @font-face {
   font-family: 'Open Sans';
   font-style: normal;
@@ -33,10 +88,6 @@
   src: url('/fonts/jetbrains-mono-latin-variable.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* ── CSS custom properties — Dark theme (default) ────────────────────────── */
 :root {
@@ -196,6 +247,25 @@
 }
 
 @layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+    opacity: 1;
+  }
+
   html, body, #root {
     height: 100%;
     background-color: var(--ss-bg);

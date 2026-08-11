@@ -100,7 +100,7 @@ function BigActionButton({
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`flex flex-col items-center justify-center gap-1.5 w-full py-3 rounded text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
+            className={`flex flex-col items-center justify-center gap-1.5 w-full py-3 rounded-sm text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
         >
             <span className="text-lg leading-none">{icon}</span>
             <span>{label}</span>
@@ -139,14 +139,14 @@ function CustomActionRow({
     };
 
     return (
-        <div className="rounded border border-ss-outline-variant/40 p-2 space-y-1.5">
+        <div className="rounded-sm border border-ss-outline-variant/40 p-2 space-y-1.5">
             <div className="flex items-center gap-2">
                 <span className="text-xs text-ss-on-surface font-semibold">{action.name}</span>
                 <span className="text-[10px] text-ss-on-surface-variant/60 font-mono">{action.id}</span>
                 <button
                     onClick={invoke}
                     disabled={disabled}
-                    className="ml-auto px-2 py-0.5 rounded text-xs bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
+                    className="ml-auto px-2 py-0.5 rounded-sm text-xs bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
                 >
                     Invoke
                 </button>
@@ -160,7 +160,7 @@ function CustomActionRow({
                 value={payloadText}
                 onChange={(e) => setPayloadText(e.target.value)}
                 placeholder="payload JSON"
-                className="w-full px-2 py-1 rounded text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono focus:outline-none focus:border-ss-primary resize-y"
+                className="w-full px-2 py-1 rounded-sm text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono focus:outline-hidden focus:border-ss-primary resize-y"
             />
             {payloadError && <p className="text-[10px] text-ss-error">{payloadError}</p>}
         </div>
@@ -169,7 +169,7 @@ function CustomActionRow({
 
 // ─── Reusable bits ───────────────────────────────────────────────────────────
 
-const SELECT_CLS = 'px-1.5 py-0.5 rounded bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface text-xs focus:outline-none focus:border-ss-primary';
+const SELECT_CLS = 'px-1.5 py-0.5 rounded-sm bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface text-xs focus:outline-hidden focus:border-ss-primary';
 
 function GotoSelect({ value, onChange, stepCount }: { value: string; onChange: (v: string) => void; stepCount: number }) {
     return (
@@ -207,7 +207,7 @@ function NumberField({
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
                 style={{ width }}
-                className="px-1.5 py-0.5 rounded bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs focus:outline-none focus:border-ss-primary"
+                className="px-1.5 py-0.5 rounded-sm bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs focus:outline-hidden focus:border-ss-primary"
             />
         </label>
     );

@@ -94,7 +94,12 @@ try {
     run(process.execPath, ['esm-smoke.mjs'], consumerDirectory);
     run(process.execPath, ['cjs-smoke.cjs'], consumerDirectory);
 
-    const typeScriptCompiler = require.resolve('typescript/bin/tsc');
+    const typeScriptCompilerPackagePath = require.resolve('@typescript/native/package.json');
+    const typeScriptCompilerPackage = require(typeScriptCompilerPackagePath);
+    const typeScriptCompiler = resolve(
+        dirname(typeScriptCompilerPackagePath),
+        typeScriptCompilerPackage.bin.tsc,
+    );
     run(process.execPath, [
         typeScriptCompiler,
         '--project',

@@ -52,14 +52,14 @@ function IssueCard({ issue, severity }: CardProps) {
 
     return (
         <article
-            className="rounded overflow-hidden bg-ss-surface hover:bg-ss-surface-high transition-colors"
+            className="rounded-sm overflow-hidden bg-ss-surface hover:bg-ss-surface-high transition-colors"
             style={{ border: '1px solid rgba(64, 72, 80, 0.35)', borderLeftColor: borderColor, borderLeftWidth: '3px' }}
         >
             <div className="px-3 sm:px-4 py-3 min-w-0">
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3 mb-1.5">
                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <span
-                            className="px-1.5 py-px rounded text-[9px] font-semibold uppercase tracking-wider border font-mono"
+                            className="px-1.5 py-px rounded-sm text-[9px] font-semibold uppercase tracking-wider border font-mono"
                             style={{ color: badgeColor, background: `${badgeColor}18`, borderColor: `${badgeColor}40` }}
                         >
                             {badgeLabel}

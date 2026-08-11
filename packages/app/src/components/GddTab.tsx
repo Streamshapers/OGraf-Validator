@@ -78,7 +78,7 @@ export default function GddTab({ manifest }: Props) {
 
     return (
         <>
-            <div className="hidden xl:block overflow-x-auto rounded" style={{ border: '1px solid var(--ss-border-subtle)' }}>
+            <div className="hidden xl:block overflow-x-auto rounded-sm" style={{ border: '1px solid var(--ss-border-subtle)' }}>
             <table className="w-full min-w-[900px] text-xs">
                 <thead>
                     <tr className="bg-ss-surface" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
@@ -115,13 +115,13 @@ export default function GddTab({ manifest }: Props) {
                             <td className="px-3 py-2">
                                 <div className="flex flex-wrap items-center gap-1">
                                     {row.order !== undefined && (
-                                        <span className="rounded bg-ss-surface-high px-1.5 py-0.5 font-mono text-[10px] text-ss-on-surface-variant">
+                                        <span className="rounded-sm bg-ss-surface-high px-1.5 py-0.5 font-mono text-[10px] text-ss-on-surface-variant">
                                             order {row.order}
                                         </span>
                                     )}
                                     {row.hidden && (
                                         <span
-                                            className="rounded border border-ss-outline-variant/40 bg-ss-surface-high px-1.5 py-0.5 text-[10px] text-ss-on-surface-variant"
+                                            className="rounded-sm border border-ss-outline-variant/40 bg-ss-surface-high px-1.5 py-0.5 text-[10px] text-ss-on-surface-variant"
                                             title="This field is not used in automatic Graphic labels. You can still edit it."
                                         >
                                             hidden from labels
@@ -146,7 +146,7 @@ export default function GddTab({ manifest }: Props) {
 
 function GddFieldCard({ row }: { row: GddFieldRow }) {
     return (
-        <article className="rounded bg-ss-surface px-3 py-3"
+        <article className="rounded-sm bg-ss-surface px-3 py-3"
                  style={{ border: '1px solid var(--ss-border-subtle)' }}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                 <div className="min-w-0" style={{ paddingLeft: `${row.depth * 10}px` }}>
@@ -176,12 +176,12 @@ function GddFieldCard({ row }: { row: GddFieldRow }) {
                     <p className="text-[9px] font-semibold uppercase tracking-wide text-ss-on-surface-variant/60">Metadata</p>
                     <div className="mt-1 flex flex-wrap gap-1">
                         {row.order !== undefined && (
-                            <span className="rounded bg-ss-surface-high px-1.5 py-0.5 font-mono text-[10px] text-ss-on-surface-variant">
+                            <span className="rounded-sm bg-ss-surface-high px-1.5 py-0.5 font-mono text-[10px] text-ss-on-surface-variant">
                                 order {row.order}
                             </span>
                         )}
                         {row.hidden && (
-                            <span className="rounded border border-ss-outline-variant/40 bg-ss-surface-high px-1.5 py-0.5 text-[10px] text-ss-on-surface-variant">
+                            <span className="rounded-sm border border-ss-outline-variant/40 bg-ss-surface-high px-1.5 py-0.5 text-[10px] text-ss-on-surface-variant">
                                 hidden from labels
                             </span>
                         )}
@@ -234,7 +234,7 @@ function TypeBadge({ type }: { type: string }) {
 
 function EmptyState({ icon, message, hint }: { icon: string; message: string; hint?: string }) {
     return (
-        <div className="rounded px-4 py-6 text-center" style={{ border: '1px solid var(--ss-border-subtle)' }}>
+        <div className="rounded-sm px-4 py-6 text-center" style={{ border: '1px solid var(--ss-border-subtle)' }}>
             <p className="text-2xl mb-2">{icon}</p>
             <p className="text-xs text-ss-on-surface-variant">{message}</p>
             {hint && <p className="text-[10px] text-ss-on-surface-variant/60 mt-1 max-w-sm mx-auto">{hint}</p>}

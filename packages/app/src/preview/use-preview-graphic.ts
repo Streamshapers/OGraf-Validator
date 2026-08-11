@@ -44,7 +44,7 @@ export interface UsePreviewGraphicOptions {
 
 export interface UsePreviewGraphicReturn {
     state: PreviewState;
-    containerRef: React.RefObject<HTMLDivElement>;
+    containerRef: React.RefObject<HTMLDivElement | null>;
     isMounted: boolean;
     setCurrentData: (data: Record<string, unknown>) => void;
     setRenderType: (type: 'realtime' | 'non-realtime') => void;

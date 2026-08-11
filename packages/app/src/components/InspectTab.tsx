@@ -292,7 +292,7 @@ function OverviewCard({
     children: React.ReactNode;
 }) {
     return (
-        <section className={`rounded bg-ss-surface p-3 sm:p-4 ${className}`}
+        <section className={`rounded-sm bg-ss-surface p-3 sm:p-4 ${className}`}
                  style={{ border: `1px solid ${issueBorderColor(issues)}` }}>
             <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 text-ss-on-surface">
@@ -341,7 +341,7 @@ function ContextIssueBadges({
         <button
             type="button"
             onClick={onShowValidation}
-            className="flex flex-wrap items-center justify-end gap-1 rounded focus:outline-none focus:ring-1 focus:ring-ss-primary-container"
+            className="flex flex-wrap items-center justify-end gap-1 rounded-sm focus:outline-hidden focus:ring-1 focus:ring-ss-primary-container"
             title="View in Validation"
             aria-label={`${formatIssueCounts(counts)}. View in Validation`}
         >
@@ -382,10 +382,10 @@ function ContextIssueSummary({ issues, onShowValidation }: {
             : 'border-ss-primary-container/35 bg-ss-primary-container/5 text-ss-primary-container';
 
     return (
-        <section aria-label="Issues in this Inspector section" className={`mb-4 rounded border px-3 py-2.5 ${colors}`}>
+        <section aria-label="Issues in this Inspector section" className={`mb-4 rounded-sm border px-3 py-2.5 ${colors}`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-start gap-2">
-                    <Icon size={14} className="mt-0.5 flex-shrink-0" />
+                    <Icon size={14} className="mt-0.5 shrink-0" />
                     <div className="min-w-0">
                         <h3 className="text-xs font-semibold text-ss-on-surface">
                             {issues.length} {issues.length === 1 ? 'issue' : 'issues'} in this section
@@ -505,13 +505,13 @@ function DetailView({
                     <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ss-on-surface-variant">{description}</p>
                 </div>
 
-                <label className="relative block w-full flex-shrink-0 sm:w-auto">
+                <label className="relative block w-full shrink-0 sm:w-auto">
                     <span className="sr-only">Change inspector section</span>
                     <select
                         aria-label="Change inspector section"
                         value={activeView}
                         onChange={(event) => onNavigate(event.target.value as InspectorView)}
-                        className="h-8 w-full appearance-none rounded border border-ss-outline-variant/50 bg-ss-surface px-3 pr-8 text-[11px] font-medium text-ss-on-surface outline-none transition-colors hover:border-ss-outline focus:border-ss-primary-container sm:min-w-48"
+                        className="h-8 w-full appearance-none rounded-sm border border-ss-outline-variant/50 bg-ss-surface px-3 pr-8 text-[11px] font-medium text-ss-on-surface outline-hidden transition-colors hover:border-ss-outline-variant focus:border-ss-primary-container sm:min-w-48"
                     >
                         {sections.map((section) => (
                             <option key={section.id} value={section.id}>{section.label}</option>
@@ -539,7 +539,7 @@ function InspectorSection({ title, icon, issues = [], onShowValidation, children
 }) {
     return (
         <section
-            className="rounded bg-ss-surface p-3 sm:p-4"
+            className="rounded-sm bg-ss-surface p-3 sm:p-4"
             style={{ border: `1px solid ${issueBorderColor(issues)}` }}
         >
             <div className="mb-2 flex items-center justify-between gap-3">
@@ -587,7 +587,7 @@ function RenderRequirementsPanel({
                             const internet = formatBooleanConstraint(requirement.accessToPublicInternet);
 
                             return (
-                                <div key={requirement.index} className="rounded border border-ss-outline-variant/40 bg-ss-surface p-3">
+                                <div key={requirement.index} className="rounded-sm border border-ss-outline-variant/40 bg-ss-surface p-3">
                                     <div className="mb-2 flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                                         <span className="text-xs font-semibold text-ss-on-surface">
                                             Alternative {requirement.index + 1}
@@ -611,7 +611,7 @@ function RenderRequirementsPanel({
                                                 {requirement.engines.map((engine, index) => (
                                                     <span
                                                         key={`${engine.type}-${index}`}
-                                                        className="rounded border border-ss-outline-variant/40 bg-ss-surface-high px-1.5 py-0.5 font-mono text-[10px] text-ss-on-surface"
+                                                        className="rounded-sm border border-ss-outline-variant/40 bg-ss-surface-high px-1.5 py-0.5 font-mono text-[10px] text-ss-on-surface"
                                                         title="The validator shows this version but does not check it."
                                                     >
                                                         {engine.type}{engine.minimumVersion ? ` ≥ ${engine.minimumVersion}` : ''}
@@ -653,7 +653,7 @@ function ActionsPanel({ manifest, showEmpty = false }: { manifest: unknown; show
     return (
         <div className={`grid grid-cols-1 gap-3 ${hasBothGroups ? 'lg:grid-cols-2' : ''}`}>
             {customActions.length > 0 && (
-                <div className="rounded border border-ss-outline-variant/40 bg-ss-surface">
+                <div className="rounded-sm border border-ss-outline-variant/40 bg-ss-surface">
                     <div className="border-b border-ss-outline-variant/30 px-3 py-2 text-[9px] font-semibold uppercase tracking-wide text-ss-on-surface-variant">
                         Custom actions
                     </div>
@@ -664,7 +664,7 @@ function ActionsPanel({ manifest, showEmpty = false }: { manifest: unknown; show
                                     <span className="text-xs font-semibold text-ss-on-surface">{action.name}</span>
                                     <span className="font-mono text-[10px] text-ss-on-surface-variant [overflow-wrap:anywhere]">{action.id}</span>
                                     {action.hasSchema && (
-                                        <span className="w-fit rounded bg-ss-surface-high px-1.5 py-px text-[9px] text-ss-on-surface-variant sm:ml-auto">
+                                        <span className="w-fit rounded-sm bg-ss-surface-high px-1.5 py-px text-[9px] text-ss-on-surface-variant sm:ml-auto">
                                             payload schema
                                         </span>
                                     )}
@@ -679,7 +679,7 @@ function ActionsPanel({ manifest, showEmpty = false }: { manifest: unknown; show
             )}
 
             {durations.length > 0 && (
-                <div className="rounded border border-ss-outline-variant/40 bg-ss-surface">
+                <div className="rounded-sm border border-ss-outline-variant/40 bg-ss-surface">
                     <div className="border-b border-ss-outline-variant/30 px-3 py-2 text-[9px] font-semibold uppercase tracking-wide text-ss-on-surface-variant">
                         Declared durations
                     </div>
@@ -700,7 +700,7 @@ function ActionsPanel({ manifest, showEmpty = false }: { manifest: unknown; show
                                         {duration.steps.map((step, stepIndex) => (
                                             <span
                                                 key={`${step.step ?? 'fallback'}-${stepIndex}`}
-                                                className="rounded bg-ss-surface-high px-1.5 py-px font-mono text-[9px] text-ss-on-surface-variant"
+                                                className="rounded-sm bg-ss-surface-high px-1.5 py-px font-mono text-[9px] text-ss-on-surface-variant"
                                             >
                                                 {step.step === undefined ? 'fallback' : `step ${step.step}`}: {formatDuration(step.duration)}
                                             </span>
@@ -718,7 +718,7 @@ function ActionsPanel({ manifest, showEmpty = false }: { manifest: unknown; show
 
 function EmptyDetail({ message }: { message: string }) {
     return (
-        <div className="rounded border border-ss-outline-variant/30 bg-ss-surface px-4 py-6 text-center text-xs text-ss-on-surface-variant">
+        <div className="rounded-sm border border-ss-outline-variant/30 bg-ss-surface px-4 py-6 text-center text-xs text-ss-on-surface-variant">
             {message}
         </div>
     );

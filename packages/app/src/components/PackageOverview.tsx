@@ -32,9 +32,9 @@ export default function PackageOverview({ rootName, packages, packageCache, isSc
     return (
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
             {/* Header */}
-            <div className="flex-shrink-0 px-6 pt-5 pb-4">
+            <div className="shrink-0 px-6 pt-5 pb-4">
                 <p className="text-[10px] font-mono text-ss-on-surface-variant uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                    <Folder size={11} className="flex-shrink-0" />
+                    <Folder size={11} className="shrink-0" />
                     <span>{rootName}/</span>
                 </p>
                 <h2 className="text-xl font-semibold text-ss-on-surface">Package Overview</h2>
@@ -108,7 +108,7 @@ function PackageCard({ entry, cache, onClick }: { entry: PackageEntry; cache: Pa
     return (
         <button
             onClick={onClick}
-            className="text-left rounded bg-ss-surface hover:bg-ss-surface-high transition-colors flex flex-col overflow-hidden group"
+            className="text-left rounded-sm bg-ss-surface hover:bg-ss-surface-high transition-colors flex flex-col overflow-hidden group"
             style={{ border: '1px solid var(--ss-border-subtle)', borderTop: `3px solid ${borderTop}` }}
         >
             <div className="min-h-10 flex items-center justify-between gap-3 px-3.5 py-2.5 border-b border-ss-outline-variant/25">
@@ -254,7 +254,7 @@ function OgrafPlaceholder({ label, loading }: { label: string; loading: boolean 
             aria-label={`OGraf placeholder: ${label}`}
             className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-ss-surface-high to-ss-surface-lowest text-ss-on-surface-variant"
         >
-            <div className="absolute inset-3 rounded border border-dashed border-ss-outline-variant/30" />
+            <div className="absolute inset-3 rounded-sm border border-dashed border-ss-outline-variant/30" />
             {loading
                 ? <Loader2 size={22} className="animate-spin text-ss-primary-container/70" />
                 : <FileCode2 size={24} className="text-ss-primary-container/60" />}
@@ -310,7 +310,7 @@ function StatusBadges({ cache, readiness }: { cache: PackageCache; readiness: Pa
 }
 
 function ReadinessIcon({ readiness }: { readiness: PackageReadiness }) {
-    const sharedClass = 'flex-shrink-0 rounded-full p-1';
+    const sharedClass = 'shrink-0 rounded-full p-1';
     const tooltip = readinessTooltip(readiness);
     const label = `Overall status: ${tooltip}`;
 
@@ -397,8 +397,8 @@ function Badge({ color, children }: { color: BadgeColor; children: React.ReactNo
 function SkeletonCard() {
     return (
         <div className="flex flex-col gap-2 animate-pulse">
-            <div className="h-3 w-3/4 rounded bg-ss-surface-highest" />
-            <div className="h-2.5 w-1/2 rounded bg-ss-surface-highest/60" />
+            <div className="h-3 w-3/4 rounded-sm bg-ss-surface-highest" />
+            <div className="h-2.5 w-1/2 rounded-sm bg-ss-surface-highest/60" />
             <div className="flex gap-1.5 mt-1">
                 <div className="h-4 w-12 rounded-full bg-ss-surface-highest/60" />
                 <div className="h-4 w-16 rounded-full bg-ss-surface-highest/40" />

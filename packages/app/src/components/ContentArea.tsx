@@ -96,14 +96,14 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
     return (
         <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
             {/* Package header */}
-            <div className="flex-shrink-0 px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 pb-0 bg-ss-surface-dim">
+            <div className="shrink-0 px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 pb-0 bg-ss-surface-dim">
                 <div className="flex items-start justify-between gap-3 sm:gap-4 mb-3">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                             <h2 className="min-w-0 truncate text-sm font-semibold text-ss-on-surface font-mono" title={selectedPackage.displayName}>
                                 {selectedPackage.displayName}{version ? `-v${version}` : ''}
                             </h2>
-                            <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                            <div className="hidden sm:flex items-center gap-2 shrink-0">
                                 {stability && <StabilityBadge label={stability} />}
                                 {readiness && <ReadinessBadge readiness={readiness} />}
                             </div>
@@ -125,7 +125,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                             </div>
                         )}
                     </div>
-                    <div className="hidden md:block flex-shrink-0">
+                    <div className="hidden md:block shrink-0">
                         <PackageSizeBadge result={cache?.validationResult} />
                     </div>
                 </div>
@@ -186,7 +186,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                         {!cache && isValidating && <InlineSpinner />}
 
                         {validationError && !isValidating && (
-                            <div className="rounded border border-red-800 bg-red-950/40 px-3 sm:px-4 py-3 text-sm text-red-300">
+                            <div className="rounded-sm border border-red-800 bg-red-950/40 px-3 sm:px-4 py-3 text-sm text-red-300">
                                 <strong className="font-semibold">Error: </strong>
                                 {validationError}
                             </div>
@@ -396,7 +396,7 @@ function ValidationOverview({
                 : 'text-ss-error';
 
     return (
-        <section aria-label="Validation summary" className="overflow-hidden rounded bg-ss-surface"
+        <section aria-label="Validation summary" className="overflow-hidden rounded-sm bg-ss-surface"
                  style={{ border: '1px solid var(--ss-border-subtle)' }}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 sm:px-4 py-3">
                 <div className="flex items-start gap-2.5 min-w-0">
@@ -409,7 +409,7 @@ function ValidationOverview({
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 sm:flex-shrink-0">
+                <div className="flex items-center gap-2 sm:shrink-0">
                     {isValidating && <Spinner />}
                     <ExportButtons
                         result={fullResult ?? result}
@@ -461,15 +461,15 @@ function ValidationOverview({
 
 function ValidationStatusIcon({ readiness }: { readiness: PackageReadiness }) {
     if (readiness.status === 'production-ready') {
-        return <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-ss-success" />;
+        return <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-ss-success" />;
     }
     if (readiness.status === 'needs-review') {
-        return <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-ss-warning" />;
+        return <AlertTriangle size={16} className="mt-0.5 shrink-0 text-ss-warning" />;
     }
     if (readiness.status === 'runtime-pending' || readiness.status === 'runtime-running') {
-        return <Loader2 size={16} className={`mt-0.5 flex-shrink-0 text-ss-primary-container ${readiness.status === 'runtime-running' ? 'animate-spin' : ''}`} />;
+        return <Loader2 size={16} className={`mt-0.5 shrink-0 text-ss-primary-container ${readiness.status === 'runtime-running' ? 'animate-spin' : ''}`} />;
     }
-    return <XCircle size={16} className="mt-0.5 flex-shrink-0 text-ss-error" />;
+    return <XCircle size={16} className="mt-0.5 shrink-0 text-ss-error" />;
 }
 
 function OverviewMetric({ label, value, detail, valueClass }: {
@@ -525,7 +525,7 @@ function WelcomeScreen({ onOpenDirectory, onReopenLastDirectory }: { onOpenDirec
                     </p>
                     <button
                         onClick={onOpenDirectory}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded text-sm font-semibold bg-ss-primary-dark hover:bg-ss-primary-container text-white transition-colors"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-sm text-sm font-semibold bg-ss-primary-dark hover:bg-ss-primary-container text-white transition-colors"
                     >
                         <FolderOpen size={16} />
                         Open Directory
@@ -562,7 +562,7 @@ function InfoCard({ icon, label, value, muted, onClick }: { icon: React.ReactNod
     return (
         <div
             onClick={onClick}
-            className={`flex flex-col items-center gap-1.5 px-6 py-3 rounded bg-ss-surface transition-colors
+            className={`flex flex-col items-center gap-1.5 px-6 py-3 rounded-sm bg-ss-surface transition-colors
                 ${clickable ? 'cursor-pointer hover:bg-ss-surface-high' : ''}`}
             style={{ border: '1px solid rgba(64, 72, 80, 0.3)' }}
             title={clickable ? `Reopen "${value}"` : undefined}
@@ -598,7 +598,7 @@ function ExportButtons({
     const slug = packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
     const report = () => createValidationReport(packageName, result, runtimeResult, runtimePhase);
 
-    const btnCls = 'inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1.5 sm:py-1 rounded text-[11px] sm:text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors';
+    const btnCls = 'inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1.5 sm:py-1 rounded-sm text-[11px] sm:text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors';
     const btnStyle = { border: '1px solid rgba(64, 72, 80, 0.5)' };
 
     return (

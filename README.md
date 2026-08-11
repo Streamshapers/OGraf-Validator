@@ -143,9 +143,13 @@ standalone validator.
 
 Requirements:
 
-- Node.js 20.19 or newer
-- npm 10 or newer
+- Node.js 24 or newer
+- npm 11 or newer
 - Google Chrome for Playwright tests
+
+The repository runs `tsc` with TypeScript 7. ESLint uses the compatible
+TypeScript 6 compiler API through a separate package alias. `smoke:toolchain`
+checks both parts before the release gate continues.
 
 ```bash
 npm install
@@ -155,8 +159,9 @@ npm run typecheck
 npm run lint
 npm run build
 npm run spec:check
+npm run smoke:toolchain # verify the TypeScript 7 compiler and TypeScript 6 API
 npm run smoke:core   # pack and install the real npm tarball
-npm run test:e2e
+npm run test:e2e     # build dist and test it in Chrome
 ```
 
 Run the complete release gate with:

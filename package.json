@@ -16,17 +16,18 @@
     "test:core": "npm run test --workspace=packages/validator-core",
     "test:e2e": "npm run test:e2e --workspace=packages/app",
     "smoke:core": "npm run build:core && node scripts/core-package-smoke.mjs",
+    "smoke:toolchain": "node scripts/toolchain-smoke.mjs",
     "spec:check": "npm run spec:check --workspace=packages/validator-core",
     "audit": "npm audit --audit-level=low",
     "audit:prod": "npm audit --omit=dev --audit-level=low",
-    "release:check": "npm run lint && npm run build:core && npm run typecheck:workspaces && npm run test:workspaces && npm run spec:check && npm run build:app && npm run smoke:core && npm run test:e2e && npm run audit:prod && npm run audit",
+    "release:check": "npm run smoke:toolchain && npm run lint && npm run build:core && npm run typecheck:workspaces && npm run test:workspaces && npm run spec:check && npm run build:app && npm run smoke:core && npm run test:e2e && npm run audit:prod && npm run audit",
     "lint": "eslint packages scripts",
     "typecheck": "npm run build:core && npm run typecheck:workspaces",
     "typecheck:workspaces": "npm run typecheck --workspaces --if-present"
   },
   "engines": {
-    "node": ">=20.19.0",
-    "npm": ">=10.0.0"
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
   },
   "repository": {
     "type": "git",
@@ -40,11 +41,13 @@
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@eslint/js": "^10.0.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "globals": "^17.9.0",
     "postcss": "8.5.26",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.67.0"
   },
   "overrides": {

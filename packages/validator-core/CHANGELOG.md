@@ -16,6 +16,7 @@ All notable changes to `@streamshapers/ograf-validator-core` are documented here
 
 ### Changed
 
+- The repository builds and checks the package with Node.js 24, npm 11, and TypeScript 7 while keeping the published ES2020 output and zero runtime dependencies.
 - Incorrect `$schema` values, unknown non-`v_*` fields, disabled realtime and non-realtime support, and non-integer `stepCount` values are errors.
 - Missing GDD data is informational. Missing file-path defaults remain tooling warnings.
 - File checks cover the main module, thumbnails, custom-action schemas, array items, and nested file references.
