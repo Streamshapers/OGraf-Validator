@@ -8,6 +8,8 @@ by [StreamShapers](https://streamshapers.com). It is pinned to EBU OGraf commit
 [`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b)
 from 7 August 2026.
 
+See the [validator core changelog](CHANGELOG.md) for package-specific release notes.
+
 ## Installation
 
 ```bash

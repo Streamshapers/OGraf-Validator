@@ -508,7 +508,7 @@ function WelcomeScreen({ onOpenDirectory, onReopenLastDirectory }: { onOpenDirec
             {/* Logo card */}
             <div className="flex flex-col items-center gap-6">
                 <img
-                    src="https://raw.githubusercontent.com/ebu/ograf/main/docs/logo/ograf-logo-colour.svg"
+                    src="/ograf-logo-colour.png"
                     alt="OGraf"
                     width={1818}
                     height={611}
@@ -517,12 +517,11 @@ function WelcomeScreen({ onOpenDirectory, onReopenLastDirectory }: { onOpenDirec
 
                 <div className="text-center max-w-md">
                     <h2 className="text-2xl font-semibold text-ss-on-surface mb-3">
-                        Open a directory to get started
+                        Validate OGraf Graphics Packages
                     </h2>
                     <p className="text-sm text-ss-on-surface-variant leading-relaxed mb-6">
-                        Select a folder with one or more{' '}
-                        <code className="font-mono text-ss-primary-container bg-ss-surface-high px-1 py-0.5 rounded text-xs">OGraf</code>
-                        {' '}packages. The validator will find and check them.
+                        Choose a folder to check OGraf v1 manifests and GDD, inspect package files,
+                        and test realtime and non-realtime graphics. Your files stay on this device.
                     </p>
                     <button
                         onClick={onOpenDirectory}

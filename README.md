@@ -6,6 +6,7 @@ OGraf Validator is an open-source [StreamShapers](https://streamshapers.com) com
 
 - Live app: [validator.streamshapers.com](https://validator.streamshapers.com)
 - Core package: [`@streamshapers/ograf-validator-core`](https://www.npmjs.com/package/@streamshapers/ograf-validator-core)
+- Changelogs: [app](packages/app/CHANGELOG.md) · [validator core](packages/validator-core/CHANGELOG.md)
 - Specification snapshot: EBU OGraf v1 commit [`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b), 7 August 2026
 
 ## What it covers

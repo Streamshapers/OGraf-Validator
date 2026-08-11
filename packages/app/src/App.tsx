@@ -570,9 +570,10 @@ export default function App() {
                     >
                         <Menu size={17} />
                     </button>
-                    <img src="https://streamshapers.com/logo-light.png" alt="StreamShapers" className="h-5 sm:h-6 flex-shrink-0" />
+                    <img src="/logo-light.png" alt="StreamShapers" className="ss-brand-logo-light h-5 sm:h-6 flex-shrink-0" />
+                    <img src="/logo-dark.png" alt="" aria-hidden="true" className="ss-brand-logo-dark h-5 sm:h-6 flex-shrink-0" />
                     <span className="hidden sm:inline text-ss-outline-variant/60 select-none">|</span>
-                    <span className="hidden sm:inline text-sm md:text-base font-semibold text-ss-on-surface tracking-wide whitespace-nowrap">OGraf Validator</span>
+                    <h1 className="hidden sm:inline text-sm md:text-base font-semibold text-ss-on-surface tracking-wide whitespace-nowrap">OGraf Validator</h1>
                 </div>
 
                 {/* Center: active project */}

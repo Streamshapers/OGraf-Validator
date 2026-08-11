@@ -3,10 +3,98 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OGraf Validator</title>
+    <meta name="theme-color" content="#4ba1e2" />
+    <meta name="description" content="Validate OGraf v1 packages in your browser. Check manifests and GDD, inspect files, and test realtime and non-realtime graphics without uploading them." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OGraf Validator" />
+    <meta property="og:title" content="OGraf Validator" />
+    <meta property="og:description" content="Validate OGraf v1 packages in your browser. Check manifests and GDD, inspect files, and test realtime and non-realtime graphics without uploading them." />
+    <meta property="og:url" content="https://validator.streamshapers.com/" />
+    <meta property="og:image" content="https://validator.streamshapers.com/social-preview.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="OGraf Validator by StreamShapers" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OGraf Validator" />
+    <meta name="twitter:description" content="Validate OGraf v1 packages in your browser. Check manifests and GDD, inspect files, and test realtime and non-realtime graphics without uploading them." />
+    <meta name="twitter:image" content="https://validator.streamshapers.com/social-preview.png" />
+    <meta name="twitter:image:alt" content="OGraf Validator by StreamShapers" />
+    <link rel="canonical" href="https://validator.streamshapers.com/" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://validator.streamshapers.com/#website",
+            "name": "OGraf Validator",
+            "url": "https://validator.streamshapers.com/"
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://validator.streamshapers.com/#application",
+            "name": "OGraf Validator",
+            "url": "https://validator.streamshapers.com/",
+            "image": "https://validator.streamshapers.com/social-preview.png",
+            "description": "Validate OGraf v1 packages in your browser. Check manifests and GDD, inspect files, and test realtime and non-realtime graphics without uploading them.",
+            "about": {
+              "@type": "Thing",
+              "name": "OGraf",
+              "url": "https://ograf.ebu.io/v1/specification/docs/Specification.html"
+            },
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Any",
+            "browserRequirements": "Requires a Chromium-based browser with the File System Access API.",
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": 0
+            },
+            "isPartOf": {
+              "@id": "https://validator.streamshapers.com/#website"
+            },
+            "publisher": {
+              "@type": "Organization",
+              "name": "StreamShapers",
+              "url": "https://streamshapers.com/"
+            }
+          }
+        ]
+      }
+    </script>
+    <title>OGraf Validator - Validate, Inspect and Preview OGraf Packages</title>
   </head>
   <body class="h-full bg-ss-dark-3 text-ss-text-1">
-    <div id="root" class="h-full"></div>
+    <div id="root" class="h-full">
+      <main class="flex h-full items-center justify-center bg-ss-surface-dim px-6 text-ss-on-surface">
+        <section class="max-w-xl text-center">
+          <h1 class="text-3xl font-semibold">OGraf Validator</h1>
+          <p class="mt-4 text-base leading-relaxed text-ss-on-surface-variant">
+            Validate OGraf v1 packages in your browser. Check manifests and GDD, inspect files, and test realtime and non-realtime graphics.
+          </p>
+          <p class="mt-2 text-sm leading-relaxed text-ss-text-2">
+            Your package files stay on your device and are not uploaded.
+          </p>
+          <nav class="mt-6 flex flex-wrap justify-center gap-4 text-sm">
+            <a class="text-ss-primary underline" href="https://ograf.ebu.io/v1/specification/docs/Specification.html">
+              OGraf specification
+            </a>
+            <a class="text-ss-primary underline" href="https://github.com/Richardpwe/OGraf-Validator">
+              Source code
+            </a>
+          </nav>
+          <noscript>
+            <p class="mt-6 text-sm text-ss-error">JavaScript is required to run the validator.</p>
+          </noscript>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
