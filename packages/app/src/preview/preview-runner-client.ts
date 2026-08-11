@@ -6,8 +6,9 @@ import {
     parsePreviewResourceUrl,
 } from './preview-resources.js';
 import { listPreviewSessionFiles, readPreviewSessionFile } from './use-preview-sw.js';
+import { DEFAULT_BACKGROUND, type PreviewBackground } from './preview-types.js';
 
-const RUNNER_PATH = '/preview-runner.html';
+const RUNNER_PATH = `/preview-runner.html?protocol=${PREVIEW_PROTOCOL_VERSION}`;
 
 export class PreviewRunnerTimeoutError extends Error {
     constructor(message: string) {
@@ -34,6 +35,7 @@ export interface PreviewRunnerOptions {
     mount: HTMLElement;
     width: number;
     height: number;
+    background?: PreviewBackground;
     hidden?: boolean;
     timeoutMs?: number;
     signal?: AbortSignal;
@@ -66,6 +68,7 @@ export interface PreviewRunner {
         params: unknown,
         options?: PreviewRunnerCallOptions,
     ) => Promise<PreviewRunnerCallResult>;
+    setBackground: (background: PreviewBackground) => Promise<void>;
     destroy: () => Promise<void>;
     remove: () => void;
 }
@@ -109,7 +112,7 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
     const iframe = document.createElement('iframe');
     iframe.setAttribute('sandbox', 'allow-scripts');
     iframe.setAttribute('aria-label', options.hidden ? 'OGraf runtime test sandbox' : 'OGraf graphic preview');
-    iframe.src = `${RUNNER_PATH}?runner=${encodeURIComponent(runnerId)}`;
+    iframe.src = `${RUNNER_PATH}&runner=${encodeURIComponent(runnerId)}`;
     iframe.style.border = '0';
     iframe.style.background = 'transparent';
     if (options.hidden) {
@@ -453,7 +456,7 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
     channel.port1.start();
 
     const request = <T>(
-        type: 'OGRAF_RUNNER_INIT' | 'OGRAF_RUNNER_CALL' | 'OGRAF_RUNNER_DESTROY',
+        type: 'OGRAF_RUNNER_INIT' | 'OGRAF_RUNNER_CALL' | 'OGRAF_RUNNER_SET_BACKGROUND' | 'OGRAF_RUNNER_DESTROY',
         payload: unknown,
         requestOptions: PreviewRunnerCallOptions = {},
     ): Promise<T> => {
@@ -536,6 +539,7 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             importUrl: options.importUrl,
             width: options.width,
             height: options.height,
+            background: options.background ?? DEFAULT_BACKGROUND,
             moduleGraph,
         }, { timeoutMs: options.timeoutMs, signal: options.signal });
         const methods = Array.isArray(init.methods)
@@ -549,6 +553,8 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             diagnostics,
             call: (method, params, callOptions) =>
                 request<PreviewRunnerCallResult>('OGRAF_RUNNER_CALL', { method, params }, callOptions),
+            setBackground: (background) =>
+                request<void>('OGRAF_RUNNER_SET_BACKGROUND', background),
             destroy: async () => {
                 if (closed) return;
                 try {

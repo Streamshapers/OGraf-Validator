@@ -1,5 +1,5 @@
 export const PREVIEW_PREFIX = '/__ograf_preview__/';
-export const PREVIEW_PROTOCOL_VERSION = 3;
+export const PREVIEW_PROTOCOL_VERSION = 4;
 
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;

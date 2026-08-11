@@ -2,7 +2,7 @@
 'use strict';
 
 const PREVIEW_PREFIX = '/__ograf_preview__/';
-const PROTOCOL_VERSION = 3;
+const PROTOCOL_VERSION = 4;
 const REQUEST_TIMEOUT_MS = 10_000;
 const SESSION_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;

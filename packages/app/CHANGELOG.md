@@ -2,6 +2,12 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## Unreleased
+
+### Fixed
+
+- Preview background colors and images are now rendered inside the isolated sandbox, so they remain visible behind transparent Graphics in Chromium.
+
 ## 0.2.1 - 2026-08-11
 
 ### Added

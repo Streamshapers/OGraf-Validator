@@ -2,14 +2,26 @@
 'use strict';
 
 (() => {
-    const PROTOCOL_VERSION = 3;
+    const PROTOCOL_VERSION = 4;
     const PREVIEW_PREFIX = '/__ograf_preview__/';
     const METHODS = [
         'load', 'dispose', 'playAction', 'stopAction', 'updateAction',
         'customAction', 'goToTime', 'setActionsSchedule',
     ];
+    const viewport = document.getElementById('viewport');
     const stage = document.getElementById('stage');
     const base = document.getElementById('ograf-base');
+    const nativeReflectApply = Reflect.apply;
+    const nativeArrayIsArray = Array.isArray;
+    const nativeObjectKeys = Object.keys;
+    const nativeRegExpTest = RegExp.prototype.test;
+    const nativeCssSupports = CSS.supports.bind(CSS);
+    const nativeElementSetAttribute = Element.prototype.setAttribute;
+    const nativeElementRemoveAttribute = Element.prototype.removeAttribute;
+    const nativeStyleSetProperty = CSSStyleDeclaration.prototype.setProperty;
+    const nativeStyleRemoveProperty = CSSStyleDeclaration.prototype.removeProperty;
+    const previewBackground = createPreviewBackground(viewport);
+    applyPreviewBackground({ type: 'checker' });
     let port = null;
     let postPort = null;
     let runnerId = '';
@@ -41,7 +53,6 @@
     const NativeURL = globalThis.URL;
     const NativeWorker = globalThis.Worker;
     const NativeSharedWorker = globalThis.SharedWorker;
-    const nativeElementSetAttribute = Element.prototype.setAttribute;
     const nativeFetch = globalThis.fetch.bind(globalThis);
     globalThis.fetch = fetchPackageResource;
     installPackageDomUrlBridge();
@@ -147,6 +158,9 @@
             if (message.type === 'OGRAF_RUNNER_INIT') {
                 const result = await initialize(message.payload);
                 respond(message.requestId, true, result);
+            } else if (message.type === 'OGRAF_RUNNER_SET_BACKGROUND') {
+                applyPreviewBackground(message.payload);
+                respond(message.requestId, true, undefined);
             } else if (message.type === 'OGRAF_RUNNER_CALL') {
                 const result = await callGraphic(message.payload);
                 respond(message.requestId, true, result);
@@ -174,6 +188,7 @@
 
         logicalWidth = positiveNumber(payload.width, 1920);
         logicalHeight = positiveNumber(payload.height, 1080);
+        applyPreviewBackground(payload.background);
         base.href = new URL('./', importUrl).toString();
         updateScale();
 
@@ -1206,6 +1221,126 @@ self.addEventListener('message', captureMessage, true);
 
     function positiveNumber(value, fallback) {
         return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+    }
+
+    function createPreviewBackground(host) {
+        if (!(host instanceof HTMLElement)) {
+            throw new Error('Preview runner viewport is missing.');
+        }
+
+        const root = host.attachShadow({ mode: 'closed' });
+        const style = document.createElement('style');
+        style.textContent = `
+            :host { display: block; position: relative; isolation: isolate; }
+            .backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+            slot { display: block; position: absolute; inset: 0; z-index: 1; }
+        `;
+        const backdrop = document.createElement('div');
+        backdrop.className = 'backdrop';
+        backdrop.setAttribute('aria-hidden', 'true');
+        const slot = document.createElement('slot');
+        root.append(style, backdrop, slot);
+
+        return { host, style: backdrop.style };
+    }
+
+    function applyPreviewBackground(value) {
+        const background = validatePreviewBackground(value);
+        const { host, style } = previewBackground;
+
+        for (const property of [
+            'background',
+            'background-color',
+            'background-image',
+            'background-position',
+            'background-repeat',
+            'background-size',
+        ]) {
+            nativeReflectApply(nativeStyleRemoveProperty, style, [property]);
+        }
+
+        nativeReflectApply(nativeElementSetAttribute, host, ['data-background-type', background.type]);
+        if (background.type === 'checker') {
+            nativeReflectApply(nativeElementRemoveAttribute, host, ['data-background-color']);
+            setBackgroundProperty(style, 'background-color', '#1a1a1a');
+            setBackgroundProperty(style, 'background-image', 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%)');
+            setBackgroundProperty(style, 'background-position', '0 0');
+            setBackgroundProperty(style, 'background-size', '20px 20px');
+        } else if (background.type === 'color') {
+            nativeReflectApply(nativeElementSetAttribute, host, ['data-background-color', background.value]);
+            setBackgroundProperty(style, 'background-color', background.value);
+        } else {
+            nativeReflectApply(nativeElementRemoveAttribute, host, ['data-background-color']);
+            setBackgroundProperty(style, 'background-color', '#1a1a1a');
+            setBackgroundProperty(style, 'background-image', `url("${background.dataUrl}")`);
+            setBackgroundProperty(style, 'background-position', 'center');
+            setBackgroundProperty(style, 'background-repeat', 'no-repeat');
+            setBackgroundProperty(style, 'background-size', 'cover');
+        }
+    }
+
+    function setBackgroundProperty(style, property, value) {
+        nativeReflectApply(nativeStyleSetProperty, style, [property, value]);
+    }
+
+    function validatePreviewBackground(value) {
+        if (!value || typeof value !== 'object' || nativeArrayIsArray(value)) {
+            throw new Error('Preview background must be an object.');
+        }
+
+        if (value.type === 'checker') {
+            if (!hasExactKeys(value, ['type'])) {
+                throw new Error('Checker preview background contains unsupported fields.');
+            }
+            return { type: 'checker' };
+        }
+
+        if (value.type === 'color') {
+            if (
+                !hasExactKeys(value, ['type', 'value']) ||
+                typeof value.value !== 'string' ||
+                value.value.length === 0 ||
+                value.value.length > 128 ||
+                !nativeCssSupports('color', value.value)
+            ) {
+                throw new Error('Color preview background is invalid.');
+            }
+            return { type: 'color', value: value.value };
+        }
+
+        if (value.type === 'image') {
+            if (
+                !hasExactKeys(value, ['type', 'dataUrl']) ||
+                typeof value.dataUrl !== 'string' ||
+                value.dataUrl.length > 16 * 1024 * 1024 ||
+                !nativeReflectApply(
+                    nativeRegExpTest,
+                    /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/]+={0,2}$/i,
+                    [value.dataUrl],
+                )
+            ) {
+                throw new Error('Image preview background is invalid.');
+            }
+            return { type: 'image', dataUrl: value.dataUrl };
+        }
+
+        throw new Error('Preview background type is invalid.');
+    }
+
+    function hasExactKeys(value, expected) {
+        const keys = nativeObjectKeys(value);
+        if (keys.length !== expected.length) return false;
+        for (let expectedIndex = 0; expectedIndex < expected.length; expectedIndex += 1) {
+            let found = false;
+            for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+                if (keys[keyIndex] === expected[expectedIndex]) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
     }
 
     function isUrlLikeSpecifier(specifier) {

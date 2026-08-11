@@ -16,6 +16,8 @@ const PRESETS: Preset[] = [
     { label: 'White',                 bg: { type: 'color', value: '#ffffff' } },
 ];
 
+const MAX_BACKGROUND_DATA_URL_LENGTH = 16 * 1024 * 1024;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -48,6 +50,10 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
         const reader = new FileReader();
         reader.onload = () => {
             const dataUrl = reader.result as string;
+            if (dataUrl.length > MAX_BACKGROUND_DATA_URL_LENGTH) {
+                window.alert('Image is too large. Please use a file smaller than about 12 MB.');
+                return;
+            }
             // Warn if > ~3 MB as base64 (4 bytes per 3 raw bytes → ~4 MB base64 for 3 MB image)
             if (dataUrl.length > 4 * 1024 * 1024) {
                 window.alert('Image is too large (> ~3 MB). Please use a smaller file — large images may not persist between sessions.');
@@ -134,4 +140,3 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
         </div>
     );
 }
-

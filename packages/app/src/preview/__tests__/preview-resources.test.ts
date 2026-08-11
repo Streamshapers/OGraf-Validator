@@ -47,7 +47,7 @@ describe('preview resource paths', () => {
 
 describe('preview session protocol', () => {
     it('uses the postMessage protocol and session namespace', () => {
-        expect(PREVIEW_PROTOCOL_VERSION).toBe(3);
+        expect(PREVIEW_PROTOCOL_VERSION).toBe(4);
         expect(PREVIEW_PREFIX).toBe('/__ograf_preview__/');
     });
 

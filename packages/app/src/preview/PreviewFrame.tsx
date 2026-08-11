@@ -70,9 +70,8 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
     const customActions = readCustomActions(manifest);
     const renderRequirementOptions = getRenderRequirementOptions(manifest);
 
-    const preview = usePreviewGraphic({ swReady, dirHandle, manifest, packagePath });
-
     const [background, setBackground] = useState<PreviewBackground>(loadBackground);
+    const preview = usePreviewGraphic({ swReady, dirHandle, manifest, packagePath, background });
 
     useEffect(() => {
         saveBackground(background);
