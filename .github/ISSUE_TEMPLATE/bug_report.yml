@@ -3,7 +3,9 @@ description: Report a problem with the validator app or core library.
 title: "[Bug] "
 body:
   - type: checkboxes
+    id: confirmations
     attributes:
+      label: Before you submit
       options:
         - label: I searched the existing issues first.
           required: true
