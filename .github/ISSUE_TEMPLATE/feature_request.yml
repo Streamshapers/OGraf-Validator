@@ -3,7 +3,9 @@ description: Suggest an improvement to OGraf Validator.
 title: "[Feature] "
 body:
   - type: checkboxes
+    id: confirmations
     attributes:
+      label: Before you submit
       options:
         - label: I searched the existing issues first.
           required: true
