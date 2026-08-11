@@ -2,7 +2,7 @@ blank_issues_enabled: false
 
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/Richardpwe/OGraf-Validator/security/advisories/new
+    url: https://github.com/Streamshapers/OGraf-Validator/security/advisories/new
     about: Report security problems privately. Do not open a public issue.
   - name: OGraf v1 specification
     url: https://ograf.ebu.io/v1/specification/docs/Specification.html

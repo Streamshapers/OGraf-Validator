@@ -15,7 +15,7 @@ isolated browser sandbox. Security reports are welcome.
 
 Use GitHub's private vulnerability reporting:
 
-[Report a vulnerability privately](https://github.com/Richardpwe/OGraf-Validator/security/advisories/new)
+[Report a vulnerability privately](https://github.com/Streamshapers/OGraf-Validator/security/advisories/new)
 
 Please do not open a public issue for a possible vulnerability.
 
