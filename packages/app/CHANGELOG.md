@@ -2,12 +2,6 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
-## Unreleased
-
-### Fixed
-
-- Preview background colors and images are now rendered inside the isolated sandbox, so they remain visible behind transparent Graphics in Chromium.
-
 ## 0.2.1 - 2026-08-11
 
 ### Added
@@ -27,6 +21,7 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Fixed
 
+- Preview background colors and images are rendered inside the isolated sandbox, so they remain visible behind transparent Graphics in Chromium.
 - The saved theme and page background are applied before React starts, preventing a white flash during loading.
 - Preview and automatic runtime tests can start when Service Worker control is unavailable and use the isolated preview bridge instead.
 - Expected resource cancellations during preview teardown no longer appear as runtime errors in the browser console.
