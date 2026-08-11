@@ -51,7 +51,7 @@ function computeMaxDuration(manifest: unknown): number {
     return 60000;
 }
 
-const INPUT_CLS = 'px-1.5 py-0.5 rounded bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs focus:outline-none focus:border-ss-primary';
+const INPUT_CLS = 'px-1.5 py-0.5 rounded-sm bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs focus:outline-hidden focus:border-ss-primary';
 
 function GoToTimeRow({
     disabled,
@@ -114,7 +114,7 @@ function GoToTimeRow({
                 <button
                     onClick={() => onInvoke(clamped)}
                     disabled={disabled}
-                    className="ml-auto px-3 py-1 rounded text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
+                    className="ml-auto px-3 py-1 rounded-sm text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
                 >
                     Go
                 </button>
@@ -160,7 +160,7 @@ function ScheduleEditor({
                 <button
                     onClick={invoke}
                     disabled={disabled}
-                    className="ml-auto px-3 py-1 rounded text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
+                    className="ml-auto px-3 py-1 rounded-sm text-xs font-semibold bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface disabled:opacity-40 transition-colors"
                 >
                     Apply
                 </button>
@@ -170,7 +170,7 @@ function ScheduleEditor({
                 spellCheck={false}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                className="w-full px-2 py-1 rounded text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono focus:outline-none focus:border-ss-primary resize-y"
+                className="w-full px-2 py-1 rounded-sm text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface font-mono focus:outline-hidden focus:border-ss-primary resize-y"
             />
             {error && <p className="text-[10px] text-ss-error">{error}</p>}
         </div>

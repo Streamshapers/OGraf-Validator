@@ -13,6 +13,9 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Changed
 
+- Development and CI now use Node.js 24, npm 11, and the TypeScript 7 compiler. ESLint keeps a separate TypeScript 6 compiler API for compatibility.
+- The application now uses React 19 and React DOM 19 with one shared React runtime.
+- Styling now uses Tailwind CSS 4 through the Vite plugin and a CSS-first `ss-*` theme configuration.
 - The welcome screen now describes the validator in clearer, search-friendly language.
 - StreamShapers and OGraf logos are served locally. The StreamShapers wordmark follows the selected light or dark theme.
 

@@ -31,7 +31,7 @@ export default function StatusBar({
 
     return (
         <div
-            className="flex-shrink-0 h-6 bg-ss-surface-lowest flex items-center justify-between gap-2 px-2 sm:px-3 select-none overflow-hidden"
+            className="shrink-0 h-6 bg-ss-surface-lowest flex items-center justify-between gap-2 px-2 sm:px-3 select-none overflow-hidden"
             style={{ borderTop: '1px solid var(--ss-border-subtle)' }}
         >
             {/* Left */}

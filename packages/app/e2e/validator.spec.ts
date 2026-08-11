@@ -31,8 +31,10 @@ test.beforeEach(async ({ context, page }) => {
 
 test('isolates packages, tabs, reloads, Unicode imports, and parent origin', async ({ context, page }) => {
     const teardownResourceErrors: string[] = [];
+    const automaticAlphaDisposals: string[] = [];
     page.on('console', (message) => {
         const text = message.text();
+        if (text === 'disposed ALPHA') automaticAlphaDisposals.push(text);
         if (
             message.type() === 'error' &&
             /Could not (?:load|prepare) OGraf package resource/.test(text) &&
@@ -45,6 +47,7 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect.poll(() => automaticAlphaDisposals.length).toBe(1);
 
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     const alphaFrame = page.frameLocator('iframe[aria-label="OGraf graphic preview"]');
@@ -219,11 +222,60 @@ test('keeps settings clear and usable at compact viewports', async ({ page }) =>
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     await expect(page.getByText('Choose dark mode, light mode, or your system setting.')).toBeVisible();
 
+    const readThemeStyles = async () => page.evaluate(() => {
+        const placeholder = document.createElement('input');
+        placeholder.placeholder = 'Placeholder';
+        const placeholderReference = document.createElement('span');
+        placeholderReference.style.color = 'var(--color-gray-400)';
+        const tokenProbe = document.createElement('span');
+        tokenProbe.className = 'border border-ss-outline-variant/40 bg-ss-primary-container/10';
+        document.body.append(placeholder, placeholderReference, tokenProbe);
+
+        const resetPreview = Array.from(document.querySelectorAll('button'))
+            .find((button) => button.textContent?.includes('Reset preview'));
+        const styles = {
+            background: getComputedStyle(document.body).backgroundColor,
+            fontFamily: getComputedStyle(document.documentElement).fontFamily,
+            placeholder: getComputedStyle(placeholder, '::placeholder').color,
+            placeholderReference: getComputedStyle(placeholderReference).color,
+            primaryToken: getComputedStyle(document.documentElement)
+                .getPropertyValue('--ss-primary-container').trim(),
+            outlineToken: getComputedStyle(document.documentElement)
+                .getPropertyValue('--ss-outline-variant').trim(),
+            tokenBackground: getComputedStyle(tokenProbe).backgroundColor,
+            tokenBorder: getComputedStyle(tokenProbe).borderTopColor,
+            resetRadius: resetPreview ? getComputedStyle(resetPreview).borderRadius : '',
+            resetCursor: resetPreview ? getComputedStyle(resetPreview).cursor : '',
+        };
+
+        placeholder.remove();
+        placeholderReference.remove();
+        tokenProbe.remove();
+        return styles;
+    });
+
+    const darkStyles = await readThemeStyles();
+    expect(darkStyles.background).toBe('rgb(19, 19, 19)');
+    expect(darkStyles.fontFamily).toContain('Open Sans');
+    expect(darkStyles.placeholder).toBe(darkStyles.placeholderReference);
+    expect(darkStyles.primaryToken).toBe('75 161 226');
+    expect(darkStyles.outlineToken).toBe('64 72 80');
+    expect(darkStyles.tokenBackground).toMatch(/\/ 0\.1\)$/u);
+    expect(darkStyles.tokenBorder).toMatch(/\/ 0\.4\)$/u);
+    expect(darkStyles.resetRadius).toBe('4px');
+    expect(darkStyles.resetCursor).toBe('pointer');
+
     const theme = page.getByRole('group', { name: 'Theme', exact: true });
     await theme.getByRole('button', { name: 'Light', exact: true }).click();
     await expect(page.locator('html')).toHaveClass(/theme-light/);
+    await expect.poll(async () => (await readThemeStyles()).background).toBe('rgb(246, 246, 246)');
+
+    await page.emulateMedia({ colorScheme: 'light' });
     await theme.getByRole('button', { name: 'System', exact: true }).click();
     await expect(page.locator('html')).toHaveClass(/theme-system/);
+    await expect.poll(async () => (await readThemeStyles()).background).toBe('rgb(246, 246, 246)');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect.poll(async () => (await readThemeStyles()).background).toBe('rgb(19, 19, 19)');
 
     const autoRevalidate = page.getByRole('switch', { name: 'Auto revalidate', exact: true });
     await expect(autoRevalidate).toHaveAttribute('aria-checked', 'false');
@@ -254,6 +306,51 @@ test('keeps settings clear and usable at compact viewports', async ({ page }) =>
         expect(layout.scrollWidth).toBe(layout.clientWidth);
         expect(layout.documentWidth).toBe(layout.viewportWidth);
         await expect(page.getByRole('button', { name: 'Reset preview', exact: true })).toBeVisible();
+    }
+});
+
+test('keeps package overview and preview inside the target viewports', async ({ page }) => {
+    await openFixture(page);
+
+    for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 768, height: 720 },
+        { width: 480, height: 800 },
+    ]) {
+        await page.setViewportSize(viewport);
+        await expect(page.getByRole('heading', { name: 'Package Overview', exact: true })).toBeVisible();
+        await expect(page.getByTestId('package-media').first()).toBeVisible();
+        const overviewWidth = await page.evaluate(() => ({
+            document: document.documentElement.scrollWidth,
+            viewport: window.innerWidth,
+        }));
+        expect(overviewWidth.document).toBe(overviewWidth.viewport);
+    }
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await selectGraphic(page, 'Alpha Graphic');
+    await page.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(page.frameLocator('iframe[aria-label="OGraf graphic preview"]').locator('#stage > *'))
+        .toContainText('ALPHA:realtime');
+
+    for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 768, height: 720 },
+        { width: 480, height: 800 },
+    ]) {
+        await page.setViewportSize(viewport);
+        const previewWidth = await page.evaluate(() => {
+            const main = document.querySelector('main')?.getBoundingClientRect();
+            return {
+                document: document.documentElement.scrollWidth,
+                viewport: window.innerWidth,
+                mainLeft: main?.left,
+                mainRight: main?.right,
+            };
+        });
+        expect(previewWidth.document).toBe(previewWidth.viewport);
+        expect(previewWidth.mainLeft).toBeGreaterThanOrEqual(0);
+        expect(previewWidth.mainRight).toBeLessThanOrEqual(viewport.width + 1);
     }
 });
 

@@ -13,7 +13,7 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
     return (
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-ss-surface-dim">
             {/* Header */}
-            <div className="flex-shrink-0 border-b border-ss-outline-variant/40 bg-ss-surface-dim px-3 py-4 sm:px-6 sm:py-5">
+            <div className="shrink-0 border-b border-ss-outline-variant/40 bg-ss-surface-dim px-3 py-4 sm:px-6 sm:py-5">
                 <div className="max-w-2xl mx-auto flex items-start justify-between">
                     <div>
                         <h2 className="text-base font-semibold text-ss-on-surface">Settings</h2>
@@ -22,7 +22,7 @@ export default function SettingsPanel({ settings, onUpdateSettings, onResetSW, o
                     <button
                         type="button"
                         onClick={onClose}
-                        className="ml-4 p-1 rounded text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors"
+                        className="ml-4 p-1 rounded-sm text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors"
                         title="Close settings"
                         aria-label="Close settings"
                     >
@@ -154,12 +154,12 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 function SettingRow({ label, description, children }: { label: string; description: string; children: React.ReactNode }) {
     return (
-        <div className="flex flex-col items-stretch gap-3 rounded border border-ss-outline-variant/40 bg-ss-surface px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="flex flex-col items-stretch gap-3 rounded-sm border border-ss-outline-variant/40 bg-ss-surface px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
             <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-ss-on-surface">{label}</p>
                 <p className="text-xs text-ss-on-surface-variant mt-0.5 leading-relaxed">{description}</p>
             </div>
-            <div className="flex w-full flex-shrink-0 items-center sm:w-auto sm:justify-end">
+            <div className="flex w-full shrink-0 items-center sm:w-auto sm:justify-end">
                 {children}
             </div>
         </div>
@@ -169,8 +169,8 @@ function SettingRow({ label, description, children }: { label: string; descripti
 
 function LocalSettingsCard() {
     return (
-        <div className="flex items-start gap-3 rounded border border-l-[3px] border-ss-outline-variant/40 border-l-ss-primary-container bg-ss-surface px-4 py-3.5">
-            <Info size={16} className="mt-0.5 flex-shrink-0 text-ss-primary-container" />
+        <div className="flex items-start gap-3 rounded-sm border border-l-[3px] border-ss-outline-variant/40 border-l-ss-primary-container bg-ss-surface px-4 py-3.5">
+            <Info size={16} className="mt-0.5 shrink-0 text-ss-primary-container" />
             <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-ss-on-surface">Saved in this browser</p>
                 <p className="text-xs text-ss-on-surface-variant mt-0.5 leading-relaxed">
@@ -194,7 +194,7 @@ function SegmentGroup({ label, options, value, onChange, disabled: groupDisabled
         <div
             role="group"
             aria-label={label}
-            className={`flex w-full overflow-hidden rounded border border-ss-outline-variant/40 transition-opacity sm:w-auto ${groupDisabled ? 'opacity-40' : ''}`}
+            className={`flex w-full overflow-hidden rounded-sm border border-ss-outline-variant/40 transition-opacity sm:w-auto ${groupDisabled ? 'opacity-40' : ''}`}
         >
             {options.map((opt) => {
                 const active = opt.value === value;
@@ -226,7 +226,7 @@ function SegmentGroup({ label, options, value, onChange, disabled: groupDisabled
 
 function NumberStepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
     return (
-        <div className="flex items-center overflow-hidden rounded border border-ss-outline-variant/40">
+        <div className="flex items-center overflow-hidden rounded-sm border border-ss-outline-variant/40">
             <button
                 type="button"
                 onClick={() => value > min && onChange(value - 1)}
@@ -279,12 +279,12 @@ type SeverityLevel = 'error' | 'warning' | 'info';
 
 function SeverityIcon({ severity }: { severity: SeverityLevel }) {
     if (severity === 'error') {
-        return <XCircle size={14} className="flex-shrink-0 text-ss-error" />;
+        return <XCircle size={14} className="shrink-0 text-ss-error" />;
     }
     if (severity === 'warning') {
-        return <AlertTriangle size={14} className="flex-shrink-0 text-ss-warning" />;
+        return <AlertTriangle size={14} className="shrink-0 text-ss-warning" />;
     }
-    return <Info size={14} className="flex-shrink-0 text-ss-info" />;
+    return <Info size={14} className="shrink-0 text-ss-info" />;
 }
 
 function SeverityToggle({
@@ -335,7 +335,7 @@ function ResetSWButton({ onReset }: { onReset: () => Promise<void> }) {
             type="button"
             onClick={() => void handleClick()}
             disabled={state === 'resetting'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-medium bg-ss-surface-high hover:bg-ss-surface-highest text-ss-on-surface transition-colors disabled:opacity-50"
         >
             {state === 'resetting' ? (
                 <>

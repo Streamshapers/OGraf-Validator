@@ -14,8 +14,12 @@ Thanks for helping improve OGraf Validator.
 
 ## Development setup
 
-You need Node.js 20.19 or newer, npm 10 or newer, and Google Chrome for browser
+You need Node.js 24 or newer, npm 11 or newer, and Google Chrome for browser
 tests.
+
+The project runs `tsc` with TypeScript 7. ESLint currently uses the TypeScript
+6 compiler API through a separate package alias. Keep both root dependencies
+until `typescript-eslint` supports the TypeScript 7 API.
 
 ```bash
 npm ci
@@ -62,7 +66,8 @@ npm run release:check
 ```
 
 The release gate runs linting, type checking, unit tests, spec checks, builds,
-the installed core-package smoke test, Playwright, and dependency audits.
+the installed core-package smoke test, Playwright against the production
+`dist`, and dependency audits.
 
 ## Commits and pull requests
 

@@ -7,7 +7,7 @@ interface Props {
 
 export default function ManifestTab({ manifest }: Props) {
     return (
-        <div className="overflow-x-auto rounded bg-ss-surface"
+        <div className="overflow-x-auto rounded-sm bg-ss-surface"
              style={{ border: '1px solid var(--ss-border-subtle)' }}>
             <div className="min-w-max p-3 sm:p-4 font-mono text-xs leading-relaxed">
                 <JsonNode value={manifest} depth={0} />
@@ -124,7 +124,7 @@ function ToggleButton({ expanded, onClick }: { expanded: boolean; onClick: () =>
     return (
         <button
             onClick={onClick}
-            className="inline-flex items-center justify-center w-4 h-4 mr-0.5 text-ss-on-surface-variant hover:text-ss-on-surface rounded transition-colors"
+            className="inline-flex items-center justify-center w-4 h-4 mr-0.5 text-ss-on-surface-variant hover:text-ss-on-surface rounded-sm transition-colors"
             aria-label={expanded ? 'Collapse' : 'Expand'}
         >
             <ChevronRight size={10} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />

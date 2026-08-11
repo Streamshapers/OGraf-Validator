@@ -35,9 +35,8 @@
     "lint": "eslint src scripts"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.13.3",
     "ajv": "8.20.0",
-    "typescript": "^5.4.0",
     "vitest": "^4.1.10"
   },
   "publishConfig": {

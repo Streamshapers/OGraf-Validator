@@ -73,7 +73,7 @@ export default function Sidebar({
         : String(packages.length);
 
     return (
-        <aside className="w-64 lg:w-60 h-full flex-shrink-0 bg-ss-surface-lowest flex flex-col shadow-2xl lg:shadow-none"
+        <aside className="w-64 lg:w-60 h-full shrink-0 bg-ss-surface-lowest flex flex-col shadow-2xl lg:shadow-none"
                style={{ borderRight: '1px solid var(--ss-border-subtle)' }}>
 
             <div className="lg:hidden flex h-11 items-center justify-between px-3"
@@ -84,7 +84,7 @@ export default function Sidebar({
                 <button
                     type="button"
                     onClick={onClose}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded text-ss-on-surface-variant hover:bg-ss-surface-high hover:text-ss-on-surface transition-colors"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-sm text-ss-on-surface-variant hover:bg-ss-surface-high hover:text-ss-on-surface transition-colors"
                     aria-label="Close package navigation"
                 >
                     <X size={16} />
@@ -167,7 +167,7 @@ export default function Sidebar({
                     ${isSettingsActive ? 'bg-ss-surface-high' : 'hover:bg-ss-surface-high/40'}`}
                 style={{ borderTop: '1px solid var(--ss-border-subtle)' }}
             >
-                <Settings size={12} className="text-ss-on-surface-variant/50 flex-shrink-0" />
+                <Settings size={12} className="text-ss-on-surface-variant/50 shrink-0" />
                 <span className="text-[10px] font-semibold text-ss-on-surface-variant uppercase tracking-[0.08em]">
                     System Settings
                 </span>
@@ -209,7 +209,7 @@ function PackageItem({ entry, isSelected, result, runtimeInfo, onClick }: ItemPr
             <button
                 onClick={onClick}
                 className={`
-                    w-full text-left px-2 py-1.5 rounded flex items-center gap-2 transition-colors
+                    w-full text-left px-2 py-1.5 rounded-sm flex items-center gap-2 transition-colors
                     ${isSelected
                         ? 'bg-ss-surface-high border-l-2 border-ss-primary-container pl-[6px]'
                         : 'hover:bg-ss-surface-highest border-l-2 border-transparent pl-[6px]'}
@@ -229,25 +229,25 @@ function PackageItem({ entry, isSelected, result, runtimeInfo, onClick }: ItemPr
 
 function StatusDot({ result, runtimeInfo }: { result: ValidationResult | undefined; runtimeInfo?: RuntimeInfo }) {
     if (!result) {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
+        return <span className="h-2 w-2 shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
     }
     const readiness = runtimeInfo?.readiness ?? derivePackageReadiness(result, runtimeInfo?.result, runtimeInfo?.phase);
     if (readiness.status === 'static-invalid' || readiness.status === 'runtime-failed') {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#cc5662' }} />;
+        return <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: '#cc5662' }} />;
     }
     if (readiness.status === 'needs-review') {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#e2b06f' }} />;
+        return <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: '#e2b06f' }} />;
     }
     if (readiness.status === 'runtime-running') {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full animate-pulse" style={{ backgroundColor: '#4ba1e2' }} />;
+        return <span className="h-2 w-2 shrink-0 rounded-full animate-pulse" style={{ backgroundColor: '#4ba1e2' }} />;
     }
     if (readiness.status === 'runtime-pending') {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#4ba1e2' }} />;
+        return <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: '#4ba1e2' }} />;
     }
     if (readiness.status === 'production-ready') {
-        return <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: '#28af62' }} />;
+        return <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: '#28af62' }} />;
     }
-    return <span className="h-2 w-2 flex-shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
+    return <span className="h-2 w-2 shrink-0 rounded-full bg-ss-on-surface-variant/30" />;
 }
 
 function IssueCount({ result, runtimeInfo }: { result: ValidationResult | undefined; runtimeInfo?: RuntimeInfo }) {
@@ -256,14 +256,14 @@ function IssueCount({ result, runtimeInfo }: { result: ValidationResult | undefi
     if (readiness.totalIssues === 0) return null;
     if (readiness.status === 'static-invalid' || readiness.status === 'runtime-failed') {
         return (
-            <span className="text-[10px] font-semibold font-mono flex-shrink-0" style={{ color: '#cc5662' }}>
+            <span className="text-[10px] font-semibold font-mono shrink-0" style={{ color: '#cc5662' }}>
                 {readiness.totalIssues}
             </span>
         );
     }
     if (readiness.status === 'needs-review') {
         return (
-            <span className="text-[10px] font-semibold font-mono flex-shrink-0" style={{ color: '#e2b06f' }}>
+            <span className="text-[10px] font-semibold font-mono shrink-0" style={{ color: '#e2b06f' }}>
                 {readiness.totalIssues}
             </span>
         );

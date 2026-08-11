@@ -62,9 +62,9 @@ export default function RuntimeTestCard({ result, phase, liveSteps, onRerun }: P
 
 function PendingCard() {
     return (
-        <div className="rounded bg-ss-surface" style={{ border: '1px solid rgba(75, 161, 226, 0.3)' }}>
+        <div className="rounded-sm bg-ss-surface" style={{ border: '1px solid rgba(75, 161, 226, 0.3)' }}>
             <div className="flex items-center gap-2 px-4 py-3">
-                <span className="h-2 w-2 rounded-full bg-ss-primary-container flex-shrink-0" />
+                <span className="h-2 w-2 rounded-full bg-ss-primary-container shrink-0" />
                 <span className="text-xs font-semibold text-ss-on-surface">Runtime Test</span>
                 <span className="text-[10px] text-ss-primary-container">Pending</span>
             </div>
@@ -74,11 +74,11 @@ function PendingCard() {
 
 function RunningCard({ steps }: { steps: RuntimeTestStep[] }) {
     return (
-        <div className="rounded overflow-hidden bg-ss-surface"
+        <div className="rounded-sm overflow-hidden bg-ss-surface"
              style={{ border: '1px solid rgba(75, 161, 226, 0.3)' }}>
             <div className="flex items-center gap-2 px-4 py-3"
                  style={{ borderBottom: steps.length > 0 ? '1px solid rgba(64, 72, 80, 0.2)' : undefined }}>
-                <Loader2 size={14} className="animate-spin text-ss-primary-container flex-shrink-0" />
+                <Loader2 size={14} className="animate-spin text-ss-primary-container shrink-0" />
                 <span className="text-xs font-semibold text-ss-on-surface">Runtime Test</span>
                 <span className="text-[10px] text-ss-primary-container">Running</span>
             </div>
@@ -105,12 +105,12 @@ function FailureCard({
     onRerun?: () => void;
 }) {
     return (
-        <section className="rounded overflow-hidden bg-ss-surface"
+        <section className="rounded-sm overflow-hidden bg-ss-surface"
                  style={{ border: '1px solid rgba(204, 86, 98, 0.45)' }}>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 px-3 sm:px-4 py-3 bg-ss-error/10"
                  style={{ borderBottom: '1px solid rgba(204, 86, 98, 0.28)' }}>
                 <div className="flex items-start gap-3 min-w-0">
-                    <XCircle size={18} className="text-ss-error flex-shrink-0 mt-0.5" />
+                    <XCircle size={18} className="text-ss-error shrink-0 mt-0.5" />
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-sm font-semibold text-ss-on-surface">Runtime validation failed</h3>
@@ -123,7 +123,7 @@ function FailureCard({
                         </p>
                     </div>
                 </div>
-                <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3 flex-shrink-0 pl-7 sm:pl-0">
+                <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3 shrink-0 pl-7 sm:pl-0">
                     <span className="text-[10px] font-mono text-ss-on-surface-variant/60">
                         {totalDurationMs.toLocaleString()} ms
                     </span>
@@ -148,7 +148,7 @@ function FailureCard({
                         <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ss-warning mb-2">
                             Warnings ({warnings.length})
                         </h4>
-                        <div className="rounded overflow-hidden border border-ss-warning/20">
+                        <div className="rounded-sm overflow-hidden border border-ss-warning/20">
                             {warnings.map((step, index) => (
                                 <StepRow key={`${step.name}-${index}`} step={step} />
                             ))}
@@ -157,7 +157,7 @@ function FailureCard({
                 )}
 
                 {passedSteps.length > 0 && (
-                    <details className="rounded bg-ss-surface-lowest"
+                    <details className="rounded-sm bg-ss-surface-lowest"
                              style={{ border: '1px solid rgba(64, 72, 80, 0.25)' }}>
                         <summary className="cursor-pointer select-none px-3 py-2 text-xs text-ss-on-surface-variant hover:text-ss-on-surface transition-colors">
                             Passed and skipped checks ({passedSteps.length})
@@ -192,14 +192,14 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
     ].filter(Boolean).join('\n');
 
     return (
-        <article aria-label={`${modePrefix}${failure.label} failed`} className="rounded overflow-hidden bg-ss-error/5"
+        <article aria-label={`${modePrefix}${failure.label} failed`} className="rounded-sm overflow-hidden bg-ss-error/5"
                  style={{ border: '1px solid rgba(204, 86, 98, 0.3)', borderLeft: '3px solid #cc5662' }}>
             <div className="p-3 sm:p-4">
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                             {modes.map((mode) => (
-                                <span key={mode} className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono text-ss-error bg-ss-error/10 border border-ss-error/25">
+                                <span key={mode} className="px-1.5 py-0.5 rounded-sm text-[9px] font-bold font-mono text-ss-error bg-ss-error/10 border border-ss-error/25">
                                     {mode}
                                 </span>
                             ))}
@@ -216,7 +216,7 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                     <button
                         type="button"
                         onClick={() => void navigator.clipboard?.writeText(copyText)}
-                        className="inline-flex h-8 w-8 sm:h-auto sm:w-auto items-center justify-center gap-1 sm:px-2 sm:py-1 rounded text-[10px] text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors flex-shrink-0"
+                        className="inline-flex h-8 w-8 sm:h-auto sm:w-auto items-center justify-center gap-1 sm:px-2 sm:py-1 rounded-sm text-[10px] text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors shrink-0"
                         title="Copy diagnostic"
                         aria-label="Copy diagnostic"
                     >
@@ -228,7 +228,7 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                     {failure.error ?? 'The runtime check failed without an error message.'}
                 </p>
                 {failure.hint && (
-                    <div className="mt-3 rounded px-3 sm:px-4 py-3 bg-ss-surface-lowest text-xs leading-relaxed text-ss-on-surface-variant"
+                    <div className="mt-3 rounded-sm px-3 sm:px-4 py-3 bg-ss-surface-lowest text-xs leading-relaxed text-ss-on-surface-variant"
                          style={{ border: '1px solid rgba(64, 72, 80, 0.28)' }}>
                         <strong className="text-ss-on-surface font-semibold">How to fix: </strong>
                         {failure.hint}
@@ -254,7 +254,7 @@ function CompletedCard({
 }) {
     const inconclusive = result.inconclusive || warningSteps.length > 0;
     return (
-        <section className="rounded overflow-hidden bg-ss-surface"
+        <section className="rounded-sm overflow-hidden bg-ss-surface"
                  style={{ border: `1px solid ${inconclusive ? 'rgba(217, 164, 65, 0.35)' : 'rgba(40, 175, 98, 0.3)'}` }}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 sm:px-4 py-2.5"
                  style={{ borderBottom: '1px solid rgba(64, 72, 80, 0.2)' }}>
@@ -290,7 +290,7 @@ function RerunButton({ onRerun }: { onRerun?: () => void }) {
             type="button"
             onClick={onRerun}
             title="Rerun runtime test"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors"
             style={{ border: '1px solid rgba(64, 72, 80, 0.4)' }}
         >
             <RotateCcw size={10} />
@@ -312,7 +312,7 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
         <div className={`flex items-start gap-2.5 px-3 py-2 ${
             step.status === 'fail' ? 'bg-ss-error/5' : step.status === 'warning' ? 'bg-ss-warning/5' : ''
         }`} style={{ borderBottom: '1px solid rgba(64, 72, 80, 0.1)' }}>
-            <span className="flex-shrink-0 mt-0.5">{icon}</span>
+            <span className="shrink-0 mt-0.5">{icon}</span>
             <div className="flex-1 min-w-0">
                 <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                     <span className={`text-[11px] font-mono [overflow-wrap:anywhere] ${
@@ -321,7 +321,7 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
                         {step.name}
                     </span>
                     {step.status !== 'skip' && (
-                        <span className="text-[10px] font-mono text-ss-on-surface-variant/50 tabular-nums flex-shrink-0">
+                        <span className="text-[10px] font-mono text-ss-on-surface-variant/50 tabular-nums shrink-0">
                             {step.durationMs} ms
                         </span>
                     )}

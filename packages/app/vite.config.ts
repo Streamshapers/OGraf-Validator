@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 
 import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -11,7 +12,7 @@ const appPkg  = JSON.parse(readFileSync(resolve(currentDir, 'package.json'), 'ut
 const corePkg = JSON.parse(readFileSync(resolve(currentDir, '../validator-core/package.json'), 'utf-8')) as { version: string };
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [tailwindcss(), react()],
     define: {
         __APP_VERSION__:  JSON.stringify(appPkg.version),
         __CORE_VERSION__: JSON.stringify(corePkg.version),
@@ -23,7 +24,7 @@ export default defineConfig({
         port: 3000,
     },
     build: {
-        target: 'es2020',
+        target: 'es2022',
         outDir: 'dist',
     },
     test: {

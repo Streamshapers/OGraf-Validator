@@ -68,7 +68,7 @@ body:
     id: environment
     attributes:
       label: Browser, operating system, and Node.js version
-      placeholder: Chrome, Windows 11, Node.js 20
+      placeholder: Chrome, Windows 11, Node.js 24
 
   - type: textarea
     id: logs

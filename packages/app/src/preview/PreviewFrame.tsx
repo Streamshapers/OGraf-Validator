@@ -92,7 +92,7 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
                  style={{ borderRight: '1px solid var(--ss-border-subtle)' }}>
 
                 {/* Top bar: render controls + step + status */}
-                <div className="flex-shrink-0 flex items-center gap-4 px-4 h-10 bg-ss-surface"
+                <div className="shrink-0 flex items-center gap-4 px-4 h-10 bg-ss-surface"
                      style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                     <RenderCharacteristicsRow
                         value={preview.state.renderCharacteristics}
@@ -127,7 +127,7 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
                 />
 
                 {/* Bottom bar: background picker right-aligned */}
-                <div className="flex-shrink-0 flex items-center justify-end gap-3 px-4 h-10 bg-ss-surface"
+                <div className="shrink-0 flex items-center justify-end gap-3 px-4 h-10 bg-ss-surface"
                      style={{ borderTop: '1px solid var(--ss-border-subtle)' }}>
                     <PreviewBackgroundPicker value={background} onChange={setBackground} />
                 </div>
@@ -138,7 +138,7 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
             <div className="flex flex-col min-w-0 flex-[2] overflow-y-auto bg-ss-surface-dim">
 
                 {/* Lifecycle bar as section title */}
-                <div className="flex-shrink-0 flex items-center px-4 h-10 bg-ss-surface"
+                <div className="shrink-0 flex items-center px-4 h-10 bg-ss-surface"
                      style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                     <PreviewLifecycleBar
                         phase={preview.state.phase}
@@ -186,7 +186,7 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
                 </RightSection>
 
                 {/* EVENT LOG — title bar is inside PreviewEventLog */}
-                <div className="flex-shrink-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+                <div className="shrink-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                     <PreviewEventLog log={preview.state.log} onClear={preview.clearLog} />
                 </div>
 
@@ -199,7 +199,7 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
 
 function RightSection({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="flex-shrink-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
+        <div className="shrink-0" style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
             <div className="flex items-center px-4 h-10 bg-ss-surface"
                  style={{ borderBottom: '1px solid rgba(64, 72, 80, 0.3)' }}>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
@@ -279,8 +279,8 @@ function RenderCharacteristicsRow({
 }) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     const inputCls =
-        'w-16 px-1.5 py-0.5 rounded bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs ' +
-        'focus:outline-none focus:border-ss-primary';
+        'w-16 px-1.5 py-0.5 rounded-sm bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface font-mono text-xs ' +
+        'focus:outline-hidden focus:border-ss-primary';
 
     const handleWidth = (raw: string) => {
         const n = parseInt(raw, 10);
@@ -325,7 +325,7 @@ function RenderCharacteristicsRow({
                             setSelectedIndex(null);
                         }
                     }}
-                    className="max-w-64 px-1.5 py-0.5 rounded bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface text-xs focus:outline-none focus:border-ss-primary"
+                    className="max-w-64 px-1.5 py-0.5 rounded-sm bg-ss-surface-dim border border-ss-outline-variant/40 text-ss-on-surface text-xs focus:outline-hidden focus:border-ss-primary"
                     title={selected?.label ?? 'Custom render characteristics'}
                 >
                     <option value="">Custom</option>

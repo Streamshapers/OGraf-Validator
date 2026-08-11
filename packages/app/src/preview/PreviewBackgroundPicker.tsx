@@ -59,7 +59,7 @@ export default function PreviewBackgroundPicker({ value, onChange }: Props) {
     };
 
     const ring = 'ring-2 ring-ss-primary ring-offset-1 ring-offset-ss-dark-2';
-    const swatch = 'h-5 w-5 rounded border border-ss-outline-variant/40/60 cursor-pointer transition-all hover:scale-110 flex-shrink-0';
+    const swatch = 'h-5 w-5 rounded-sm border border-ss-outline-variant/40 cursor-pointer transition-all hover:scale-110 shrink-0';
 
     return (
         <div className="flex items-center gap-2 justify-end flex-wrap">

@@ -97,7 +97,7 @@ export default function ManifestDiffPanel({ previous, current }: Props) {
     const removed = ops.filter((o) => o.type === 'delete').length;
 
     return (
-        <div className="rounded overflow-hidden" style={{ border: '1px solid var(--ss-border-subtle)' }}>
+        <div className="rounded-sm overflow-hidden" style={{ border: '1px solid var(--ss-border-subtle)' }}>
             {/* Accordion header */}
             <button
                 onClick={() => setExpanded((v) => !v)}
@@ -105,7 +105,7 @@ export default function ManifestDiffPanel({ previous, current }: Props) {
             >
                 <ChevronRight
                     size={12}
-                    className={`flex-shrink-0 text-ss-on-surface-variant transition-transform ${expanded ? 'rotate-90' : ''}`}
+                    className={`shrink-0 text-ss-on-surface-variant transition-transform ${expanded ? 'rotate-90' : ''}`}
                 />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ss-on-surface-variant">
                     Manifest Diff

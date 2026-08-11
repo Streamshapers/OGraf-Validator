@@ -557,21 +557,21 @@ export default function App() {
 
     return (
         <div className="flex flex-col h-full min-w-0">
-            <header className="flex-shrink-0 h-12 sm:h-14 bg-ss-surface-high flex items-center px-3 sm:px-4 gap-2 sm:gap-4 select-none"
+            <header className="shrink-0 h-12 sm:h-14 bg-ss-surface-high flex items-center px-3 sm:px-4 gap-2 sm:gap-4 select-none"
                     style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                 {/* Left: branding */}
-                <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                     <button
                         type="button"
                         onClick={() => setMobileSidebarOpen(true)}
-                        className="lg:hidden inline-flex h-8 w-8 items-center justify-center rounded text-ss-on-surface-variant hover:bg-ss-surface-highest hover:text-ss-on-surface transition-colors"
+                        className="lg:hidden inline-flex h-8 w-8 items-center justify-center rounded-sm text-ss-on-surface-variant hover:bg-ss-surface-highest hover:text-ss-on-surface transition-colors"
                         aria-label="Open package navigation"
                         aria-expanded={mobileSidebarOpen}
                     >
                         <Menu size={17} />
                     </button>
-                    <img src="/logo-light.png" alt="StreamShapers" className="ss-brand-logo-light h-5 sm:h-6 flex-shrink-0" />
-                    <img src="/logo-dark.png" alt="" aria-hidden="true" className="ss-brand-logo-dark h-5 sm:h-6 flex-shrink-0" />
+                    <img src="/logo-light.png" alt="StreamShapers" className="ss-brand-logo-light h-5 sm:h-6 shrink-0" />
+                    <img src="/logo-dark.png" alt="" aria-hidden="true" className="ss-brand-logo-dark h-5 sm:h-6 shrink-0" />
                     <span className="hidden sm:inline text-ss-outline-variant/60 select-none">|</span>
                     <h1 className="hidden sm:inline text-sm md:text-base font-semibold text-ss-on-surface tracking-wide whitespace-nowrap">OGraf Validator</h1>
                 </div>
@@ -587,12 +587,12 @@ export default function App() {
                 </div>
 
                 {/* Right: actions */}
-                <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                <div className="ml-auto flex items-center gap-2 shrink-0">
                     <button
                         type="button"
                         onClick={handleRootDirectoryChange}
                         disabled={!state.rootHandle || state.isScanning}
-                        className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded ring-1 ring-inset ring-ss-outline-variant/40 text-sm font-semibold text-ss-on-surface-variant hover:bg-ss-surface-highest hover:text-ss-on-surface disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                        className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded-sm ring-1 ring-inset ring-ss-outline-variant/40 text-sm font-semibold text-ss-on-surface-variant hover:bg-ss-surface-highest hover:text-ss-on-surface disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
                         aria-label="Rescan Directory"
                         title={state.rootHandle ? 'Rescan current directory' : 'Open a directory first'}
                     >
@@ -602,7 +602,7 @@ export default function App() {
                     <button
                         type="button"
                         onClick={openDirectory}
-                        className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-4 rounded ring-1 ring-inset ring-ss-primary-container text-sm font-semibold text-ss-primary-container hover:bg-ss-primary-container/10 hover:text-ss-primary-light transition-colors"
+                        className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-4 rounded-sm ring-1 ring-inset ring-ss-primary-container text-sm font-semibold text-ss-primary-container hover:bg-ss-primary-container/10 hover:text-ss-primary-light transition-colors"
                         aria-label="Open Directory"
                     >
                         <FolderOpen size={15} />

@@ -74,7 +74,7 @@ export default function AssetsTab({ assets, manifest, dirHandle }: Props) {
                                             isPreviewing ? 'bg-ss-surface-high' : 'hover:bg-ss-surface-high/50'
                                         } ${isImage ? 'cursor-pointer' : 'cursor-default'}`}
                                     >
-                                        <span className="w-9 h-9 flex-shrink-0 rounded flex items-center justify-center text-ss-on-surface-variant">
+                                        <span className="w-9 h-9 shrink-0 rounded-sm flex items-center justify-center text-ss-on-surface-variant">
                                             <FileIcon extension={extension} />
                                         </span>
                                         <span className="flex-1 min-w-0">
@@ -86,19 +86,19 @@ export default function AssetsTab({ assets, manifest, dirHandle }: Props) {
                                             </span>
                                             <AssetSize file={file} dirHandle={dirHandle} />
                                         </span>
-                                        <span className="flex-shrink-0 flex flex-col items-end gap-1">
+                                        <span className="shrink-0 flex flex-col items-end gap-1">
                                             <span className="flex items-center gap-1">
                                                 {isThumbnail && <AssetBadge label="thumbnail" />}
                                                 {isMain && <AssetBadge label="main" icon={<Star size={8} />} />}
                                             </span>
-                                            <span className="px-1.5 py-px rounded bg-ss-surface-highest text-[9px] font-bold tracking-widest uppercase font-mono text-ss-on-surface-variant/60">
+                                            <span className="px-1.5 py-px rounded-sm bg-ss-surface-highest text-[9px] font-bold tracking-widest uppercase font-mono text-ss-on-surface-variant/60">
                                                 {extension || 'file'}
                                             </span>
                                         </span>
                                     </button>
 
                                     {isPreviewing && (
-                                        <div className="mx-3 mb-2 overflow-hidden rounded border border-ss-outline-variant/40">
+                                        <div className="mx-3 mb-2 overflow-hidden rounded-sm border border-ss-outline-variant/40">
                                             <div className="relative bg-[repeating-conic-gradient(#2a2a2a_0%_25%,#1a1a1a_0%_50%)] bg-[length:16px_16px]">
                                                 <LocalAssetImage file={file} name={name} dirHandle={dirHandle} />
                                             </div>
@@ -128,7 +128,7 @@ function ThumbnailGallery({
                 {thumbnails.map((thumbnail, index) => (
                     <div
                         key={`${thumbnail.file}-${index}`}
-                        className="min-w-0 overflow-hidden rounded border border-ss-outline-variant/40 bg-ss-surface"
+                        className="min-w-0 overflow-hidden rounded-sm border border-ss-outline-variant/40 bg-ss-surface"
                     >
                         <div className="aspect-video flex items-center justify-center overflow-hidden bg-ss-surface-high">
                             {thumbnail.external ? (
@@ -200,7 +200,7 @@ function ExternalThumbnailPreview({ thumbnail }: { thumbnail: InspectorThumbnail
                         setLoadFailed(false);
                         setLoadRequested(true);
                     }}
-                    className="mt-1.5 rounded bg-ss-surface-highest px-2 py-1 text-[10px] font-semibold text-ss-on-surface hover:text-ss-primary-container"
+                    className="mt-1.5 rounded-sm bg-ss-surface-highest px-2 py-1 text-[10px] font-semibold text-ss-on-surface hover:text-ss-primary-container"
                 >
                     {loadFailed ? 'Retry' : 'Load preview'}
                 </button>
@@ -219,7 +219,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 function AssetBadge({ label, icon }: { label: string; icon?: React.ReactNode }) {
     return (
-        <span className="inline-flex items-center gap-1 rounded border border-ss-primary/40 bg-ss-primary/10 px-1.5 py-px text-[9px] font-semibold text-ss-primary-container">
+        <span className="inline-flex items-center gap-1 rounded-sm border border-ss-primary/40 bg-ss-primary/10 px-1.5 py-px text-[9px] font-semibold text-ss-primary-container">
             {icon}{label}
         </span>
     );

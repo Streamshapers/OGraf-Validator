@@ -2,7 +2,7 @@ import type { CSSProperties, RefObject } from 'react';
 import type { PreviewBackground, PreviewPhase } from './preview-types.js';
 
 interface Props {
-    containerRef: RefObject<HTMLDivElement>;
+    containerRef: RefObject<HTMLDivElement | null>;
     background: PreviewBackground;
     width: number;
     height: number;
@@ -13,7 +13,7 @@ export default function PreviewStage({ containerRef, background, width, height }
         <div className="flex flex-col items-stretch overflow-auto p-4 gap-2">
             {/* Canvas: respects configured aspect ratio, scales to container width */}
             <div
-                className="relative w-full overflow-hidden rounded"
+                className="relative w-full overflow-hidden rounded-sm"
                 style={{
                     aspectRatio: `${width} / ${height}`,
                     ...backgroundStyle(background),
@@ -57,7 +57,7 @@ export function StatusBadge({ phase, error }: { phase: PreviewPhase; error: stri
     const { label, cls } = config[phase];
 
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-px rounded text-[10px] font-semibold font-mono tracking-wide backdrop-blur-sm ${cls}`}
+        <span className={`inline-flex items-center gap-1 px-2 py-px rounded-sm text-[10px] font-semibold font-mono tracking-wide backdrop-blur-xs ${cls}`}
               style={{ border: '1px solid var(--ss-border-subtle)' }}>
             {label}
             {phase === 'error' && error && (

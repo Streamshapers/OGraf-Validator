@@ -176,8 +176,8 @@ function fieldHint(field: GddField): string {
 // ─── Input primitives ────────────────────────────────────────────────────────
 
 const INPUT_CLS =
-    'w-full px-2 py-1 rounded text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface ' +
-    'focus:outline-none focus:border-ss-primary transition-colors font-mono';
+    'w-full px-2 py-1 rounded-sm text-xs bg-ss-surface border border-ss-outline-variant/40 text-ss-on-surface ' +
+    'focus:outline-hidden focus:border-ss-primary transition-colors font-mono';
 
 function TextInput({
     value,
@@ -289,7 +289,7 @@ function ColorInput({
                 type="color"
                 value={hex}
                 onChange={(e) => onChange(alpha ? `${e.target.value}${currentAlpha}` : e.target.value)}
-                className="h-7 w-10 rounded border border-ss-outline-variant/40 bg-ss-surface cursor-pointer"
+                className="h-7 w-10 rounded-sm border border-ss-outline-variant/40 bg-ss-surface cursor-pointer"
             />
             <input
                 type="text"
@@ -358,7 +358,7 @@ function MultiSelectInput({
     }
 
     return (
-        <div className="flex flex-col gap-1.5 rounded border border-ss-outline-variant/40 bg-ss-surface p-2">
+        <div className="flex flex-col gap-1.5 rounded-sm border border-ss-outline-variant/40 bg-ss-surface p-2">
             {options.map((option) => {
                 const checked = selected.some((item) => Object.is(item, option.value));
 
@@ -405,7 +405,7 @@ function ObjectInput({
     }
 
     return (
-        <fieldset className="border border-ss-outline-variant/40/60 rounded p-2 space-y-2">
+        <fieldset className="border border-ss-outline-variant/40 rounded-sm p-2 space-y-2">
             <GddForm
                 properties={field.properties}
                 value={current}
@@ -436,7 +436,7 @@ function ArrayInput({
         <div className="space-y-2">
             {items.map((item, idx) => (
                 <div key={idx} className="flex items-start gap-2">
-                    <div className="flex-1 border border-ss-outline-variant/40/60 rounded p-2">
+                    <div className="flex-1 border border-ss-outline-variant/40 rounded-sm p-2">
                         <GddFormField
                             name={`[${idx}]`}
                             field={itemSchema}
