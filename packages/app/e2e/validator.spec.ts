@@ -30,6 +30,16 @@ test.beforeEach(async ({ context, page }) => {
 });
 
 test('isolates packages, tabs, reloads, Unicode imports, and parent origin', async ({ context, page }) => {
+    const teardownResourceErrors: string[] = [];
+    page.on('console', (message) => {
+        const text = message.text();
+        if (
+            message.type() === 'error' &&
+            /Could not (?:load|prepare) OGraf package resource/.test(text) &&
+            text.includes('Preview runner was destroyed')
+        ) teardownResourceErrors.push(text);
+    });
+
     await openFixture(page);
     await selectGraphic(page, 'Alpha Graphic');
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
@@ -63,10 +73,21 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
 
     const firstSession = await currentGraphicSession(page);
     expect(firstSession).toBeDefined();
+    const firstFrame = await currentPreviewFrame(page);
+    expect(firstFrame).toBeDefined();
+    await firstFrame?.evaluate(() => {
+        const graphic = document.querySelector<HTMLElement>('#stage > *');
+        for (let index = 0; index < 50; index += 1) {
+            const file = index % 2 === 0 ? 'srcset one.svg' : 'srcset two.svg';
+            graphic?.setAttribute('style', `background-image: url('./assets/${file}')`);
+        }
+    });
     await page.getByRole('button', { name: /Reload$/ }).click();
     await expect.poll(async () => (await currentGraphicSession(page)) ?? firstSession).not.toBe(firstSession);
     await expect(page.frameLocator('iframe[aria-label="OGraf graphic preview"]').locator('#stage > *'))
         .toContainText('ALPHA:realtime');
+    await page.waitForTimeout(100);
+    expect(teardownResourceErrors).toEqual([]);
 
     const play = page.getByRole('button', { name: 'Play', exact: true });
     await play.click();

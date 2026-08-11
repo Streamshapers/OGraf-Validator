@@ -16,6 +16,9 @@
     let sessionId = '';
     let element = null;
     let disposed = false;
+    let shuttingDown = false;
+    let destroyPromise = null;
+    let packageStyleObserver = null;
     let logicalWidth = 1920;
     let logicalHeight = 1080;
     let importMapElement = null;
@@ -220,7 +223,15 @@
         };
     }
 
-    async function destroyGraphic() {
+    function destroyGraphic() {
+        if (!destroyPromise) destroyPromise = performDestroyGraphic();
+        return destroyPromise;
+    }
+
+    async function performDestroyGraphic() {
+        shuttingDown = true;
+        packageStyleObserver?.disconnect();
+        packageStyleObserver = null;
         if (element && !disposed && typeof element.dispose === 'function') {
             disposed = true;
             try { await element.dispose({}); } catch (error) { originalConsole.warn('OGraf dispose during cleanup failed:', error); }
@@ -228,8 +239,9 @@
         if (element) element.remove();
         element = null;
         stage.replaceChildren();
-        rejectPendingFileRequests(new Error('Preview runner was destroyed.'));
-        rejectPendingResourceRequests(new Error('Preview runner was destroyed.'));
+        const error = createRunnerDestroyedError();
+        rejectPendingFileRequests(error);
+        rejectPendingResourceRequests(error);
         releaseModuleGraph();
     }
 
@@ -313,10 +325,11 @@
                     }
 
                     void getPackageResourceBlobUrl(packageUrl).then((blobUrl) => {
-                        if (getPackageElementUrl(this, property) === packageUrl) {
+                        if (!shuttingDown && getPackageElementUrl(this, property) === packageUrl) {
                             descriptor.set.call(this, blobUrl);
                         }
                     }).catch((error) => {
+                        if (isExpectedResourceCancellation(error)) return;
                         if (getPackageElementUrl(this, property) !== packageUrl) return;
                         originalConsole.error('Could not load OGraf package resource:', error);
                         this.dispatchEvent(new Event('error'));
@@ -369,9 +382,14 @@
                     source,
                     baseUrl: base.href || document.URL,
                 }).then((prepared) => {
-                    if (styleGenerations.get(this) !== generation || getPackageElementUrl(this, 'srcset') !== source) return;
+                    if (
+                        shuttingDown ||
+                        styleGenerations.get(this) !== generation ||
+                        getPackageElementUrl(this, 'srcset') !== source
+                    ) return;
                     descriptor.set.call(this, createPreparedSrcset(prepared));
                 }).catch((error) => {
+                    if (isExpectedResourceCancellation(error)) return;
                     if (styleGenerations.get(this) !== generation) return;
                     reportResourceError(error, this);
                 });
@@ -396,7 +414,9 @@
     }
 
     function installPackageStyleBridge() {
-        const observer = new MutationObserver((mutations) => {
+        packageStyleObserver?.disconnect();
+        packageStyleObserver = new MutationObserver((mutations) => {
+            if (shuttingDown) return;
             for (const mutation of mutations) {
                 if (mutation.type === 'attributes') {
                     if (mutation.attributeName === 'style' && mutation.target instanceof Element) {
@@ -424,7 +444,7 @@
                 }
             }
         });
-        observer.observe(stage, {
+        packageStyleObserver.observe(stage, {
             subtree: true,
             childList: true,
             characterData: true,
@@ -449,15 +469,17 @@
     }
 
     function scheduleInlineStyle(target, source, apply) {
+        if (shuttingDown) return;
         const generation = (styleGenerations.get(target) || 0) + 1;
         styleGenerations.set(target, generation);
         void requestPreparedResource('stylesheet-text', {
             source,
             baseUrl: base.href || document.URL,
         }).then((graph) => {
-            if (styleGenerations.get(target) !== generation) return;
+            if (shuttingDown || styleGenerations.get(target) !== generation) return;
             apply(createCssGraphSource(graph));
         }).catch((error) => {
+            if (isExpectedResourceCancellation(error)) return;
             if (styleGenerations.get(target) === generation) reportResourceError(error, target);
         });
     }
@@ -514,6 +536,7 @@
     }
 
     function getPackageResourceBlobUrl(url) {
+        if (shuttingDown) return Promise.reject(createRunnerDestroyedError());
         const cached = packageResourceBlobUrls.get(url);
         if (cached) return Promise.resolve(cached);
         const pending = pendingPackageResourceBlobUrls.get(url);
@@ -538,12 +561,13 @@
     }
 
     async function applyPackageStylesheetLink(link, url) {
+        if (shuttingDown) return;
         try {
             const graph = await requestPreparedResource('stylesheet-url', { url });
-            if (getPackageElementUrl(link, 'href') !== url) return;
+            if (shuttingDown || getPackageElementUrl(link, 'href') !== url) return;
             const source = createCssGraphSource(graph);
             await waitForConnected(link);
-            if (getPackageElementUrl(link, 'href') !== url) return;
+            if (shuttingDown || getPackageElementUrl(link, 'href') !== url) return;
             packageStylesheetNodes.get(link)?.remove();
             const style = document.createElement('style');
             style.setAttribute('data-ograf-stylesheet', url);
@@ -554,6 +578,7 @@
                 if (getPackageElementUrl(link, 'href') === url) link.dispatchEvent(new Event('load'));
             });
         } catch (error) {
+            if (isExpectedResourceCancellation(error)) return;
             if (getPackageElementUrl(link, 'href') !== url) return;
             reportResourceError(error, link);
         }
@@ -618,6 +643,7 @@
     }
 
     function requestPackageFile(url, method, signal) {
+        if (shuttingDown) return Promise.reject(createRunnerDestroyedError());
         if (!postPort) return Promise.reject(new Error('Preview runner is not connected.'));
         if (signal?.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
         const requestId = `file-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
@@ -647,6 +673,7 @@
     }
 
     function requestPreparedResource(resourceKind, payload) {
+        if (shuttingDown) return Promise.reject(createRunnerDestroyedError());
         if (!postPort) return Promise.reject(new Error('Preview runner is not connected.'));
         const requestId = `resource-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
         return new Promise((resolve, reject) => {
@@ -693,7 +720,22 @@
         return error;
     }
 
+    function createRunnerDestroyedError() {
+        const error = new Error('Preview runner was destroyed.');
+        error.code = 'OGRAF_RUNNER_DESTROYED';
+        return error;
+    }
+
+    function isExpectedResourceCancellation(error) {
+        return shuttingDown || (
+            error &&
+            typeof error === 'object' &&
+            error.code === 'OGRAF_RUNNER_DESTROYED'
+        );
+    }
+
     function reportResourceError(error, target) {
+        if (isExpectedResourceCancellation(error)) return;
         originalConsole.error('Could not prepare OGraf package resource:', error);
         target?.dispatchEvent?.(new Event('error'));
         post({ type: 'OGRAF_RUNNER_ERROR', error: serializeError(error) });
