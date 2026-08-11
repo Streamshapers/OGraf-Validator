@@ -2,6 +2,18 @@
 
 All notable changes to `@streamshapers/ograf-validator-core` are documented here.
 
+## 0.2.1 - 2026-08-12
+
+### Added
+
+- Machine-readable metadata for the vendored EBU OGraf specification snapshot.
+- A release check that keeps the snapshot directory, upstream commit, documentation, checksums, generated validator, and packaged files in sync.
+- Regression tests for malformed snapshot metadata, stale documentation, and unsafe or duplicate checksum paths.
+
+### Changed
+
+- Validator generation, snapshot tests, and the npm tarball smoke test now discover the active snapshot from its metadata instead of using a hardcoded directory.
+
 ## 0.2.0 - 2026-08-10
 
 ### Added

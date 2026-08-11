@@ -1,6 +1,6 @@
 {
   "name": "@streamshapers/ograf-validator-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Validate OGraf v1 Graphics Packages in Node.js and browsers with zero runtime dependencies",
   "keywords": ["ograf", "broadcast", "graphics", "validator", "ebu"],
   "repository": {
