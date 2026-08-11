@@ -331,6 +331,21 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     }))).toEqual({ width: 1672, height: 941 });
 });
 
+test.describe('without Service Worker control', () => {
+    test.use({ serviceWorkers: 'block' });
+
+    test('uses the isolated preview bridge', async ({ page }) => {
+        await openFixture(page);
+        await selectGraphic(page, 'Alpha Graphic');
+        await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+
+        await page.getByRole('button', { name: 'Preview', exact: true }).click();
+        const frame = page.frameLocator('iframe[aria-label="OGraf graphic preview"]');
+        await expect(frame.locator('#stage > *')).toContainText('ALPHA:realtime');
+        await expect(frame.locator('#stage > *')).toHaveAttribute('data-asset-text', 'sandbox asset ok');
+    });
+});
+
 async function installDirectoryPicker(context: BrowserContext): Promise<void> {
     await context.addInitScript(() => {
         Object.defineProperty(window, 'showDirectoryPicker', {

@@ -109,6 +109,10 @@ function ensureFileBroker(): void {
             }
         })();
     });
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!isPreviewWorker(navigator.serviceWorker.controller)) return;
+        for (const sessionId of sessions.keys()) postSessionRegistration('REGISTER', sessionId);
+    });
     brokerInstalled = true;
 }
 
@@ -199,28 +203,6 @@ function isPreviewWorker(worker: ServiceWorker | null): boolean {
     }
 }
 
-async function waitForPreviewController(timeoutMs = 10_000): Promise<void> {
-    if (isPreviewWorker(navigator.serviceWorker.controller)) return;
-
-    await new Promise<void>((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-            cleanup();
-            reject(new Error('Preview Service Worker did not take control of this page.'));
-        }, timeoutMs);
-        const onControllerChange = () => {
-            if (!isPreviewWorker(navigator.serviceWorker.controller)) return;
-            cleanup();
-            resolve();
-        };
-        const cleanup = () => {
-            window.clearTimeout(timeout);
-            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-        };
-        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-        onControllerChange();
-    });
-}
-
 /** Register the scoped preview service worker and expose session creation. */
 export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): PreviewSW {
     const [swReady, setSwReady] = useState(false);
@@ -232,25 +214,35 @@ export function usePreviewSW(dirHandle: FileSystemDirectoryHandle | null): Previ
     }, [dirHandle]);
 
     const register = useCallback(async (): Promise<void> => {
-        if (!('serviceWorker' in navigator)) return;
+        if (!('serviceWorker' in navigator)) {
+            setSwReady(true);
+            return;
+        }
         ensureFileBroker();
-        const registration = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
-        registrationRef.current = registration;
-        await navigator.serviceWorker.ready;
-        await waitForPreviewController();
-        for (const sessionId of sessions.keys()) postSessionRegistration('REGISTER', sessionId);
-        setSwReady(true);
+        try {
+            const registration = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
+            registrationRef.current = registration;
+            if (isPreviewWorker(navigator.serviceWorker.controller)) {
+                for (const sessionId of sessions.keys()) postSessionRegistration('REGISTER', sessionId);
+            }
+        } catch (error) {
+            // The opaque preview runner reads package files through its isolated
+            // MessageChannel. Service Worker control is an optional fast path.
+            console.info('Preview Service Worker is unavailable; using the isolated preview bridge.', error);
+        } finally {
+            setSwReady(true);
+        }
     }, []);
 
     useEffect(() => {
-        void register().catch((error) => {
-            console.warn('Preview Service Worker registration failed:', error);
-            setSwReady(false);
-        });
+        void register();
     }, [register]);
 
     const resetSW = useCallback(async (): Promise<void> => {
-        if (!('serviceWorker' in navigator)) return;
+        if (!('serviceWorker' in navigator)) {
+            setSwReady(true);
+            return;
+        }
         setSwReady(false);
         const registration = registrationRef.current ?? await navigator.serviceWorker.getRegistration('/');
         if (
