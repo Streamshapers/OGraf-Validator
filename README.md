@@ -144,7 +144,7 @@ standalone validator.
 Requirements:
 
 - Node.js 24 or newer
-- npm 11 or newer
+- npm 11.5.1 or newer
 - Google Chrome for Playwright tests
 
 The repository runs `tsc` with TypeScript 7. ESLint uses the compatible
@@ -194,6 +194,7 @@ The app and core library are versioned separately:
 
 - [OGraf Validator app changelog](packages/app/CHANGELOG.md)
 - [Validator core changelog](packages/validator-core/CHANGELOG.md)
+- [Release process and tag conventions](RELEASING.md)
 
 ## Contributing
 

@@ -14,8 +14,8 @@ Thanks for helping improve OGraf Validator.
 
 ## Development setup
 
-You need Node.js 24 or newer, npm 11 or newer, and Google Chrome for browser
-tests.
+You need Node.js 24 or newer, npm 11.5.1 or newer, and Google Chrome for
+browser tests.
 
 The project runs `tsc` with TypeScript 7. ESLint currently uses the TypeScript
 6 compiler API through a separate package alias. Keep both root dependencies
@@ -45,7 +45,9 @@ The app runs at `http://localhost:3000`.
   `allow-same-origin` or expose directory handles to a Graphic.
 - Add tests for changes to validation, scanning, preview transport, runtime
   behavior, or package readiness.
-- Add a changelog entry to the app or core changelog when users are affected.
+- Follow the [release guide](RELEASING.md) for version changes and tags.
+- Include the affected package version, lockfile version, and changelog entry
+  in every release-relevant pull request.
 
 ### Specification changes
 
@@ -79,6 +81,7 @@ the installed core-package smoke test, Playwright against the production
 - Keep generated files in the same commit as the source change that produced
   them.
 - Do not mix unrelated cleanup into a feature or bug fix.
+- Do not move or reuse release tags.
 
 By submitting a contribution, you agree that it may be distributed under the
 [MIT License](LICENSE).
