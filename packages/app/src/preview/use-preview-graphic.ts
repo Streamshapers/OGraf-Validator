@@ -16,6 +16,7 @@ import {
     toOgrafRenderCharacteristics,
     type LogEntry,
     type PlayActionParams,
+    type PreviewBackground,
     type PreviewState,
     type RenderCharacteristics,
     type ScheduleEntry,
@@ -40,6 +41,7 @@ export interface UsePreviewGraphicOptions {
     dirHandle: FileSystemDirectoryHandle;
     manifest: unknown;
     packagePath: string;
+    background: PreviewBackground;
 }
 
 export interface UsePreviewGraphicReturn {
@@ -68,6 +70,7 @@ export function usePreviewGraphic({
     dirHandle,
     manifest,
     packagePath,
+    background,
 }: UsePreviewGraphicOptions): UsePreviewGraphicReturn {
     const containerRef = useRef<HTMLDivElement>(null);
     const runnerRef = useRef<PreviewRunner | null>(null);
@@ -75,6 +78,8 @@ export function usePreviewGraphic({
     const abortRef = useRef<AbortController | null>(null);
     const generationRef = useRef(0);
     const teardownQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const backgroundRef = useRef(background);
+    backgroundRef.current = background;
     const sessionKey = `ograf-preview:${packagePath}`;
     const supportsRealTime = readBoolean(manifest, 'supportsRealTime') !== false;
     const supportsNonRealTime = readBoolean(manifest, 'supportsNonRealTime') === true;
@@ -193,12 +198,14 @@ export function usePreviewGraphic({
 
         try {
             const snapshot = stateRef.current;
+            const initialBackground = backgroundRef.current;
             const runner = await createPreviewRunner({
                 sessionId: session.sessionId,
                 importUrl,
                 mount: container,
                 width: snapshot.renderCharacteristics.width,
                 height: snapshot.renderCharacteristics.height,
+                background: initialBackground,
                 timeoutMs: 10_000,
                 signal: abortController.signal,
                 onLog: ({ level, args }) => appendLog({
@@ -226,6 +233,9 @@ export function usePreviewGraphic({
                 return;
             }
             runnerRef.current = runner;
+            if (backgroundRef.current !== initialBackground) {
+                await runner.setBackground(backgroundRef.current);
+            }
 
             const required = supportsNonRealTime
                 ? [...REQUIRED_METHODS, ...NON_REALTIME_METHODS]
@@ -251,6 +261,14 @@ export function usePreviewGraphic({
             await teardownCurrent(true);
         }
     }, [appendLog, dirHandle, invoke, mainFile, supportsNonRealTime, swReady, teardownCurrent]);
+
+    useEffect(() => {
+        const runner = runnerRef.current;
+        if (!runner) return;
+        void runner.setBackground(background).catch(() => {
+            // A background change may race with reload, disposal, or package selection.
+        });
+    }, [background]);
 
     useEffect(() => {
         if (!swReady || !mainFile) return;
