@@ -2,6 +2,13 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## 0.2.2 - 2026-09-16
+
+### Changed
+
+- Update React and React DOM to 19.3.0, the preview Worker bundler to Rollup 4.63.1, PostCSS to 8.5.28, and Lucide icons to 1.44.0.
+- Update Vite to 8.3.0, its React plugin to 6.1.1, Playwright to 1.63.0, and the linting and type dependencies.
+
 ## 0.2.1 - 2026-08-11
 
 ### Added
