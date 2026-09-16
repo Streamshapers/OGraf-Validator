@@ -1,6 +1,6 @@
 {
   "name": "@streamshapers/ograf-validator-app",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "OGraf Validator – browser-based tool for validating, inspecting and safely previewing OGraf Graphics Packages",
   "private": true,
   "license": "MIT",
@@ -16,23 +16,23 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@rollup/browser": "^4.62.4",
+    "@rollup/browser": "^4.63.1",
     "@streamshapers/ograf-validator-core": "*",
-    "lucide-react": "^1.30.0",
-    "postcss": "^8.5.26",
+    "lucide-react": "^1.44.0",
+    "postcss": "^8.5.28",
     "postcss-value-parser": "^4.2.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@types/node": "^24.13.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.2.1",
+    "vite": "^8.3.0",
     "vitest": "^4.1.11"
   }
 }
