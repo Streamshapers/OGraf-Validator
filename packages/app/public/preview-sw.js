@@ -95,7 +95,10 @@ async function safelyServePreviewResource(request, url) {
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const status = /not found|does not exist/i.test(message) ? 404 : 504;
-        return response(message, status, 'text/plain; charset=utf-8');
+        // Keep broker details in this trusted worker, outside resource responses.
+        console.warn('Could not serve an OGraf preview resource.', error);
+        const body = status === 404 ? 'Preview resource not found.' : 'Preview resource unavailable.';
+        return response(request.method === 'HEAD' ? null : body, status, 'text/plain; charset=utf-8');
     }
 }
 
@@ -104,7 +107,8 @@ async function servePreviewResource(request, url) {
     try {
         parsed = parsePreviewPath(url.pathname);
     } catch (error) {
-        return response(String(error instanceof Error ? error.message : error), 400, 'text/plain; charset=utf-8');
+        console.warn('Invalid OGraf preview resource URL.', error);
+        return response(request.method === 'HEAD' ? null : 'Invalid preview resource URL.', 400, 'text/plain; charset=utf-8');
     }
 
     if (request.method === 'OPTIONS') {
