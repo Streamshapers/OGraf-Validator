@@ -511,6 +511,10 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             'Preview runner iframe load',
         );
         if (!iframe.contentWindow) throw new Error('Preview runner iframe has no content window.');
+        // This exact frame has an opaque origin: targetOrigin must be '*'.
+        // Bootstrap its private MessagePort before any package code executes.
+        // The runner accepts only its parent once; later traffic is session-bound.
+        // See SECURITY.md, "Preview communication", and preview-security.spec.ts.
         iframe.contentWindow.postMessage({
             protocol: PREVIEW_PROTOCOL_VERSION,
             type: 'OGRAF_RUNNER_CONNECT',

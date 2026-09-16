@@ -47,3 +47,30 @@ Examples of security issues include:
 
 OGraf compatibility bugs without a security impact can be reported with the
 public OGraf compatibility issue form.
+
+## Preview communication
+
+The preview iframe uses exactly `sandbox="allow-scripts"`. Its opaque origin
+requires `targetOrigin: '*'` for the initial `postMessage` to that specific
+iframe's `contentWindow`. This is not a broadcast. Adding `allow-same-origin`
+would weaken the isolation and is not an acceptable way to silence a scanner.
+
+The parent loads the application-owned runner and transfers one MessagePort
+before sending any package code. The runner accepts this connection only from
+its parent, checks the protocol and message shape, and then removes the window
+message listener. Subsequent traffic uses the private port and checks the
+protocol, runner ID, and session ID. Package file requests are limited to the
+active session and normalized package-relative paths.
+
+CodeQL's `js/cross-window-information-leak` rule reports this bootstrap because
+of its wildcard target origin. The wildcard is an intentional exception for
+the opaque frame. `packages/app/e2e/preview-security.spec.ts` exercises the real
+runner in Chrome: a concrete target origin cannot connect, unrelated windows
+cannot claim the port, and invalid protocol, runner, session, and replacement
+connections are rejected. Reassess this exception if the runner URL becomes
+package-controlled, package execution moves before the handshake, or the
+receiver and session checks change.
+
+Preview Service Worker error responses contain only fixed messages. Detailed
+errors are logged in the trusted worker's console, not included in resource
+responses that package code can read.

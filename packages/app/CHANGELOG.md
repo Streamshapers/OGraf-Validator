@@ -2,6 +2,17 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## 0.2.3 - 2026-09-16
+
+### Fixed
+
+- Keep internal file-broker errors out of preview resource responses while preserving their HTTP status codes.
+- Return empty bodies for failed HEAD requests.
+
+### Added
+
+- Regression tests for preview error responses and the isolated runner handshake, with documentation of its required wildcard target origin.
+
 ## 0.2.2 - 2026-09-16
 
 ### Changed
