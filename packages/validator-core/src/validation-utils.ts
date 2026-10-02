@@ -62,7 +62,7 @@ export function hasOwn(object: JsonObject, key: string): boolean {
 }
 
 export function isMissing(object: JsonObject, key: string): boolean {
-    return !hasOwn(object, key) || object[key] === undefined || object[key] === null;
+    return !hasOwn(object, key) || object[key] === undefined;
 }
 
 export function isFiniteNumber(value: unknown): value is number {

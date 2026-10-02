@@ -9,6 +9,7 @@
  */
 
 export { validateManifest, validatePackage } from './validate.js';
+export { validateGddValue } from './gdd-value-validation.js';
 export type {
     OgrafManifest,
     OgrafVendorExtensions,
@@ -33,6 +34,8 @@ export type {
     GddFieldType,
     GddOptions,
     GddValidValue,
+    GddValueIssue,
+    GddValueValidationResult,
     ValidationIssue,
     ValidationIssueCode,
     ValidationResult,

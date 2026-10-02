@@ -7,8 +7,17 @@ import {
 } from './preview-resources.js';
 import { listPreviewSessionFiles, readPreviewSessionFile } from './use-preview-sw.js';
 import { DEFAULT_BACKGROUND, type PreviewBackground } from './preview-types.js';
+import { readRuntimeDiagnostic, type RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
+import { PreviewDiagnosticError } from './preview-errors.js';
 
 const RUNNER_PATH = `/preview-runner.html?protocol=${PREVIEW_PROTOCOL_VERSION}`;
+
+export class PreviewRunnerError extends PreviewDiagnosticError {
+    constructor(message: string, diagnostic?: RuntimeDiagnosticDetails) {
+        super(message, diagnostic);
+        this.name = 'PreviewRunnerError';
+    }
+}
 
 export class PreviewRunnerTimeoutError extends Error {
     constructor(message: string) {
@@ -40,7 +49,7 @@ export interface PreviewRunnerOptions {
     timeoutMs?: number;
     signal?: AbortSignal;
     onLog?: (entry: PreviewRunnerLog) => void;
-    onRuntimeError?: (error: string) => void;
+    onRuntimeError?: (error: string, diagnostic?: RuntimeDiagnosticDetails) => void;
 }
 
 export interface PreviewRunnerCallOptions {
@@ -170,7 +179,8 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             return;
         }
         if (message.type === 'OGRAF_RUNNER_ERROR') {
-            options.onRuntimeError?.(readErrorMessage(message.error));
+            const error = deserializeRunnerError(message.error);
+            options.onRuntimeError?.(error.message, error.diagnostic);
             return;
         }
         if (
@@ -203,7 +213,7 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
         window.clearTimeout(request.timeout);
         request.removeAbortListener?.();
         if (message.ok === true) request.resolve(message.result);
-        else request.reject(new Error(readErrorMessage(message.error)));
+        else request.reject(deserializeRunnerError(message.error));
     };
 
     const respondToFileRequest = async (
@@ -322,8 +332,13 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             if (typeof workerId !== 'string' || !workerId || hostedWorkers.has(workerId)) {
                 throw new Error('Dedicated Worker request contains an invalid or duplicate worker id.');
             }
-            if (typeof message.source !== 'string' || message.source.length > 16 * 1024 * 1024) {
-                throw new Error('Dedicated Worker bootstrap is missing or exceeds 16 MiB.');
+            if (typeof message.source !== 'string') {
+                throw new Error('Dedicated Worker bootstrap is missing.');
+            }
+            if (message.source.length > 16 * 1024 * 1024) {
+                throw new PreviewDiagnosticError('Dedicated Worker bootstrap exceeds 16 MiB.', {
+                    code: 'PREVIEW_LIMITATION', reason: 'worker-bootstrap-limit',
+                });
             }
             if (message.workerType !== 'module' && message.workerType !== 'classic') {
                 throw new Error('Dedicated Worker request contains an invalid worker type.');
@@ -563,7 +578,12 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
                 if (closed) return;
                 try {
                     await request('OGRAF_RUNNER_DESTROY', {}, { timeoutMs: 1_000 });
-                } catch {
+                } catch (error) {
+                    if (error instanceof PreviewRunnerTimeoutError) {
+                        options.onRuntimeError?.(error.message, {
+                            code: 'RUNTIME_TIMEOUT', reason: 'cleanup-timeout', method: 'dispose',
+                        });
+                    }
                     // DOM removal is the final isolation boundary even if disposal hangs.
                 } finally {
                     remove();
@@ -574,6 +594,9 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
     } catch (error) {
         readyReject?.(error instanceof Error ? error : new Error(String(error)));
         remove();
+        if (error instanceof PreviewDiagnosticError && !(error instanceof PreviewRunnerError)) {
+            throw new PreviewRunnerError(error.message, error.diagnostic);
+        }
         throw error;
     }
 }
@@ -651,6 +674,18 @@ function readErrorMessage(value: unknown): string {
     return 'Unknown preview runner error.';
 }
 
+export function deserializeRunnerError(value: unknown): PreviewRunnerError {
+    const record = typeof value === 'object' && value !== null
+        ? value as Record<string, unknown> : {};
+    const error = new PreviewRunnerError(
+        readErrorMessage(value),
+        readRuntimeDiagnostic(record['diagnostic']),
+    );
+    if (typeof record['stack'] === 'string') error.stack = record['stack'];
+
+    return error;
+}
+
 function collectArrayBuffers(value: unknown, buffers = new Set<ArrayBuffer>()): ArrayBuffer[] {
     if (value instanceof ArrayBuffer) {
         buffers.add(value);
@@ -664,7 +699,7 @@ function collectArrayBuffers(value: unknown, buffers = new Set<ArrayBuffer>()): 
     return [...buffers];
 }
 
-function serializeResourceError(error: unknown): Record<string, unknown> {
+export function serializeResourceError(error: unknown): Record<string, unknown> {
     if (error instanceof Error) {
         const record = error as Error & {
             code?: unknown;
@@ -677,6 +712,8 @@ function serializeResourceError(error: unknown): Record<string, unknown> {
             ...(typeof record.code === 'string' ? { code: record.code } : {}),
             ...(typeof record.resourceKind === 'string' ? { resourceKind: record.resourceKind } : {}),
             ...(typeof record.path === 'string' ? { path: record.path } : {}),
+            ...(error instanceof PreviewDiagnosticError && error.diagnostic
+                ? { diagnostic: error.diagnostic } : {}),
         };
     }
     return { name: 'Error', message: String(error) };

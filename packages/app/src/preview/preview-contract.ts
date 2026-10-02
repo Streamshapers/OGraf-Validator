@@ -1,4 +1,5 @@
 import type { ApiMethod, ScheduleEntry } from './preview-types.js';
+import type { RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
 
 export type OgrafApiMethod = Exclude<ApiMethod, `console.${string}`>;
 
@@ -19,13 +20,14 @@ export const NON_REALTIME_METHODS = [
 export interface NormalizedReturnPayload {
     valid: boolean;
     successful: boolean;
-    statusCode: number;
+    statusCode?: number;
     statusMessage?: string;
     result?: unknown;
     hasCurrentStep: boolean;
     /** null represents a present-but-undefined currentStep (the end). */
     currentStep?: number | null;
     error?: string;
+    diagnostic?: RuntimeDiagnosticDetails;
     raw: unknown;
 }
 
@@ -44,7 +46,10 @@ export function normalizeReturnPayload(
 ): NormalizedReturnPayload {
     if (value === undefined) {
         if (method === 'playAction') {
-            return invalid(value, 'playAction must resolve to a ReturnPayload containing currentStep.');
+            return invalid(value, 'playAction must resolve to a ReturnPayload containing currentStep.', {
+                code: 'INVALID_CURRENT_STEP', reason: 'missing-payload', method,
+                field: 'currentStep',
+            });
         }
         return {
             valid: true,
@@ -56,14 +61,19 @@ export function normalizeReturnPayload(
     }
 
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return invalid(value, 'ReturnPayload must be an object or undefined.');
+        return invalid(value, `${method === 'setActionsSchedule' ? 'EmptyPayload' : 'ReturnPayload'} must be an object or undefined.`, {
+            code: method === 'setActionsSchedule' ? 'INVALID_EMPTY_PAYLOAD' : 'INVALID_RETURN_PAYLOAD',
+            reason: 'invalid-type', method,
+        });
     }
 
     const payload = value as Record<string, unknown>;
     if (method === 'setActionsSchedule') {
         const invalidKey = Object.keys(payload).find((key) => !key.startsWith('v_'));
         if (invalidKey) {
-            return invalid(value, `setActionsSchedule EmptyPayload contains non-vendor field "${invalidKey}".`);
+            return invalid(value, `EmptyPayload contains non-vendor field "${invalidKey}".`, {
+                code: 'INVALID_EMPTY_PAYLOAD', reason: 'non-vendor-field', method, field: invalidKey,
+            });
         }
         return {
             valid: true,
@@ -82,19 +92,27 @@ export function normalizeReturnPayload(
     ]);
     const invalidField = Object.keys(payload).find((key) => !allowedFields.has(key) && !key.startsWith('v_'));
     if (invalidField) {
-        return invalid(value, `ReturnPayload contains non-vendor field "${invalidField}".`);
+        return invalid(value, `ReturnPayload contains non-vendor field "${invalidField}".`, {
+            code: 'INVALID_RETURN_PAYLOAD', reason: 'non-vendor-field', method, field: invalidField,
+        });
     }
 
     const rawStatus = payload['statusCode'];
-    if (rawStatus === undefined) {
-        return invalid(value, 'ReturnPayload.statusCode is required when a payload object is returned.');
+    if (!Object.prototype.hasOwnProperty.call(payload, 'statusCode')) {
+        return invalid(value, 'ReturnPayload.statusCode is required.', {
+            code: 'INVALID_STATUS_CODE', reason: 'missing-field', method, field: 'statusCode',
+        });
     }
     const statusCode = rawStatus;
     if (!Number.isInteger(statusCode) || (statusCode as number) < 100 || (statusCode as number) > 599) {
-        return invalid(value, 'ReturnPayload.statusCode must be an integer between 100 and 599.');
+        return invalid(value, 'ReturnPayload.statusCode must be an integer between 100 and 599.', {
+            code: 'INVALID_STATUS_CODE', reason: 'invalid-value', method, field: 'statusCode',
+        });
     }
     if (payload['statusMessage'] !== undefined && typeof payload['statusMessage'] !== 'string') {
-        return invalid(value, 'ReturnPayload.statusMessage must be a string when present.');
+        return invalid(value, 'ReturnPayload.statusMessage must be a string when present.', {
+            code: 'INVALID_STATUS_MESSAGE', reason: 'invalid-type', method, field: 'statusMessage',
+        });
     }
 
     let hasCurrentStep = false;
@@ -107,11 +125,15 @@ export function normalizeReturnPayload(
         } else if (Number.isInteger(rawStep) && (rawStep as number) >= 0) {
             currentStep = rawStep as number;
         } else {
-            return invalid(value, 'playAction.currentStep must be a zero-based non-negative integer or undefined.');
+            return invalid(value, 'playAction.currentStep must be a zero-based non-negative integer or undefined.', {
+                code: 'INVALID_CURRENT_STEP', reason: 'invalid-value', method, field: 'currentStep',
+            });
         }
     }
     if (method === 'playAction' && !hasCurrentStep) {
-        return invalid(value, 'playAction ReturnPayload must contain the currentStep field.');
+        return invalid(value, 'playAction ReturnPayload must contain the currentStep field.', {
+            code: 'INVALID_CURRENT_STEP', reason: 'missing-field', method, field: 'currentStep',
+        });
     }
 
     return {
@@ -130,13 +152,13 @@ export function normalizeReturnPayload(
     };
 }
 
-function invalid(raw: unknown, error: string): NormalizedReturnPayload {
+function invalid(raw: unknown, error: string, diagnostic: RuntimeDiagnosticDetails): NormalizedReturnPayload {
     return {
         valid: false,
         successful: false,
-        statusCode: 500,
         hasCurrentStep: false,
         error,
+        diagnostic,
         raw,
     };
 }
@@ -193,7 +215,7 @@ function isDurationStep(value: unknown): value is { step?: number; duration: num
 }
 
 /** Return human-readable shape errors for the normative schedule wire format. */
-export function validateSchedule(schedule: unknown): string[] {
+export function validateSchedule(schedule: unknown, manifest?: unknown): string[] {
     if (!Array.isArray(schedule)) return ['schedule must be an array.'];
     const errors: string[] = [];
 
@@ -204,6 +226,7 @@ export function validateSchedule(schedule: unknown): string[] {
             return;
         }
         const entry = candidate as Record<string, unknown>;
+        validateInputFields(entry, ['timestamp', 'action'], at, errors);
         if (typeof entry['timestamp'] !== 'number' || !Number.isFinite(entry['timestamp']) || entry['timestamp'] < 0) {
             errors.push(`${at}.timestamp must be a non-negative number in milliseconds.`);
         }
@@ -213,6 +236,7 @@ export function validateSchedule(schedule: unknown): string[] {
             return;
         }
         const actionRecord = action as Record<string, unknown>;
+        validateInputFields(actionRecord, ['type', 'params'], `${at}.action`, errors);
         if (Object.prototype.hasOwnProperty.call(actionRecord, 'method')) {
             errors.push(`${at}.action uses "method"; OGraf v1 requires "type".`);
         }
@@ -225,15 +249,59 @@ export function validateSchedule(schedule: unknown): string[] {
             errors.push(`${at}.action.params must be an object.`);
             return;
         }
+        const actionParams = params as Record<string, unknown>;
+        const fields = type === 'playAction' ? ['goto', 'delta', 'skipAnimation']
+            : type === 'updateAction' ? ['data', 'skipAnimation']
+                : type === 'customAction' ? ['id', 'payload', 'skipAnimation'] : ['skipAnimation'];
+        validateInputFields(actionParams, fields, `${at}.action.params`, errors);
+        if (actionParams['skipAnimation'] !== undefined && typeof actionParams['skipAnimation'] !== 'boolean') {
+            errors.push(`${at}.action.params.skipAnimation must be a boolean.`);
+        }
         if (type === 'playAction') {
-            const goto = (params as Record<string, unknown>)['goto'];
+            const goto = actionParams['goto'];
             if (goto !== undefined && (!Number.isInteger(goto) || (goto as number) < 0)) {
                 errors.push(`${at}.action.params.goto must be a zero-based non-negative integer.`);
+            }
+            if (actionParams['delta'] !== undefined && !Number.isInteger(actionParams['delta'])) {
+                errors.push(`${at}.action.params.delta must be an integer.`);
+            }
+        } else if (type === 'updateAction') {
+            if (!Object.prototype.hasOwnProperty.call(actionParams, 'data')) {
+                errors.push(`${at}.action.params.data is required; partial updates are allowed.`);
+            }
+        } else if (type === 'customAction') {
+            const id = actionParams['id'];
+            if (typeof id !== 'string') errors.push(`${at}.action.params.id must be a string.`);
+            const manifestRecord = typeof manifest === 'object' && manifest !== null
+                ? manifest as Record<string, unknown> : undefined;
+            const actions = manifestRecord?.['customActions'];
+            const actionDefinition = Array.isArray(actions)
+                ? actions.find((item: unknown) => typeof item === 'object' && item !== null &&
+                    (item as Record<string, unknown>)['id'] === id) as Record<string, unknown> | undefined
+                : undefined;
+            if (manifestRecord && typeof id === 'string' && !actionDefinition) {
+                errors.push(`${at}.action.params.id must name a custom action declared in the manifest.`);
+            }
+            if (!Object.prototype.hasOwnProperty.call(actionParams, 'payload') && actionDefinition?.['schema'] !== null) {
+                errors.push(`${at}.action.params.payload is required unless the action declares schema: null.`);
             }
         }
     });
 
     return errors;
+}
+
+function validateInputFields(
+    value: Record<string, unknown>,
+    allowed: readonly string[],
+    path: string,
+    errors: string[],
+): void {
+    for (const key of Object.keys(value)) {
+        if (!allowed.includes(key) && !key.startsWith('v_')) {
+            errors.push(`${path} contains unsupported field "${key}"; vendor fields must start with v_.`);
+        }
+    }
 }
 
 export function createRuntimeSchedule(

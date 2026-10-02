@@ -129,4 +129,46 @@ describe('schedule wire format', () => {
             expect.stringContaining('requires "type"'),
         ]));
     });
+
+    it('validates method input types without rejecting negative deltas or partial updates', () => {
+        expect(validateSchedule([
+            { timestamp: 0, action: { type: 'playAction', params: { delta: -1, skipAnimation: true } } },
+            { timestamp: 1, action: { type: 'updateAction', params: { data: {} } } },
+        ])).toEqual([]);
+        expect(validateSchedule([
+            { timestamp: 0, action: { type: 'playAction', params: { delta: '1', skipAnimation: 1 } } },
+            { timestamp: 1, action: { type: 'updateAction', params: {} } },
+        ])).toEqual(expect.arrayContaining([
+            expect.stringContaining('delta must be an integer'),
+            expect.stringContaining('skipAnimation must be a boolean'),
+            expect.stringContaining('data is required'),
+        ]));
+    });
+
+    it('requires declared custom IDs and allows omitted payload for explicit parameterless actions', () => {
+        const manifest = { customActions: [
+            { id: 'reset', schema: null },
+            { id: 'set', schema: { type: 'object', properties: {} } },
+        ] };
+        expect(validateSchedule([
+            { timestamp: 0, action: { type: 'customAction', params: { id: 'reset' } } },
+            { timestamp: 1, action: { type: 'customAction', params: { id: 'set', payload: {} } } },
+        ], manifest)).toEqual([]);
+        expect(validateSchedule([
+            { timestamp: 0, action: { type: 'customAction', params: { id: 'missing', payload: {} } } },
+            { timestamp: 1, action: { type: 'customAction', params: { id: 'set' } } },
+        ], manifest)).toEqual(expect.arrayContaining([
+            expect.stringContaining('id must name a custom action'),
+            expect.stringContaining('payload is required'),
+        ]));
+    });
+
+    it('preserves vendor fields and rejects extra unprefixed fields at each level', () => {
+        expect(validateSchedule([{ timestamp: 0, v_time: true, action: {
+            type: 'stopAction', v_action: true, params: { v_params: true },
+        } }])).toEqual([]);
+        expect(validateSchedule([{ timestamp: 0, extra: true, action: {
+            type: 'stopAction', extra: true, params: { extra: true },
+        } }])).toHaveLength(3);
+    });
 });

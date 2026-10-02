@@ -97,6 +97,43 @@ Validates a parsed manifest in memory and returns synchronously.
 Runs manifest validation and package-file checks. The optional filename is
 validated when supplied and preserves the existing API shape.
 
+### `validateGddValue(schema: unknown, value: unknown): GddValueValidationResult`
+
+Checks supplied data against the supported assertions of a GDD schema without
+applying defaults, coercing values, resolving references, or mutating either input.
+Use manifest validation first to validate the schema itself.
+
+```ts
+import { validateGddValue } from '@streamshapers/ograf-validator-core';
+
+const result = validateGddValue(manifest.schema, data);
+// { status: 'invalid', issues: [{ path: '$.name', message: '...' }] }
+```
+
+```ts
+interface GddValueValidationResult {
+    status: 'valid' | 'invalid' | 'unsupported';
+    issues: Array<{ path: string; message: string }>;
+}
+```
+
+The checker supports GDD basic types, enum, string length and patterns, numeric
+bounds and multiples, object properties and required fields, pattern/additional
+properties, and homogeneous arrays with length and uniqueness constraints.
+Paths start with `$`; ordinary keys use `$.name`, array indices use `$[0]`, and
+other keys use bracket quoting such as `$["name.first"]`.
+
+A definite failure of a supported assertion returns `invalid`. Otherwise, known
+unevaluated assertions (including references, combinators, conditionals, const,
+contains, tuple/unevaluated constraints, dependencies, and object property counts)
+return `unsupported`; they never silently produce a pass. Schema inspection is
+conservative and includes declared properties even when their data is absent.
+GDD presentation hints, `format` annotations, and custom annotation keys are
+ignored. This is a bounded GDD data checker, not a complete JSON Schema engine.
+
+Invalid or unsupported generated test data describes incomplete test coverage;
+it does not establish a runtime defect in the Graphic.
+
 ### `VirtualFS`
 
 ```ts
@@ -162,6 +199,14 @@ Normative additions include:
 A missing GDD is informational. The core deliberately does not emit a semver
 recommendation or a generic missing-`gddType` message.
 
+Unusual main filename extensions are compatibility warnings: the specification
+requires a JavaScript module, not a particular extension. Likewise, defaults that
+violate data constraints produce `GDD_DEFAULT_MISMATCH` warnings, following
+[JSON Schema's recommendation for default values](https://json-schema.org/draft/2020-12/json-schema-validation#name-default).
+The default-type restrictions explicitly imposed by the EBU GDD meta-schema
+remain errors. Passing manifest validation does not mean every default is usable
+as Graphic data; call `validateGddValue` before using generated data.
+
 ## Issue codes
 
 ### Errors
@@ -174,7 +219,6 @@ recommendation or a generic missing-`gddType` message.
 | `INVALID_ID` | `id` is empty or contains `/` |
 | `INVALID_NAME` | `name` is empty |
 | `INVALID_MAIN` | `main` is empty |
-| `UNUSUAL_MAIN_EXTENSION` | `main` is not a `.js` or `.mjs` module |
 | `INVALID_SCHEMA_REF` | `$schema` is not the exact official URL |
 | `UNKNOWN_FIELD` | A non-standard field lacks the `v_*` prefix |
 | `NO_RUNTIME_SUPPORT` | Both runtime support flags are false |
@@ -200,6 +244,8 @@ recommendation or a generic missing-`gddType` message.
 | Code | Meaning |
 | --- | --- |
 | `EMPTY_PACKAGE` | The directory contains no files except manifests |
+| `UNUSUAL_MAIN_EXTENSION` | `main` lacks a conventional `.js` or `.mjs` extension |
+| `GDD_DEFAULT_MISMATCH` | A default violates its associated data constraints |
 | `LARGE_FILE` | A package file exceeds 10 MB |
 | `MISSING_DEFAULT_ASSET` | A package-relative file-path GDD default does not exist |
 

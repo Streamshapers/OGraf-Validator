@@ -22,6 +22,7 @@ import {
     isRecord,
     validateRequiredFields,
     validateUnknownFields,
+    warn,
 } from './validation-utils.js';
 import type { JsonObject } from './validation-utils.js';
 
@@ -31,7 +32,7 @@ export function validateManifestFields(manifest: unknown): ValidationIssue[] {
     }
 
     const issues: ValidationIssue[] = [];
-    issues.push(...validateAgainstPinnedSchema(manifest));
+    const schemaIssues = validateAgainstPinnedSchema(manifest);
     issues.push(...validateRequiredFields(manifest, [
         '$schema',
         'id',
@@ -68,9 +69,9 @@ export function validateManifestFields(manifest: unknown): ValidationIssue[] {
     validateNonEmptyManifestString(manifest, 'main', 'INVALID_MAIN', issues);
     if (typeof manifest['main'] === 'string' && manifest['main'].trim() !== '') {
         if (!VALID_MAIN_EXTENSIONS.has(fileExtension(manifest['main']))) {
-            issues.push(err(
+            issues.push(warn(
                 'UNUSUAL_MAIN_EXTENSION',
-                'The OGraf main entry point must be a JavaScript module (.js or .mjs).',
+                'Use .js or .mjs for interoperability. OGraf requires a JavaScript module; its filename extension alone does not determine conformance.',
                 'main',
                 MANIFEST_SPEC_REF,
             ));
@@ -134,7 +135,7 @@ export function validateManifestFields(manifest: unknown): ValidationIssue[] {
     }
 
     issues.push(...validateUnknownFields(manifest, MANIFEST_FIELDS, '', MANIFEST_SPEC_REF));
-    return deduplicateIssues(issues);
+    return mergeSchemaIssues(issues, schemaIssues);
 }
 
 function validateNonEmptyManifestString(
@@ -220,7 +221,16 @@ function validateCustomActions(value: unknown): { issues: ValidationIssue[]; ids
             issues.push(err('INVALID_CUSTOM_ACTION', 'Custom action "description" must be a string.', `${path}.description`, CUSTOM_ACTION_SPEC_REF));
         }
         if (entry['schema'] !== undefined && entry['schema'] !== null) {
-            issues.push(...validateGddRoot(entry['schema'], `${path}.schema`));
+            if (!isRecord(entry['schema'])) {
+                issues.push(err(
+                    'INVALID_GDD',
+                    'Custom action GDD schema must be an object or null.',
+                    `${path}.schema`,
+                    CUSTOM_ACTION_SPEC_REF,
+                ));
+            } else {
+                issues.push(...validateGddRoot(entry['schema'], `${path}.schema`));
+            }
         }
     });
     return { issues, ids };
@@ -247,7 +257,9 @@ function validateActionDurations(value: unknown, customActionIds: ReadonlySet<st
             : type === 'customAction'
                 ? new Set(['type', 'duration', 'customActionId'])
                 : new Set(['type', 'duration']);
-        issues.push(...validateUnknownFields(entry, allowed, path, ACTION_DURATION_SPEC_REF));
+        if (typeof type === 'string' && ['playAction', 'updateAction', 'stopAction', 'customAction'].includes(type)) {
+            issues.push(...validateUnknownFields(entry, allowed, path, ACTION_DURATION_SPEC_REF));
+        }
 
         if (isMissing(entry, 'type')) {
             issues.push(err('MISSING_FIELD', 'Action duration "type" is required.', `${path}.type`, ACTION_DURATION_SPEC_REF));
@@ -313,7 +325,7 @@ function validateActionStepDurations(value: unknown, path: string): ValidationIs
         }
         issues.push(...validateUnknownFields(entry, new Set(['step', 'duration']), itemPath, ACTION_DURATION_SPEC_REF));
         validateDurationValue(entry, `${itemPath}.duration`, issues);
-        if (entry['step'] === undefined || entry['step'] === null) {
+        if (entry['step'] === undefined) {
             if (seenFallback) {
                 issues.push(err('DUPLICATE_ACTION_DURATION', 'Only one fallback step duration is allowed.', itemPath, ACTION_DURATION_SPEC_REF));
             }
@@ -418,10 +430,16 @@ function validateThumbnails(value: unknown): ValidationIssue[] {
     return issues;
 }
 
-function deduplicateIssues(issues: ValidationIssue[]): ValidationIssue[] {
+function mergeSchemaIssues(
+    contextual: ValidationIssue[],
+    schema: ValidationIssue[],
+): ValidationIssue[] {
+    const contextualKeys = new Set(contextual.map((entry) => `${entry.code}|${entry.path ?? ''}`));
+    const combined = [...contextual, ...schema.filter((entry) =>
+        !contextualKeys.has(`${entry.code}|${entry.path ?? ''}`))];
     const seen = new Set<string>();
-    return issues.filter((entry) => {
-        const key = `${entry.code}|${entry.path ?? ''}`;
+    return combined.filter((entry) => {
+        const key = `${entry.severity}|${entry.code}|${entry.path ?? ''}|${entry.message}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
