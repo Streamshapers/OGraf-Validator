@@ -294,12 +294,12 @@ import type {
 } from '@streamshapers/ograf-validator-core';
 ```
 
-## Offline specification maintenance
+## Specification maintenance
 
 The immutable source snapshot lives at
-`spec/ebu-ograf-v1-d42afced/`. It comes from EBU OGraf commit
-[`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b)
-from 7 August 2026. Ajv 8.20.0 in 2020-12 mode is a development dependency and
+`spec/ebu-ograf-v1-8a74757b/`. It comes from EBU OGraf commit
+[`8a74757b`](https://github.com/ebu/ograf/commit/8a74757bc4919fd898db1f562b14ad18fe22bc77)
+from 22 September 2026. Ajv 8.20.0 in 2020-12 mode is a development dependency and
 compiles the vendored schemas into
 `src/generated/ograf-manifest-validator.ts`; published runtime code does not
 import Ajv or load network resources.
@@ -309,11 +309,39 @@ From this package directory:
 ```bash
 npm run generate:validator
 npm run spec:check
+npm run spec:check:upstream
 ```
 
 `spec:check` verifies the snapshot metadata, current documentation,
 `SHA256SUMS`, and generated standalone code. It fails if any of them refers to
 a different EBU commit.
+This command is entirely offline; success means local consistency, not upstream
+freshness. The scripts are repository maintenance tools and are not a published
+CLI or part of the browser runtime.
+
+`spec:check:upstream` runs the local check before contacting the GitHub API. It
+resolves EBU `main` once and compares immutable Git trees for the pinned and
+resolved commits. The comparison covers `LICENSE`, the Graphics specification,
+the complete JSON-schema subtree, and the four vendored reference manifests.
+Website changes, the Server API, and additional unselected examples are ignored.
+
+| Result | Meaning | Exit code |
+| --- | --- | --- |
+| `current` | Identical content in the selected scope, even at a newer commit | 0 |
+| `changed` | Selected sources were added, modified, or removed; review required | 1 |
+| `unavailable` | Network, timeout, rate-limit, or invalid/incomplete API response | 2 |
+
+A local integrity failure exits 1 before any API requests. The output includes
+both commits, a comparison link, and sorted changes. A changed source does not
+automatically imply a new validation requirement. Neither command writes files.
+Each API request has a 15-second timeout; `GITHUB_TOKEN` is optional locally and
+is supplied by the weekly workflow. Credentials are sent only to `api.github.com`.
+
+The independent GitHub workflow runs every Monday at 07:23 UTC and supports
+manual dispatch against the default branch. PR and release gates continue using
+only the offline check. To update the snapshot, follow the explicit source
+replacement, checksum, code-generation, and regression-test procedure in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#specification-changes).
 
 ## Compatibility
 

@@ -1,9 +1,9 @@
 # Vendored EBU OGraf v1 specification snapshot
 
 - Upstream: https://github.com/ebu/ograf
-- Commit: `d42afcedf9348e05e35b2009b04fb9552785e35b`
-- Commit URL: https://github.com/ebu/ograf/tree/d42afcedf9348e05e35b2009b04fb9552785e35b
-- Source date: 2026-08-07
+- Commit: `8a74757bc4919fd898db1f562b14ad18fe22bc77`
+- Commit URL: https://github.com/ebu/ograf/tree/8a74757bc4919fd898db1f562b14ad18fe22bc77
+- Source date: 2026-09-22
 - Vendored paths: `v1/specification/docs/Specification.md`, `v1/specification/json-schemas/**`, and the four upstream `v1/examples/*.ograf.json` manifests
 - License: MIT; see `LICENSE`
 

@@ -58,6 +58,43 @@ Discuss specification updates before starting them. A spec update should be a
 separate pull request that records the upstream commit, updates source hashes,
 regenerates the standalone validator, and adds fixtures for changed behavior.
 
+Use `npm run spec:check` for offline integrity and `npm run spec:check:upstream`
+for a read-only comparison with EBU `main`. The latter first verifies local
+integrity, then compares the Graphics specification, all JSON-schema sources,
+license, and the four existing reference manifests. It resolves `main` once so
+all requests inspect the same commit. Website and Server API changes are outside
+this scope.
+
+The online result is `current` (exit 0), `changed` (exit 1; manual review needed),
+or `unavailable` (exit 2; the API could not be checked). Local integrity failures
+exit 1 without making network requests. `GITHUB_TOKEN` is optional for local
+calls. No command downloads replacement files or creates commits automatically.
+
+The **EBU specification freshness** workflow runs on the default branch every
+Monday at 07:23 UTC and supports manual dispatch. Source changes and unavailable
+checks fail this independent workflow; normal PR and release gates remain offline.
+
+For an approved update:
+
+1. Record the complete target commit and its UTC committer date. Review the
+   selected source diff; annotations and example corrections do not establish
+   new normative requirements.
+2. Replace the single `ebu-ograf-v1-<sha8>` directory with the target commit's
+   root `LICENSE`, `v1/specification/docs/Specification.md`, complete
+   `v1/specification/json-schemas` tree, and these exact manifests:
+   `l3rd-name/l3rd.ograf.json`, `minimal/minimal.ograf.json`,
+   `ograf-logo/logo.ograf.json`, and `renderer-test/manifest.ograf.json` under
+   `v1/examples`. Preserve UTF-8 content; apply only checkout LF normalization.
+3. Update `SNAPSHOT.json`, `SNAPSHOT.md`, and sorted `SHA256SUMS` entries for all
+   snapshot files except the checksum file itself. Update both READMEs and the
+   Unreleased core changelog; retain historical release entries.
+4. Run `npm run generate:validator --workspace=packages/validator-core`. Review
+   the generated diff and any effects on hand-written rules and types. Update
+   reference tests while retaining independent regressions for older defects.
+5. Run the checks below, the core-package smoke test, and an online check. A
+   still-newer EBU commit may require review but must not silently replace the
+   explicitly selected target.
+
 ## Checks
 
 Run the checks that cover your change. Before opening a pull request, run the
