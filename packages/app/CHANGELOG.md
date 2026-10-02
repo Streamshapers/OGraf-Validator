@@ -2,7 +2,7 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
-## Unreleased
+## 0.2.4 - 2026-10-03
 
 ### Fixed
 
@@ -10,6 +10,7 @@ All notable changes to the hosted OGraf Validator app are documented here.
 - Bound test-data generation, validate generated input before invoking Graphics, exercise parameterless custom actions, and mark incomplete checks as inconclusive.
 - Capture uncaught runtime errors through cleanup and check the expected first step when the manifest declares a known step count.
 - Validate manual schedule parameter shapes and declared custom-action IDs before dispatch.
+- Update indirect development dependencies `brace-expansion` and `fast-uri` to resolve the release audit findings.
 
 ### Added
 
