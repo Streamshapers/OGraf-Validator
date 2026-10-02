@@ -1,11 +1,13 @@
 /** Recursive validation of OGraf Graphics Data Definition schemas. */
 
 import type { GddFieldType, ValidationIssue } from './types.js';
+import { gddValueMatchesType, validateGddValue } from './gdd-value-validation.js';
 import {
     GDD_FIELD_TYPES,
     GDD_SCHEMA_URL,
     MAX_GDD_DEPTH,
     err,
+    warn,
     hasOwn,
     isFiniteNumber,
     isRecord,
@@ -45,7 +47,7 @@ function validateGddField(
     const issues: ValidationIssue[] = [];
     try {
         const type = field['type'];
-        if (!hasOwn(field, 'type') || type === undefined || type === null) {
+        if (!hasOwn(field, 'type') || type === undefined) {
             issues.push(err('MISSING_FIELD', 'GDD field requires "type".', `${path}.type`, GDD_SCHEMA_URL));
         } else if (typeof type !== 'string' || !GDD_FIELD_TYPES.has(type as GddFieldType)) {
             issues.push(err('INVALID_GDD', 'GDD field has an unsupported "type".', `${path}.type`, GDD_SCHEMA_URL));
@@ -93,13 +95,7 @@ function validateGddField(
         }
 
         if (typeof type === 'string' && GDD_FIELD_TYPES.has(type as GddFieldType) && hasOwn(field, 'default')) {
-            issues.push(...validateDefaultAgainstSchema(
-                field['default'],
-                field,
-                `${path}.default`,
-                new WeakSet<object>(),
-                0,
-            ));
+            issues.push(...validateGddDefault(field, `${path}.default`));
         }
 
         if (type === 'object') {
@@ -143,362 +139,20 @@ function validateGddField(
     return issues;
 }
 
-function defaultMatchesType(value: unknown, type: GddFieldType): boolean {
-    switch (type) {
-        case 'boolean': return typeof value === 'boolean';
-        case 'string': return typeof value === 'string';
-        case 'number': return isFiniteNumber(value);
-        case 'integer': return isFiniteNumber(value) && Number.isInteger(value);
-        case 'array': return Array.isArray(value);
-        case 'object': return isRecord(value);
+function validateGddDefault(field: JsonObject, path: string): ValidationIssue[] {
+    const value = field['default'];
+    const type = field['type'] as GddFieldType;
+    if (!gddValueMatchesType(value, type)) {
+        return [err('INVALID_GDD', `GDD default value does not match type "${type}".`, path, GDD_SCHEMA_URL)];
     }
-}
-
-function validateDefaultAgainstSchema(
-    value: unknown,
-    schema: JsonObject,
-    path: string,
-    recursionStack: WeakSet<object>,
-    depth: number,
-): ValidationIssue[] {
-    if (depth > MAX_GDD_DEPTH) {
-        return [err('INVALID_GDD', 'GDD default value exceeds the supported nesting depth.', path, GDD_SCHEMA_URL)];
-    }
-
-    const type = schema['type'];
-    if (typeof type !== 'string' || !GDD_FIELD_TYPES.has(type as GddFieldType)) return [];
-    if (!defaultMatchesType(value, type as GddFieldType)) {
-        return [err(
-            'INVALID_GDD',
-            `GDD default value does not match type "${type}".`,
-            path,
-            GDD_SCHEMA_URL,
-        )];
-    }
-
-    const issues: ValidationIssue[] = [];
-    const enumValues = schema['enum'];
-    if (
-        Array.isArray(enumValues)
-        && enumValues.length > 0
-        && !enumValues.some((candidate) => jsonValuesEqual(candidate, value))
-    ) {
-        issues.push(err(
-            'INVALID_GDD',
-            'GDD default value is not one of the declared enum values.',
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-
-    if (typeof value === 'string') {
-        issues.push(...validateDefaultString(value, schema, path));
-        return issues;
-    }
-    if (isFiniteNumber(value)) {
-        issues.push(...validateDefaultNumber(value, schema, path));
-        return issues;
-    }
-    if (typeof value !== 'object' || value === null) return issues;
-    if (recursionStack.has(value)) {
-        issues.push(err('INVALID_GDD', 'GDD default value contains a cyclic reference.', path, GDD_SCHEMA_URL));
-        return issues;
-    }
-
-    recursionStack.add(value);
-    try {
-        if (Array.isArray(value)) {
-            issues.push(...validateDefaultArray(value, schema, path, recursionStack, depth));
-        } else if (isRecord(value)) {
-            issues.push(...validateDefaultObject(value, schema, path, recursionStack, depth));
-        }
-    } finally {
-        recursionStack.delete(value);
-    }
-
-    return issues;
-}
-
-function validateDefaultString(value: string, schema: JsonObject, path: string): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const length = Array.from(value).length;
-    const minLength = schema['minLength'];
-    const maxLength = schema['maxLength'];
-    if (isNonNegativeInteger(minLength) && length < minLength) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default string must contain at least ${minLength} character(s).`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-    if (isNonNegativeInteger(maxLength) && length > maxLength) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default string must contain at most ${maxLength} character(s).`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-
-    const pattern = schema['pattern'];
-    if (typeof pattern === 'string') {
-        try {
-            if (!new RegExp(pattern, 'u').test(value)) {
-                issues.push(err(
-                    'INVALID_GDD',
-                    'GDD default string does not match the declared pattern.',
-                    path,
-                    GDD_SCHEMA_URL,
-                ));
-            }
-        } catch {
-            // The pinned JSON schema reports invalid regular expressions.
-        }
-    }
-
-    return issues;
-}
-
-function validateDefaultNumber(value: number, schema: JsonObject, path: string): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const minimum = schema['minimum'];
-    const maximum = schema['maximum'];
-    const exclusiveMinimum = schema['exclusiveMinimum'];
-    const exclusiveMaximum = schema['exclusiveMaximum'];
-    const multipleOf = schema['multipleOf'];
-
-    if (isFiniteNumber(minimum) && value < minimum) {
-        issues.push(err('INVALID_GDD', `GDD default number must be at least ${minimum}.`, path, GDD_SCHEMA_URL));
-    }
-    if (isFiniteNumber(maximum) && value > maximum) {
-        issues.push(err('INVALID_GDD', `GDD default number must be at most ${maximum}.`, path, GDD_SCHEMA_URL));
-    }
-    if (isFiniteNumber(exclusiveMinimum) && value <= exclusiveMinimum) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default number must be greater than ${exclusiveMinimum}.`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-    if (isFiniteNumber(exclusiveMaximum) && value >= exclusiveMaximum) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default number must be less than ${exclusiveMaximum}.`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-    if (isFiniteNumber(multipleOf) && multipleOf > 0 && !isNumberMultipleOf(value, multipleOf)) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default number must be a multiple of ${multipleOf}.`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-
-    return issues;
-}
-
-function validateDefaultObject(
-    value: JsonObject,
-    schema: JsonObject,
-    path: string,
-    recursionStack: WeakSet<object>,
-    depth: number,
-): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const properties = isRecord(schema['properties']) ? schema['properties'] : {};
-    const required = Array.isArray(schema['required'])
-        ? schema['required'].filter((entry): entry is string => typeof entry === 'string')
-        : [];
-
-    for (const property of required) {
-        if (!hasOwn(value, property)) {
-            issues.push(err(
-                'INVALID_GDD',
-                `GDD default object is missing required property "${property}".`,
-                appendDefaultPropertyPath(path, property),
-                GDD_SCHEMA_URL,
-            ));
-        }
-    }
-
-    const patternProperties = readPatternProperties(schema['patternProperties']);
-    for (const [property, propertyValue] of Object.entries(value)) {
-        const propertyPath = appendDefaultPropertyPath(path, property);
-        let matched = false;
-        if (hasOwn(properties, property)) {
-            matched = true;
-            const propertySchema = properties[property];
-            if (isRecord(propertySchema)) {
-                issues.push(...validateDefaultAgainstSchema(
-                    propertyValue,
-                    propertySchema,
-                    propertyPath,
-                    recursionStack,
-                    depth + 1,
-                ));
-            }
-        }
-
-        for (const patternProperty of patternProperties) {
-            if (!patternProperty.pattern.test(property)) continue;
-            matched = true;
-            issues.push(...validateDefaultAgainstSchema(
-                propertyValue,
-                patternProperty.schema,
-                propertyPath,
-                recursionStack,
-                depth + 1,
-            ));
-        }
-
-        if (matched) continue;
-        const additionalProperties = schema['additionalProperties'];
-        if (additionalProperties === false) {
-            issues.push(err(
-                'INVALID_GDD',
-                `GDD default object contains undeclared property "${property}".`,
-                propertyPath,
-                GDD_SCHEMA_URL,
-            ));
-        } else if (isRecord(additionalProperties)) {
-            issues.push(...validateDefaultAgainstSchema(
-                propertyValue,
-                additionalProperties,
-                propertyPath,
-                recursionStack,
-                depth + 1,
-            ));
-        }
-    }
-
-    return issues;
-}
-
-function validateDefaultArray(
-    value: unknown[],
-    schema: JsonObject,
-    path: string,
-    recursionStack: WeakSet<object>,
-    depth: number,
-): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const minItems = schema['minItems'];
-    const maxItems = schema['maxItems'];
-    if (isNonNegativeInteger(minItems) && value.length < minItems) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default array must contain at least ${minItems} item(s).`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-    if (isNonNegativeInteger(maxItems) && value.length > maxItems) {
-        issues.push(err(
-            'INVALID_GDD',
-            `GDD default array must contain at most ${maxItems} item(s).`,
-            path,
-            GDD_SCHEMA_URL,
-        ));
-    }
-
-    if (schema['uniqueItems'] === true) {
-        for (let index = 0; index < value.length; index += 1) {
-            const duplicate = value.slice(0, index).some((candidate) => jsonValuesEqual(candidate, value[index]));
-            if (duplicate) {
-                issues.push(err(
-                    'INVALID_GDD',
-                    'GDD default array items must be unique.',
-                    `${path}[${index}]`,
-                    GDD_SCHEMA_URL,
-                ));
-            }
-        }
-    }
-
-    const items = schema['items'];
-    if (isRecord(items)) {
-        value.forEach((item, index) => {
-            issues.push(...validateDefaultAgainstSchema(
-                item,
-                items,
-                `${path}[${index}]`,
-                recursionStack,
-                depth + 1,
-            ));
-        });
-    }
-
-    return issues;
-}
-
-interface PatternProperty {
-    pattern: RegExp;
-    schema: JsonObject;
-}
-
-function readPatternProperties(value: unknown): PatternProperty[] {
-    if (!isRecord(value)) return [];
-    const result: PatternProperty[] = [];
-    for (const [pattern, schema] of Object.entries(value)) {
-        if (!isRecord(schema)) continue;
-        try {
-            result.push({ pattern: new RegExp(pattern, 'u'), schema });
-        } catch {
-            // The pinned JSON schema reports invalid regular expressions.
-        }
-    }
-    return result;
-}
-
-function appendDefaultPropertyPath(path: string, property: string): string {
-    return `${path}.${property}`;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-    return isFiniteNumber(value) && Number.isInteger(value) && value >= 0;
-}
-
-function isNumberMultipleOf(value: number, divisor: number): boolean {
-    const quotient = value / divisor;
-    if (!Number.isFinite(quotient)) return false;
-    const nearestInteger = Math.round(quotient);
-    const tolerance = Number.EPSILON * Math.max(1, Math.abs(quotient)) * 8;
-    return Math.abs(quotient - nearestInteger) <= tolerance;
-}
-
-function jsonValuesEqual(left: unknown, right: unknown): boolean {
-    return jsonValuesEqualInternal(left, right, new WeakMap<object, WeakSet<object>>());
-}
-
-function jsonValuesEqualInternal(
-    left: unknown,
-    right: unknown,
-    seen: WeakMap<object, WeakSet<object>>,
-): boolean {
-    if (left === right) return true;
-    if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) return false;
-    if (Array.isArray(left) !== Array.isArray(right)) return false;
-
-    const seenRights = seen.get(left);
-    if (seenRights?.has(right)) return true;
-    if (seenRights) seenRights.add(right);
-    else seen.set(left, new WeakSet([right]));
-
-    if (Array.isArray(left) && Array.isArray(right)) {
-        return left.length === right.length
-            && left.every((entry, index) => jsonValuesEqualInternal(entry, right[index], seen));
-    }
-    if (!isRecord(left) || !isRecord(right)) return false;
-
-    const leftKeys = Object.keys(left);
-    const rightKeys = Object.keys(right);
-    return leftKeys.length === rightKeys.length
-        && leftKeys.every((key) => hasOwn(right, key) && jsonValuesEqualInternal(left[key], right[key], seen));
+    const result = validateGddValue(field, value);
+    if (result.status !== 'invalid') return [];
+    return result.issues.map((issue) => warn(
+        'GDD_DEFAULT_MISMATCH',
+        `GDD default: ${issue.message} Correct this default before using it as Graphic data.`,
+        `${path}${issue.path.slice(1)}`,
+        GDD_SCHEMA_URL,
+    ));
 }
 
 function hasDuplicateJsonValues(values: readonly unknown[]): boolean {

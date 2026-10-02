@@ -1,7 +1,7 @@
 {
   "name": "@streamshapers/ograf-validator-app",
-  "version": "0.2.3",
-  "description": "OGraf Validator – browser-based tool for validating, inspecting and safely previewing OGraf Graphics Packages",
+  "version": "0.2.4",
+  "description": "OGraf Validator \u2013 browser-based tool for validating, inspecting and safely previewing OGraf Graphics Packages",
   "private": true,
   "license": "MIT",
   "type": "module",

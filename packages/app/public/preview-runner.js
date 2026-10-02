@@ -2,8 +2,10 @@
 'use strict';
 
 (() => {
-    const PROTOCOL_VERSION = 4;
+    const PROTOCOL_VERSION = 5;
     const PREVIEW_PREFIX = '/__ograf_preview__/';
+    const errorDiagnostics = new WeakMap();
+    const teardownCancellations = new WeakSet();
     const METHODS = [
         'load', 'dispose', 'playAction', 'stopAction', 'updateAction',
         'customAction', 'goToTime', 'setActionsSchedule',
@@ -68,15 +70,26 @@
     }
 
     addEventListener('error', (event) => {
+        if (isExpectedResourceCancellation(event.error)) return;
         post({
             type: 'OGRAF_RUNNER_ERROR',
-            error: event.error instanceof Error ? serializeError(event.error) : String(event.message || 'Unknown runtime error'),
+            error: {
+                ...serializeError(event.error ?? event.message ?? 'Unknown runtime error'),
+                diagnostic: errorDiagnostics.get(event.error) ?? { code: 'UNCAUGHT_RUNTIME_ERROR', reason: 'uncaught-exception' },
+            },
         });
     });
     addEventListener('unhandledrejection', (event) => {
+        if (isExpectedResourceCancellation(event.reason)) {
+            event.preventDefault();
+            return;
+        }
         post({
             type: 'OGRAF_RUNNER_ERROR',
-            error: event.reason instanceof Error ? serializeError(event.reason) : String(event.reason),
+            error: {
+                ...serializeError(event.reason),
+                diagnostic: errorDiagnostics.get(event.reason) ?? { code: 'UNCAUGHT_RUNTIME_ERROR', reason: 'unhandled-rejection' },
+            },
         });
     });
     addEventListener('resize', updateScale);
@@ -195,10 +208,10 @@
         const module = await importModuleGraph(payload.moduleGraph);
         const GraphicClass = module.default;
         if (typeof GraphicClass !== 'function') {
-            throw new Error('Graphic module must have a default class export.');
+            throw diagnosticError('Graphic module must have a default class export.', { code: 'INVALID_DEFAULT_EXPORT' });
         }
         if (!(GraphicClass.prototype instanceof HTMLElement)) {
-            throw new Error('Graphic default export must extend HTMLElement.');
+            throw diagnosticError('Graphic default export must extend HTMLElement.', { code: 'DEFAULT_EXPORT_NOT_HTMLELEMENT' });
         }
 
         const tagName = `ograf-sandbox-${runnerId.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24)}`;
@@ -222,12 +235,17 @@
         if (!element) throw new Error('Runner has not been initialized.');
         const method = payload && payload.method;
         if (!METHODS.includes(method)) throw new Error(`Unsupported OGraf method "${String(method)}".`);
-        if (typeof element[method] !== 'function') throw new Error(`${method}() is not implemented.`);
+        if (typeof element[method] !== 'function') {
+            throw diagnosticError(`${method}() is not implemented.`, { code: 'MISSING_REQUIRED_METHODS', method });
+        }
 
         if (method === 'dispose') disposed = true;
         const started = performance.now();
         const returned = element[method](payload.params);
         const wasPromise = isPromiseLike(returned);
+        if (!wasPromise) {
+            throw diagnosticError(`${method}() must return a Promise.`, { code: 'METHOD_MUST_RETURN_PROMISE', method });
+        }
         const raw = await returned;
         const normalized = normalizePayload(method, raw);
 
@@ -249,7 +267,18 @@
         packageStyleObserver = null;
         if (element && !disposed && typeof element.dispose === 'function') {
             disposed = true;
-            try { await element.dispose({}); } catch (error) { originalConsole.warn('OGraf dispose during cleanup failed:', error); }
+            try {
+                await element.dispose({});
+            } catch (error) {
+                if (!isExpectedResourceCancellation(error)) {
+                    post({ type: 'OGRAF_RUNNER_ERROR', error: {
+                        ...serializeError(error),
+                        diagnostic: errorDiagnostics.get(error) ?? {
+                            code: 'RUNTIME_CHECK_FAILED', method: 'dispose', reason: 'cleanup-rejected',
+                        },
+                    } });
+                }
+            }
         }
         if (element) element.remove();
         element = null;
@@ -258,6 +287,8 @@
         rejectPendingFileRequests(error);
         rejectPendingResourceRequests(error);
         releaseModuleGraph();
+        // Flush queued rejection events before acknowledging destruction and closing the port.
+        await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     async function fetchPackageResource(input, init) {
@@ -676,7 +707,9 @@
                 if (!pending) return;
                 pendingFileRequests.delete(requestId);
                 pending.removeAbortListener?.();
-                reject(new Error(`Timed out while reading OGraf package resource "${url}".`));
+                reject(diagnosticError(`Timed out while reading OGraf package resource "${url}".`, {
+                    code: 'RUNTIME_TIMEOUT', reason: 'package-file-timeout',
+                }));
             }, 10_000);
             const removeAbortListener = signal
                 ? () => signal.removeEventListener('abort', onAbort)
@@ -696,7 +729,9 @@
                 const pending = pendingResourceRequests.get(requestId);
                 if (!pending) return;
                 pendingResourceRequests.delete(requestId);
-                reject(new Error(`Timed out while preparing OGraf ${resourceKind}.`));
+                reject(diagnosticError(`Timed out while preparing OGraf ${resourceKind}.`, {
+                    code: 'RUNTIME_TIMEOUT', reason: 'resource-preparation-timeout',
+                }));
             }, 10_000);
             pendingResourceRequests.set(requestId, { resolve, reject, timeout });
             post({
@@ -731,6 +766,13 @@
             if (typeof value.code === 'string') error.code = value.code;
             if (typeof value.resourceKind === 'string') error.resourceKind = value.resourceKind;
             if (typeof value.path === 'string') error.path = value.path;
+            if (value.diagnostic && ['PREVIEW_LIMITATION', 'RUNTIME_TIMEOUT', 'RUNTIME_ABORTED']
+                .includes(value.diagnostic.code)) {
+                errorDiagnostics.set(error, {
+                    code: value.diagnostic.code,
+                    ...(typeof value.diagnostic.reason === 'string' ? { reason: value.diagnostic.reason } : {}),
+                });
+            }
         }
         return error;
     }
@@ -738,15 +780,12 @@
     function createRunnerDestroyedError() {
         const error = new Error('Preview runner was destroyed.');
         error.code = 'OGRAF_RUNNER_DESTROYED';
+        teardownCancellations.add(error);
         return error;
     }
 
     function isExpectedResourceCancellation(error) {
-        return shuttingDown || (
-            error &&
-            typeof error === 'object' &&
-            error.code === 'OGRAF_RUNNER_DESTROYED'
-        );
+        return teardownCancellations.has(error);
     }
 
     function reportResourceError(error, target) {
@@ -886,10 +925,10 @@
                     const workerError = event.data?.__ografValidatorWorkerError;
                     if (!workerError || typeof workerError.message !== 'string') return;
                     event.stopImmediatePropagation();
-                    worker.dispatchEvent(new ErrorEvent('error', {
+                    dispatchWorkerError(worker, {
                         message: workerError.message,
                         error: new Error(workerError.message),
-                    }));
+                    });
                 }, true);
                 return worker;
             }
@@ -918,6 +957,7 @@
         let terminated = false;
         const queuedMessages = [];
         const eventHandlers = { message: null, messageerror: null, error: null };
+        const eventListeners = { message: null, messageerror: null, error: null };
 
         for (const type of Object.keys(eventHandlers)) {
             Object.defineProperty(proxy, `on${type}`, {
@@ -925,10 +965,13 @@
                 enumerable: true,
                 get: () => eventHandlers[type],
                 set: (handler) => {
-                    const previous = eventHandlers[type];
+                    const previous = eventListeners[type];
                     if (typeof previous === 'function') proxy.removeEventListener(type, previous);
                     eventHandlers[type] = typeof handler === 'function' ? handler : null;
-                    if (eventHandlers[type]) proxy.addEventListener(type, eventHandlers[type]);
+                    eventListeners[type] = eventHandlers[type] ? (event) => {
+                        if (eventHandlers[type].call(proxy, event) === false) event.preventDefault();
+                    } : null;
+                    if (eventListeners[type]) proxy.addEventListener(type, eventListeners[type]);
                 },
             });
         }
@@ -966,12 +1009,12 @@
                 } else if (message?.type === 'messageerror') {
                     proxy.dispatchEvent(new MessageEvent('messageerror', { data: message.data }));
                 } else if (message?.type === 'error') {
-                    proxy.dispatchEvent(new ErrorEvent('error', {
+                    dispatchWorkerError(proxy, {
                         message: message.message || `Dedicated Worker "${packagePath}" failed.`,
                         filename: message.filename || packagePath,
                         lineno: Number(message.lineno) || 0,
                         colno: Number(message.colno) || 0,
-                    }));
+                    });
                 }
             });
             port.start();
@@ -982,12 +1025,26 @@
         proxy.__ografFail = (error) => {
             if (terminated) return;
             const message = error instanceof Error ? error.message : String(error);
-            proxy.dispatchEvent(new ErrorEvent('error', {
+            dispatchWorkerError(proxy, {
                 message: `Dedicated Worker "${packagePath}" could not start: ${message}`,
                 filename: packagePath,
-            }));
+                error,
+            });
         };
         return proxy;
+    }
+
+    function dispatchWorkerError(proxy, details) {
+        if (isExpectedResourceCancellation(details.error)) return;
+        const event = new ErrorEvent('error', { ...details, cancelable: true });
+        if (!proxy.dispatchEvent(event)) return;
+        const error = details.error ?? new Error(details.message);
+        post({ type: 'OGRAF_RUNNER_ERROR', error: {
+            ...serializeError(error),
+            diagnostic: errorDiagnostics.get(error) ?? {
+                code: 'UNCAUGHT_RUNTIME_ERROR', reason: 'worker-error',
+            },
+        } });
     }
 
     function requestHostedWorker(workerId, workerType, source, workerName) {
@@ -998,7 +1055,9 @@
                 const pending = pendingWorkerRequests.get(requestId);
                 if (!pending) return;
                 pendingWorkerRequests.delete(requestId);
-                reject(new Error(`Timed out while starting Dedicated Worker "${workerId}".`));
+                reject(diagnosticError(`Timed out while starting Dedicated Worker "${workerId}".`, {
+                    code: 'RUNTIME_TIMEOUT', reason: 'hosted-worker-timeout',
+                }));
             }, 10_000);
             pendingWorkerRequests.set(requestId, { resolve, reject, timeout });
             post({
@@ -1040,13 +1099,10 @@ const reportWorkerError = (error) => self.postMessage({ __ografValidatorWorkerEr
     message: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
 } });
-self.addEventListener('error', (event) => {
-    event.preventDefault();
-    reportWorkerError(event.error || event.message || 'Unknown Dedicated Worker error.');
-});
 self.addEventListener('unhandledrejection', (event) => {
-    event.preventDefault();
-    reportWorkerError(event.reason);
+    queueMicrotask(() => {
+        if (!event.defaultPrevented) reportWorkerError(event.reason);
+    });
 });
 const queuedMessages = [];
 let initialized = false;
@@ -1104,7 +1160,7 @@ self.addEventListener('message', captureMessage, true);
     }
 
     function inconclusiveError(message) {
-        const error = new Error(`OGRAF_PREVIEW_INCONCLUSIVE: ${message}`);
+        const error = diagnosticError(message, { code: 'PREVIEW_LIMITATION' });
         error.name = 'OgrafPreviewInconclusiveError';
         return error;
     }
@@ -1129,74 +1185,140 @@ self.addEventListener('message', captureMessage, true);
         pendingPackageResourceBlobUrls.clear();
         for (const url of resourceGraphBlobUrls) NativeURL.revokeObjectURL(url);
         resourceGraphBlobUrls.clear();
-        rejectPendingResourceRequests(new Error('Preview resource graph was released.'));
+        rejectPendingResourceRequests(createRunnerDestroyedError());
         for (const pending of pendingWorkerRequests.values()) {
             clearTimeout(pending.timeout);
-            pending.reject(new Error('Preview Worker host was released.'));
+            pending.reject(createRunnerDestroyedError());
         }
         pendingWorkerRequests.clear();
     }
 
-    function normalizePayload(method, value) {
+    function isSuccessfulStatus(statusCode) {
+        return Number.isInteger(statusCode) && statusCode >= 200 && statusCode < 300;
+    }
+
+
+    function normalizePayload(
+        method,
+        value,
+    ) {
         if (value === undefined) {
             if (method === 'playAction') {
-                return invalidPayload(value, 'playAction must resolve to a ReturnPayload containing currentStep.');
+                return invalidPayload(value, 'playAction must resolve to a ReturnPayload containing currentStep.', {
+                    code: 'INVALID_CURRENT_STEP', reason: 'missing-payload', method,
+                    field: 'currentStep',
+                });
             }
-            return validPayload(value, 200);
+            return {
+                valid: true,
+                successful: true,
+                statusCode: 200,
+                hasCurrentStep: false,
+                raw: safeClone(value),
+            };
         }
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            return invalidPayload(value, 'Return payload must be an object or undefined.');
+
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            return invalidPayload(value, `${method === 'setActionsSchedule' ? 'EmptyPayload' : 'ReturnPayload'} must be an object or undefined.`, {
+                code: method === 'setActionsSchedule' ? 'INVALID_EMPTY_PAYLOAD' : 'INVALID_RETURN_PAYLOAD',
+                reason: 'invalid-type', method,
+            });
         }
+
+        const payload = value;
         if (method === 'setActionsSchedule') {
-            const invalidKey = Object.keys(value).find((key) => !key.startsWith('v_'));
-            return invalidKey
-                ? invalidPayload(value, `EmptyPayload contains non-vendor field "${invalidKey}".`)
-                : validPayload(value, 200);
+            const invalidKey = Object.keys(payload).find((key) => !key.startsWith('v_'));
+            if (invalidKey) {
+                return invalidPayload(value, `EmptyPayload contains non-vendor field "${invalidKey}".`, {
+                    code: 'INVALID_EMPTY_PAYLOAD', reason: 'non-vendor-field', method, field: invalidKey,
+                });
+            }
+            return {
+                valid: true,
+                successful: true,
+                statusCode: 200,
+                hasCurrentStep: false,
+                raw: safeClone(value),
+            };
         }
+
         const allowedFields = new Set([
-            'statusCode', 'statusMessage', 'result',
+            'statusCode',
+            'statusMessage',
+            'result',
             ...(method === 'playAction' ? ['currentStep'] : []),
         ]);
-        const invalidField = Object.keys(value).find((key) => !allowedFields.has(key) && !key.startsWith('v_'));
-        if (invalidField) return invalidPayload(value, `ReturnPayload contains non-vendor field "${invalidField}".`);
-        if (!Object.prototype.hasOwnProperty.call(value, 'statusCode')) {
-            return invalidPayload(value, 'ReturnPayload.statusCode is required.');
+        const invalidField = Object.keys(payload).find((key) => !allowedFields.has(key) && !key.startsWith('v_'));
+        if (invalidField) {
+            return invalidPayload(value, `ReturnPayload contains non-vendor field "${invalidField}".`, {
+                code: 'INVALID_RETURN_PAYLOAD', reason: 'non-vendor-field', method, field: invalidField,
+            });
         }
-        if (!Number.isInteger(value.statusCode) || value.statusCode < 100 || value.statusCode > 599) {
-            return invalidPayload(value, 'ReturnPayload.statusCode must be an integer between 100 and 599.');
+
+        const rawStatus = payload['statusCode'];
+        if (!Object.prototype.hasOwnProperty.call(payload, 'statusCode')) {
+            return invalidPayload(value, 'ReturnPayload.statusCode is required.', {
+                code: 'INVALID_STATUS_CODE', reason: 'missing-field', method, field: 'statusCode',
+            });
         }
-        if (value.statusMessage !== undefined && typeof value.statusMessage !== 'string') {
-            return invalidPayload(value, 'ReturnPayload.statusMessage must be a string when present.');
+        const statusCode = rawStatus;
+        if (!Number.isInteger(statusCode) || (statusCode) < 100 || (statusCode) > 599) {
+            return invalidPayload(value, 'ReturnPayload.statusCode must be an integer between 100 and 599.', {
+                code: 'INVALID_STATUS_CODE', reason: 'invalid-value', method, field: 'statusCode',
+            });
+        }
+        if (payload['statusMessage'] !== undefined && typeof payload['statusMessage'] !== 'string') {
+            return invalidPayload(value, 'ReturnPayload.statusMessage must be a string when present.', {
+                code: 'INVALID_STATUS_MESSAGE', reason: 'invalid-type', method, field: 'statusMessage',
+            });
         }
 
         let hasCurrentStep = false;
         let currentStep;
-        if (method === 'playAction') {
-            hasCurrentStep = Object.prototype.hasOwnProperty.call(value, 'currentStep');
-            if (!hasCurrentStep) return invalidPayload(value, 'playAction ReturnPayload must contain currentStep.');
-            if (value.currentStep === undefined) currentStep = null;
-            else if (Number.isInteger(value.currentStep) && value.currentStep >= 0) currentStep = value.currentStep;
-            else return invalidPayload(value, 'playAction.currentStep must be a zero-based integer or undefined.');
+        if (method === 'playAction' && Object.prototype.hasOwnProperty.call(payload, 'currentStep')) {
+            hasCurrentStep = true;
+            const rawStep = payload['currentStep'];
+            if (rawStep === undefined) {
+                currentStep = null;
+            } else if (Number.isInteger(rawStep) && (rawStep) >= 0) {
+                currentStep = rawStep;
+            } else {
+                return invalidPayload(value, 'playAction.currentStep must be a zero-based non-negative integer or undefined.', {
+                    code: 'INVALID_CURRENT_STEP', reason: 'invalid-value', method, field: 'currentStep',
+                });
+            }
+        }
+        if (method === 'playAction' && !hasCurrentStep) {
+            return invalidPayload(value, 'playAction ReturnPayload must contain the currentStep field.', {
+                code: 'INVALID_CURRENT_STEP', reason: 'missing-field', method, field: 'currentStep',
+            });
         }
 
         return {
             valid: true,
-            successful: value.statusCode >= 200 && value.statusCode < 300,
-            statusCode: value.statusCode,
-            ...(typeof value.statusMessage === 'string' ? { statusMessage: value.statusMessage } : {}),
-            ...(Object.prototype.hasOwnProperty.call(value, 'result') ? { result: safeClone(value.result) } : {}),
+            successful: isSuccessfulStatus(statusCode),
+            statusCode: statusCode,
+            ...(typeof payload['statusMessage'] === 'string'
+                ? { statusMessage: payload['statusMessage'] }
+                : {}),
+            ...(Object.prototype.hasOwnProperty.call(payload, 'result')
+                ? { result: safeClone(payload['result']) }
+                : {}),
             hasCurrentStep,
             ...(hasCurrentStep ? { currentStep } : {}),
             raw: safeClone(value),
         };
     }
 
-    function validPayload(raw, statusCode) {
-        return { valid: true, successful: true, statusCode, hasCurrentStep: false, raw: safeClone(raw) };
-    }
-
-    function invalidPayload(raw, error) {
-        return { valid: false, successful: false, statusCode: 500, hasCurrentStep: false, error, raw: safeClone(raw) };
+    function invalidPayload(raw, error, diagnostic) {
+        return {
+            valid: false,
+            successful: false,
+            hasCurrentStep: false,
+            error,
+            diagnostic,
+            raw: safeClone(raw),
+        };
     }
 
     function updateScale() {
@@ -1347,8 +1469,17 @@ self.addEventListener('message', captureMessage, true);
         return specifier.startsWith('.') || specifier.startsWith('/') || /^[A-Za-z][A-Za-z\d+.-]*:/.test(specifier);
     }
 
+    function diagnosticError(message, diagnostic) {
+        const error = new Error(message);
+        errorDiagnostics.set(error, diagnostic);
+        return error;
+    }
+
     function serializeError(error) {
-        if (error instanceof Error) return { name: error.name, message: error.message, stack: error.stack };
+        if (error instanceof Error) {
+            const diagnostic = errorDiagnostics.get(error);
+            return { name: error.name, message: error.message, stack: error.stack, ...(diagnostic ? { diagnostic } : {}) };
+        }
         if (error instanceof Event) {
             const target = error.target;
             const resource = target && typeof target === 'object'

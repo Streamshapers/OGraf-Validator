@@ -142,11 +142,13 @@ async function writeConsumerSmokeFiles(consumerDirectory) {
 
     await writeFile(resolve(consumerDirectory, 'esm-smoke.mjs'), `
 import assert from 'node:assert/strict';
-import { validateManifest, validatePackage } from '@streamshapers/ograf-validator-core';
+import { validateGddValue, validateManifest, validatePackage } from '@streamshapers/ograf-validator-core';
 
 assert.equal(typeof validateManifest, 'function');
 assert.equal(typeof validatePackage, 'function');
 assert.equal(validateManifest(null).valid, false);
+assert.equal(validateGddValue({ type: 'string' }, 'example').status, 'valid');
+assert.equal(validateGddValue({ type: 'string' }, 123).status, 'invalid');
 
 const manifest = ${manifestSource};
 const fs = {
@@ -166,11 +168,14 @@ const core = require('@streamshapers/ograf-validator-core');
 assert.equal(typeof core.validateManifest, 'function');
 assert.equal(typeof core.validatePackage, 'function');
 assert.equal(core.validateManifest(null).valid, false);
+assert.equal(core.validateGddValue({ type: 'number' }, 123).status, 'valid');
+assert.equal(core.validateGddValue({ type: 'number', const: 123 }, 123).status, 'unsupported');
 `, 'utf8');
 
     await writeFile(resolve(consumerDirectory, 'type-smoke.ts'), `
-import { validateManifest, validatePackage } from '@streamshapers/ograf-validator-core';
+import { validateGddValue, validateManifest, validatePackage } from '@streamshapers/ograf-validator-core';
 import type {
+    GddValueValidationResult,
     OgrafActionDuration,
     OgrafEngineRequirement,
     OgrafManifest,
@@ -187,12 +192,14 @@ const fs: VirtualFS = {
     async listFiles(): Promise<string[]> { return ['graphic.mjs']; },
 };
 const result: ValidationResult = validateManifest(manifest);
+const dataResult: GddValueValidationResult = validateGddValue({ type: 'string' }, 'example');
 const code: ValidationIssueCode = 'INVALID_MANIFEST';
 const duration: OgrafActionDuration = { type: 'playAction', duration: 0 };
 const engine: OgrafEngineRequirement = { type: 'CEF', version: { min: '139' } };
 const thumbnail: OgrafThumbnail = { file: 'thumbnail.png' };
 
 void result;
+void dataResult;
 void code;
 void duration;
 void engine;

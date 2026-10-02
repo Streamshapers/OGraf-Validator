@@ -3,6 +3,7 @@ import {
     buildPreviewResourceUrl,
     parsePreviewResourceUrl,
 } from './preview-resources.js';
+import { PreviewDiagnosticError } from './preview-errors.js';
 
 const MAX_MODULE_COUNT = 512;
 const MAX_GRAPH_BYTES = 32 * 1024 * 1024;
@@ -95,7 +96,9 @@ export async function buildPreviewModuleGraph(
     while (queue.length > 0) {
         if (signal?.aborted) throw new DOMException('Preview module graph was aborted.', 'AbortError');
         if (modules.length >= MAX_MODULE_COUNT) {
-            throw new Error(`Preview module graph exceeds ${MAX_MODULE_COUNT} modules.`);
+            throw new PreviewDiagnosticError(`Preview module graph exceeds ${MAX_MODULE_COUNT} modules.`, {
+                code: 'PREVIEW_LIMITATION', reason: 'module-count-limit',
+            });
         }
 
         const url = queue.shift();
@@ -104,7 +107,9 @@ export async function buildPreviewModuleGraph(
         const buffer = await readFile(parsed.path);
         graphBytes += buffer.byteLength;
         if (graphBytes > MAX_GRAPH_BYTES) {
-            throw new Error(`Preview module graph exceeds ${MAX_GRAPH_BYTES} bytes.`);
+            throw new PreviewDiagnosticError(`Preview module graph exceeds ${MAX_GRAPH_BYTES} bytes.`, {
+                code: 'PREVIEW_LIMITATION', reason: 'module-byte-limit',
+            });
         }
 
         const mimeType = previewMimeTypeForPath(parsed.path);
@@ -138,8 +143,9 @@ export async function buildPreviewModuleGraph(
             }
             if (rewritten.requiresPackageModuleListing && !packageModulesListed) {
                 if (!listFiles) {
-                    throw new Error(
+                    throw new PreviewDiagnosticError(
                         'A package file listing is required to resolve a non-literal dynamic import.',
+                        { code: 'PREVIEW_LIMITATION', reason: 'package-listing-unavailable' },
                     );
                 }
                 packageModulesListed = true;

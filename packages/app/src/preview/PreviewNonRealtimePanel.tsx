@@ -39,7 +39,7 @@ export default function PreviewNonRealtimePanel({ disabled, manifest, onGoToTime
     return (
         <div className="space-y-4">
             <GoToTimeRow disabled={disabled} maxMs={maxMs} onMaxChange={handleMaxChange} onInvoke={onGoToTime} />
-            <ScheduleEditor disabled={disabled} onInvoke={onSetSchedule} />
+            <ScheduleEditor disabled={disabled} manifest={manifest} onInvoke={onSetSchedule} />
         </div>
     );
 }
@@ -125,9 +125,11 @@ function GoToTimeRow({
 
 function ScheduleEditor({
     disabled,
+    manifest,
     onInvoke,
 }: {
     disabled: boolean;
+    manifest: unknown;
     onInvoke: (schedule: ScheduleEntry[]) => void;
 }) {
     const [text, setText] = useState(DEFAULT_SCHEDULE_JSON);
@@ -141,7 +143,7 @@ function ScheduleEditor({
 
                 return;
             }
-            const shapeErrors = validateSchedule(parsed);
+            const shapeErrors = validateSchedule(parsed, manifest);
             if (shapeErrors.length > 0) {
                 setError(shapeErrors.join(' '));
                 return;
@@ -166,6 +168,7 @@ function ScheduleEditor({
                 </button>
             </div>
             <textarea
+                aria-label="Actions schedule JSON"
                 rows={5}
                 spellCheck={false}
                 value={text}

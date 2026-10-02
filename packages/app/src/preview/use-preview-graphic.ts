@@ -357,7 +357,7 @@ export function usePreviewGraphic({
     }, [invoke]);
 
     const callSetSchedule = useCallback(async (schedule: ScheduleEntry[]): Promise<void> => {
-        const errors = validateSchedule(schedule);
+        const errors = validateSchedule(schedule, manifest);
         if (errors.length > 0) {
             const message = errors.join(' ');
             appendLog(logEntry('setActionsSchedule', { schedule }, performance.now(), undefined, message));
@@ -365,7 +365,7 @@ export function usePreviewGraphic({
             return;
         }
         await invoke('setActionsSchedule', { schedule });
-    }, [appendLog, invoke]);
+    }, [appendLog, invoke, manifest]);
 
     const setCurrentData = useCallback((currentData: Record<string, unknown>) => {
         setState((previous) => ({ ...previous, currentData }));

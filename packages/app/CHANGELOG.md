@@ -2,6 +2,21 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## 0.2.4 - 2026-10-03
+
+### Fixed
+
+- Diagnose runtime failures from structured check metadata instead of matching words in Graphic errors; distinguish EmptyPayload, status fields, steps, exports, and Promise contracts.
+- Bound test-data generation, validate generated input before invoking Graphics, exercise parameterless custom actions, and mark incomplete checks as inconclusive.
+- Capture uncaught runtime errors through cleanup and check the expected first step when the manifest declares a known step count.
+- Validate manual schedule parameter shapes and declared custom-action IDs before dispatch.
+- Update indirect development dependencies `brace-expansion` and `fast-uri` to resolve the release audit findings.
+
+### Added
+
+- Consistent diagnostic guidance and official specification references in the UI, clipboard output, and JSON/HTML reports.
+- Browser regressions for runtime diagnostics, input gaps, cleanup failures, exports, and the versioned sandbox handshake.
+
 ## 0.2.3 - 2026-09-16
 
 ### Fixed

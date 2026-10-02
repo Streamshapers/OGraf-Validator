@@ -2,6 +2,18 @@
 
 All notable changes to `@streamshapers/ograf-validator-core` are documented here.
 
+## 0.3.0 - 2026-10-03
+
+### Added
+
+- `validateGddValue()` checks supplied data with exact paths and explicitly reports unsupported assertions without adding runtime dependencies.
+
+### Fixed
+
+- Schema diagnostics select the applicable action-duration branch, omit redundant conditional summaries, and preserve contextual corrections.
+- Present `null` fields are diagnosed by type instead of being reported as missing.
+- Unusual module extensions and defaults that violate data constraints are warnings, while explicit EBU default-type restrictions remain errors.
+
 ## 0.2.1 - 2026-08-12
 
 ### Added
