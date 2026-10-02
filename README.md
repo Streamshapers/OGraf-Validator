@@ -150,13 +150,27 @@ provide a CLI or `bin` command.
 
 Validation uses a local snapshot of the stable OGraf Graphics v1 specification:
 
-- EBU commit [`d42afced`](https://github.com/ebu/ograf/commit/d42afcedf9348e05e35b2009b04fb9552785e35b)
-- Snapshot date: 7 August 2026
-- Local files: [`packages/validator-core/spec/ebu-ograf-v1-d42afced`](packages/validator-core/spec/ebu-ograf-v1-d42afced)
+- EBU commit [`8a74757b`](https://github.com/ebu/ograf/commit/8a74757bc4919fd898db1f562b14ad18fe22bc77)
+- Snapshot date: 22 September 2026
+- Local files: [`packages/validator-core/spec/ebu-ograf-v1-8a74757b`](packages/validator-core/spec/ebu-ograf-v1-8a74757b)
 
 The app never downloads schemas at runtime. Spec updates are reviewed and added
 manually. `npm run spec:check` verifies that the documented EBU commit,
 snapshot metadata, stored hashes, and generated standalone validator agree.
+It works offline and does not check whether EBU has published newer sources.
+
+`npm run spec:check:upstream` runs the local check first, then compares the pinned
+sources with a fixed resolution of EBU `main`. It reports `current` (exit 0),
+`changed` (exit 1), or `unavailable` (exit 2). A local integrity failure exits 1
+before any network request. New commits affecting only the website or Server API
+do not require a Graphics snapshot update. Changed sources require review; the
+command never replaces files or infers new normative requirements.
+
+The independent **EBU specification freshness** GitHub workflow runs on the
+default branch every Monday at 07:23 UTC and can also be started manually.
+Changes and unavailable checks fail that workflow without blocking normal PR
+or release checks. See [CONTRIBUTING.md](CONTRIBUTING.md#specification-changes)
+for the reviewed update process.
 
 ## Local development
 
@@ -178,6 +192,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm run spec:check
+npm run spec:check:upstream # optional online freshness check
 npm run smoke:toolchain # verify the TypeScript 7 compiler and TypeScript 6 API
 npm run smoke:core   # pack and install the real npm tarball
 npm run test:e2e     # build dist and test it in Chrome

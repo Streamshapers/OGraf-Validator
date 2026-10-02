@@ -19,6 +19,7 @@
     "smoke:core": "npm run build:core && node scripts/core-package-smoke.mjs",
     "smoke:toolchain": "node scripts/toolchain-smoke.mjs",
     "spec:check": "npm run spec:check --workspace=packages/validator-core",
+    "spec:check:upstream": "npm run spec:check:upstream --workspace=packages/validator-core",
     "audit": "npm audit --audit-level=low",
     "audit:prod": "npm audit --omit=dev --audit-level=low",
     "release:check": "npm run smoke:toolchain && npm run test:release-tags && npm run lint && npm run build:core && npm run typecheck:workspaces && npm run test:workspaces && npm run spec:check && npm run build:app && npm run smoke:core && npm run test:e2e && npm run audit:prod && npm run audit",

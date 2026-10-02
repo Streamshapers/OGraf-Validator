@@ -25,7 +25,10 @@
                 {
                     "type": "null"
                 }
-            ]
+            ],
+            "example": {
+                "actionParameter": "example-string"
+            }
         }
     },
     "required": [

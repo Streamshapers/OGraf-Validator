@@ -41,6 +41,7 @@
     "test:watch": "vitest",
     "generate:validator": "node scripts/generate-standalone-validator.mjs",
     "spec:check": "node scripts/check-spec.mjs",
+    "spec:check:upstream": "node scripts/check-spec-upstream.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts"
   },

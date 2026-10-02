@@ -2,34 +2,33 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateValidatorSource, generatedValidatorPath } from './generate-standalone-validator.mjs';
+import {
+    generateValidatorSource,
+    generatedValidatorPath as defaultGeneratedValidatorPath,
+} from './generate-standalone-validator.mjs';
 import {
     assertCurrentSnapshotReferences,
     assertSnapshotReferences,
+    loadSnapshotMetadata,
     packageRoot,
-    snapshotMetadata,
-    snapshotRoot,
     validateSnapshotMarkdown,
 } from './spec-snapshot.mjs';
 
-const repositoryRoot = resolve(packageRoot, '../..');
-const checksumPath = resolve(snapshotRoot, 'SHA256SUMS');
-
-function normalizedRelativePath(path) {
+function normalizedRelativePath(path, snapshotRoot) {
     return relative(snapshotRoot, path).replaceAll('\\', '/');
 }
 
-function collectFiles(directory) {
+function collectFiles(directory, snapshotRoot) {
     return readdirSync(directory)
         .map((name) => resolve(directory, name))
         .flatMap((path) => {
             const details = lstatSync(path);
             if (details.isSymbolicLink()) {
-                throw new Error(`Snapshot must not contain symbolic links: ${normalizedRelativePath(path)}`);
+                throw new Error(`Snapshot must not contain symbolic links: ${normalizedRelativePath(path, snapshotRoot)}`);
             }
-            if (details.isDirectory()) return collectFiles(path);
+            if (details.isDirectory()) return collectFiles(path, snapshotRoot);
             if (!details.isFile()) {
-                throw new Error(`Snapshot contains a non-regular file: ${normalizedRelativePath(path)}`);
+                throw new Error(`Snapshot contains a non-regular file: ${normalizedRelativePath(path, snapshotRoot)}`);
             }
             return [path];
         });
@@ -69,7 +68,22 @@ function readUtf8(path) {
     return readFileSync(path, 'utf8');
 }
 
-export function runSpecCheck() {
+// Overrides allow fixture repositories to exercise the complete read-only check.
+// Production and online-check callers retain the no-argument entry point.
+export function runSpecCheck({
+    packageDirectory = packageRoot,
+    generateSource = generateValidatorSource,
+    log = console.log,
+} = {}) {
+    const repositoryRoot = resolve(packageDirectory, '../..');
+    const specRoot = resolve(packageDirectory, 'spec');
+    const snapshotMetadata = loadSnapshotMetadata(specRoot);
+    const snapshotRoot = resolve(specRoot, snapshotMetadata.directory);
+    const checksumPath = resolve(snapshotRoot, 'SHA256SUMS');
+    const generatedValidatorPath = resolve(
+        packageDirectory,
+        relative(packageRoot, defaultGeneratedValidatorPath),
+    );
     if (!existsSync(checksumPath)) {
         throw new Error(`Missing snapshot checksum file: ${checksumPath}`);
     }
@@ -90,7 +104,7 @@ export function runSpecCheck() {
         },
         {
             label: 'packages/validator-core/README.md',
-            content: readUtf8(resolve(packageRoot, 'README.md')),
+            content: readUtf8(resolve(packageDirectory, 'README.md')),
             tokens: [
                 snapshotMetadata.commit,
                 snapshotMetadata.shortCommit,
@@ -101,13 +115,13 @@ export function runSpecCheck() {
     ]);
     assertSnapshotReferences([{
         label: 'packages/validator-core/CHANGELOG.md',
-        content: readUtf8(resolve(packageRoot, 'CHANGELOG.md')),
+        content: readUtf8(resolve(packageDirectory, 'CHANGELOG.md')),
         tokens: [snapshotMetadata.shortCommit],
     }]);
 
     const expected = parseChecksumManifest(readUtf8(checksumPath));
-    const actualFiles = collectFiles(snapshotRoot)
-        .map(normalizedRelativePath)
+    const actualFiles = collectFiles(snapshotRoot, snapshotRoot)
+        .map((path) => normalizedRelativePath(path, snapshotRoot))
         .filter((path) => path !== 'SHA256SUMS')
         .sort();
 
@@ -127,13 +141,13 @@ export function runSpecCheck() {
     if (!existsSync(generatedValidatorPath)) {
         throw new Error(`Missing generated validator: ${generatedValidatorPath}`);
     }
-    if (readUtf8(generatedValidatorPath) !== generateValidatorSource()) {
+    if (readUtf8(generatedValidatorPath) !== generateSource()) {
         throw new Error('Generated validator drift detected. Run npm run generate:validator.');
     }
 
-    console.log(
+    log(
         `Pinned OGraf snapshot ${snapshotMetadata.shortCommit}, documentation, checksums, ` +
-        'and generated validator are up to date.',
+        'and generated validator are locally consistent; upstream freshness was not checked.',
     );
 }
 

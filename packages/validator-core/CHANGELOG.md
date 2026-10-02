@@ -7,6 +7,13 @@ All notable changes to `@streamshapers/ograf-validator-core` are documented here
 ### Added
 
 - `validateGddValue()` checks supplied data with exact paths and explicitly reports unsupported assertions without adding runtime dependencies.
+- A read-only `spec:check:upstream` command and independent weekly GitHub workflow compare the pinned specification sources with EBU main.
+
+### Changed
+
+- Update the pinned EBU snapshot to `8a74757b` (22 September 2026), including the action-schema example annotation and corrected reference manifests. Graphics requirements and validation rules are unchanged.
+- Restore the original UTF-8 author name in the logo reference manifest, correcting an encoding error in the previous local copy.
+- Clarify that `spec:check` verifies local consistency without checking upstream freshness.
 
 ### Fixed
 

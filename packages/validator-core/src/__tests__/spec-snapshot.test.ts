@@ -100,6 +100,7 @@ describe(`vendored EBU ${SNAPSHOT_METADATA.commit.slice(0, 8)} snapshot`, () => 
 
     it.each([
         'examples/l3rd-name/l3rd.ograf.json',
+        'examples/minimal/minimal.ograf.json',
         'examples/ograf-logo/logo.ograf.json',
         'examples/renderer-test/manifest.ograf.json',
     ])('accepts the upstream example manifest %s', (relativePath) => {
@@ -110,16 +111,36 @@ describe(`vendored EBU ${SNAPSHOT_METADATA.commit.slice(0, 8)} snapshot`, () => 
         expect(result.valid).toBe(true);
     });
 
-    it('reports the upstream minimal example default that contradicts its color pattern', () => {
+    it('accepts the corrected upstream minimal example without a default mismatch', () => {
         const upstreamManifest = JSON.parse(readFileSync(
             resolve(SNAPSHOT_ROOT, 'examples/minimal/minimal.ograf.json'),
             'utf8',
         )) as unknown;
         const result = validateManifest(upstreamManifest);
 
+        expect(result.warnings).not.toContainEqual(expect.objectContaining({ code: 'GDD_DEFAULT_MISMATCH' }));
+        expect(result.valid).toBe(true);
+    });
+
+    it('still warns when a synthetic default contradicts its declared color pattern', () => {
+        const result = validateManifest(manifest({ schema: {
+            type: 'object', properties: {
+                message: {
+                    type: 'string', default: 'Hello World!',
+                    gddType: 'color-rrggbb', pattern: '^#[0-9a-f]{6}$',
+                },
+            },
+        } }));
         expect(issueAt(result, 'GDD_DEFAULT_MISMATCH', 'schema.properties.message.default'))
             .toMatchObject({ severity: 'warning' });
         expect(result.valid).toBe(true);
+    });
+
+    it('preserves the upstream UTF-8 author name in the logo reference manifest', () => {
+        const upstreamManifest = JSON.parse(readFileSync(
+            resolve(SNAPSHOT_ROOT, 'examples/ograf-logo/logo.ograf.json'), 'utf8',
+        )) as { author: { name: string } };
+        expect(upstreamManifest.author.name).toBe('Markus Nygård, YLE');
     });
 });
 
