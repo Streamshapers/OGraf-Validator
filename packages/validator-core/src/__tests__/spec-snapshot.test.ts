@@ -117,8 +117,9 @@ describe(`vendored EBU ${SNAPSHOT_METADATA.commit.slice(0, 8)} snapshot`, () => 
         )) as unknown;
         const result = validateManifest(upstreamManifest);
 
-        expect(issueAt(result, 'INVALID_GDD', 'schema.properties.message.default')).toBeDefined();
-        expect(result.valid).toBe(false);
+        expect(issueAt(result, 'GDD_DEFAULT_MISMATCH', 'schema.properties.message.default'))
+            .toMatchObject({ severity: 'warning' });
+        expect(result.valid).toBe(true);
     });
 });
 
@@ -467,9 +468,10 @@ describe('recursive GDD validation', () => {
             },
         }));
 
-        expect(issueAt(result, 'INVALID_GDD', 'schema.properties.enumValue.default')).toBeDefined();
-        expect(issueAt(result, 'INVALID_GDD', 'schema.properties.tooShort.default')).toBeDefined();
-        expect(issueAt(result, 'INVALID_GDD', 'schema.properties.tooLong.default')).toBeDefined();
+        expect(issueAt(result, 'GDD_DEFAULT_MISMATCH', 'schema.properties.enumValue.default')).toBeDefined();
+        expect(issueAt(result, 'GDD_DEFAULT_MISMATCH', 'schema.properties.tooShort.default')).toBeDefined();
+        expect(issueAt(result, 'GDD_DEFAULT_MISMATCH', 'schema.properties.tooLong.default')).toBeDefined();
+        expect(result.valid).toBe(true);
     });
 
     it('validates numeric GDD defaults against integer, bounds, and multipleOf', () => {
@@ -495,7 +497,9 @@ describe('recursive GDD validation', () => {
             'exclusiveMaximum',
             'multipleOf',
         ]) {
-            expect(issueAt(result, 'INVALID_GDD', `schema.properties.${field}.default`)).toBeDefined();
+            const code = field === 'integer' ? 'INVALID_GDD' : 'GDD_DEFAULT_MISMATCH';
+            expect(issueAt(result, code, `schema.properties.${field}.default`))
+                .toMatchObject({ severity: field === 'integer' ? 'error' : 'warning' });
         }
     });
 
@@ -550,8 +554,9 @@ describe('recursive GDD validation', () => {
             'schema.properties.tooLong.default[2]',
             'schema.properties.wrongItems.default[0]',
         ]) {
-            expect(issueAt(result, 'INVALID_GDD', path)).toBeDefined();
+            expect(issueAt(result, 'GDD_DEFAULT_MISMATCH', path)).toMatchObject({ severity: 'warning' });
         }
+        expect(result.valid).toBe(true);
     });
 
     it('accepts select and select-multiple definitions', () => {
@@ -714,14 +719,14 @@ describe('robust unknown and VirtualFS handling', () => {
         expect(sizeFailure.issues.filter((entry) => entry.code === 'FILE_ACCESS_ERROR')).toHaveLength(2);
     });
 
-    it('rejects extensionless main files as normative JavaScript violations', async () => {
+    it('warns about extensionless main files without rejecting conformance', async () => {
         const result = await validatePackage(
             manifest({ main: 'graphic' }),
             memoryFs({ 'manifest.ograf.json': '{}', graphic: '' }),
         );
 
-        expect(issueAt(result, 'UNUSUAL_MAIN_EXTENSION', 'main')).toBeDefined();
-        expect(result.valid).toBe(false);
+        expect(issueAt(result, 'UNUSUAL_MAIN_EXTENSION', 'main')).toMatchObject({ severity: 'warning' });
+        expect(result.valid).toBe(true);
     });
 
     it('checks file-path defaults in nested custom action schemas', async () => {

@@ -9,6 +9,7 @@ import {
     OFFICIAL_SCHEMA_URL,
     RENDER_REQUIREMENT_SPEC_REF,
     err,
+    isRecord,
 } from './validation-utils.js';
 
 interface StandaloneSchemaError {
@@ -31,12 +32,69 @@ export function validateAgainstPinnedSchema(value: unknown): ValidationIssue[] {
 
     try {
         if (validator(value)) return [];
-        return (validator.errors ?? []).map(mapSchemaError);
+        return normalizeSchemaErrors(validator.errors ?? [], value).map(mapSchemaError);
     } catch {
         // Hand-written validation reports the context-specific issue. Skipping
         // Ajv here keeps arbitrary object graphs from escaping as exceptions.
         return [];
     }
+}
+
+// These branch indices follow the pinned, generated schema. Snapshot regression
+// tests cover every discriminant so schema upgrades cannot silently change them.
+const ACTION_DURATION_BRANCHES = ['playAction', 'updateAction', 'stopAction', 'customAction'];
+
+function normalizeSchemaErrors(
+    errors: StandaloneSchemaError[],
+    manifest: unknown,
+): StandaloneSchemaError[] {
+    const relevant: StandaloneSchemaError[] = [];
+    for (const error of errors) {
+        const actionIndex = /^\/actionDurations\/(\d+)(?:\/|$)/u.exec(error.instancePath)?.[1];
+        if (actionIndex !== undefined && isRecord(manifest) && Array.isArray(manifest['actionDurations'])) {
+            const action = manifest['actionDurations'][Number(actionIndex)] as unknown;
+            const branch = /^#\/properties\/actionDurations\/items\/oneOf\/(\d+)(?:\/|$)/u
+                .exec(error.schemaPath)?.[1];
+            const selected = isRecord(action) ? ACTION_DURATION_BRANCHES.indexOf(String(action['type'])) : 0;
+            if (branch !== undefined && Number(branch) !== selected) continue;
+            if (selected === -1 && error.keyword === 'oneOf') {
+                const missing = isRecord(action) && action['type'] === undefined;
+                relevant.push({
+                    ...error,
+                    instancePath: `/actionDurations/${actionIndex}${missing ? '' : '/type'}`,
+                    keyword: missing ? 'required' : 'enum',
+                    params: missing ? { missingProperty: 'type' } : { allowedValues: ACTION_DURATION_BRANCHES },
+                    message: missing ? 'must have required property \'type\'' : 'has an unsupported action type',
+                });
+                continue;
+            }
+        }
+
+        const customSchema = /^\/customActions\/(\d+)\/schema(?:\/|$)/u.exec(error.instancePath);
+        if (customSchema && isRecord(manifest) && Array.isArray(manifest['customActions'])) {
+            const action = manifest['customActions'][Number(customSchema[1])] as unknown;
+            if (isRecord(action)) {
+                const schema = action['schema'];
+                if (isRecord(schema) && /\/properties\/schema\/oneOf\/1(?:\/|$)/u.test(error.schemaPath)) {
+                    continue;
+                }
+            }
+        }
+        relevant.push(error);
+    }
+
+    // Ajv emits summary failures after leaf failures for conditional and union
+    // schemas. Keep a fallback summary only if it is the sole explanation.
+    const summaries = new Set(['if', 'oneOf', 'anyOf']);
+    return relevant.filter((error) => {
+        if ((error.keyword === 'const' || error.keyword === 'enum')
+            && relevant.some((candidate) => candidate.keyword === 'type'
+                && candidate.instancePath === error.instancePath)) return false;
+        return !summaries.has(error.keyword) || !relevant.some((candidate) =>
+            !summaries.has(candidate.keyword)
+            && (candidate.instancePath === error.instancePath
+                || candidate.instancePath.startsWith(`${error.instancePath}/`)));
+    });
 }
 
 function mapSchemaError(error: StandaloneSchemaError): ValidationIssue {
@@ -53,10 +111,18 @@ function mapSchemaError(error: StandaloneSchemaError): ValidationIssue {
     const location = path.length === 0 ? 'manifest' : path;
     return err(
         code,
-        `Pinned OGraf schema rejected ${location}: ${error.message ?? error.keyword}.`,
+        `Pinned OGraf schema rejected ${location}: ${schemaErrorDescription(error)}.`,
         path.length === 0 ? undefined : path,
         specReference(code),
     );
+}
+
+function schemaErrorDescription(error: StandaloneSchemaError): string {
+    if (error.keyword === 'const') return `must equal ${JSON.stringify(error.params['allowedValue'])}`;
+    if (error.keyword === 'enum' && Array.isArray(error.params['allowedValues'])) {
+        return `must be one of ${error.params['allowedValues'].map((value) => JSON.stringify(value)).join(', ')}`;
+    }
+    return error.message ?? error.keyword;
 }
 
 function issueCode(error: StandaloneSchemaError, path: string): ValidationIssueCode {

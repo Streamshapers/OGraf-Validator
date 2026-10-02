@@ -1,4 +1,5 @@
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
+import SpecReferenceLink from './SpecReferenceLink.js';
 
 interface Props {
     result: ValidationResult;
@@ -76,8 +77,8 @@ function IssueCard({ issue, severity }: CardProps) {
                     )}
                 </div>
                 <p className="text-[13px] sm:text-xs text-ss-on-surface-variant leading-relaxed [overflow-wrap:anywhere]">{issue.message}</p>
+                <SpecReferenceLink reference={issue.specRef} />
             </div>
         </article>
     );
 }
-

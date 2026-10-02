@@ -6,6 +6,7 @@ import {
     type PreviewWorkerBundle,
 } from './preview-module-graph.js';
 import { parsePreviewResourceUrl } from './preview-resources.js';
+import { PreviewDiagnosticError } from './preview-errors.js';
 
 const MAX_WORKER_FILES = 256;
 const MAX_WORKER_BYTES = 16 * 1024 * 1024;
@@ -48,10 +49,10 @@ async function buildModuleWorker(
             if (!isSessionUrl(id, sessionId)) return null;
             throwIfAborted(signal);
             const parsed = assertWorkerUrl(id, sessionId);
-            if (++files > MAX_WORKER_FILES) throw new Error(`Worker graph exceeds ${MAX_WORKER_FILES} files.`);
+            if (++files > MAX_WORKER_FILES) throw workerLimitError('files');
             const buffer = await readFile(parsed.path);
             bytes += buffer.byteLength;
-            if (bytes > MAX_WORKER_BYTES) throw new Error(`Worker graph exceeds ${MAX_WORKER_BYTES} bytes.`);
+            if (bytes > MAX_WORKER_BYTES) throw workerLimitError('bytes');
             const extension = extensionOf(parsed.path);
             if (extension === 'json') {
                 const json = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
@@ -100,7 +101,7 @@ async function buildClassicWorker(
     const visit = async (url: string): Promise<string> => {
         const existing = ids.get(url);
         if (existing) return existing;
-        if (ids.size >= MAX_WORKER_FILES) throw new Error(`Worker graph exceeds ${MAX_WORKER_FILES} files.`);
+        if (ids.size >= MAX_WORKER_FILES) throw workerLimitError('files');
         const parsed = assertWorkerUrl(url, sessionId);
         const id = `classic-${ids.size}`;
         ids.set(url, id);
@@ -108,7 +109,7 @@ async function buildClassicWorker(
         throwIfAborted(signal);
         const buffer = await readFile(parsed.path);
         bytes += buffer.byteLength;
-        if (bytes > MAX_WORKER_BYTES) throw new Error(`Worker graph exceeds ${MAX_WORKER_BYTES} bytes.`);
+        if (bytes > MAX_WORKER_BYTES) throw workerLimitError('bytes');
         let source = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
         const calls = findImportScriptsCalls(source);
         const replacements: Array<{ start: number; end: number; source: string }> = [];
@@ -150,6 +151,13 @@ async function buildClassicWorker(
         entryId,
         ...(unsupportedReason ? { unsupportedReason } : {}),
     };
+}
+
+function workerLimitError(kind: 'files' | 'bytes'): PreviewDiagnosticError {
+    return new PreviewDiagnosticError(
+        `Worker graph exceeds ${kind === 'files' ? MAX_WORKER_FILES : MAX_WORKER_BYTES} ${kind}.`,
+        { code: 'PREVIEW_LIMITATION', reason: `worker-${kind}-limit` },
+    );
 }
 
 function findImportScriptsCalls(source: string): Array<{

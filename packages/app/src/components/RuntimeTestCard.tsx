@@ -10,10 +10,13 @@ import {
 import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
 import type { RuntimeTestPhase } from '../readiness/package-readiness.js';
 import {
+    diagnoseRuntimeError,
     groupRuntimeFailures,
     type RuntimeFailureGroup,
     type RuntimeMode,
 } from '../preview/runtime-diagnostics.js';
+import { safeSpecReference } from '../readiness/spec-reference.js';
+import SpecReferenceLink from './SpecReferenceLink.js';
 
 interface Props {
     result?: RuntimeTestResult;
@@ -189,6 +192,7 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
         failure.error,
         modes.length > 0 ? `Affected modes: ${modes.join(', ')}` : undefined,
         failure.hint,
+        safeSpecReference(failure.specRef),
     ].filter(Boolean).join('\n');
 
     return (
@@ -234,6 +238,7 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                         {failure.hint}
                     </div>
                 )}
+                <SpecReferenceLink reference={failure.specRef} />
             </div>
         </article>
     );
@@ -300,6 +305,9 @@ function RerunButton({ onRerun }: { onRerun?: () => void }) {
 }
 
 function StepRow({ step }: { step: RuntimeTestStep }) {
+    const diagnostic = step.status === 'fail' || step.status === 'warning' || step.diagnostic
+        ? diagnoseRuntimeError(step.error, step.diagnostic)
+        : undefined;
     const icon = step.status === 'pass'
         ? <CheckCircle2 size={11} className="text-ss-success" />
         : step.status === 'fail'
@@ -336,6 +344,13 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
                     }`}>
                         {step.error}
                     </p>
+                )}
+                {diagnostic && (
+                    <div className="mt-2 text-[11px] leading-relaxed text-ss-on-surface-variant">
+                        <code className="font-mono [overflow-wrap:anywhere]">{diagnostic.code}</code>
+                        <p className="mt-1"><strong>Next step: </strong>{diagnostic.hint}</p>
+                        <SpecReferenceLink reference={diagnostic.specRef} />
+                    </div>
                 )}
             </div>
         </div>

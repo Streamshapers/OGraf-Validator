@@ -1,5 +1,7 @@
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
-import type { RuntimeTestResult } from '../preview/runtime-test-types.js';
+import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
+import { diagnoseRuntimeError } from '../preview/runtime-diagnostics.js';
+import { safeSpecReference } from './spec-reference.js';
 import {
     derivePackageReadiness,
     type PackageReadiness,
@@ -36,7 +38,17 @@ export function createValidationReport(
             status: readiness.runtimeStatus,
             label: readiness.runtimeLabel,
             phase: runtimePhase ?? null,
-            result: runtimeResult ?? null,
+            result: runtimeResult ? {
+                ...runtimeResult,
+                steps: runtimeResult.steps.map((step) => (
+                    step.status === 'fail' || step.status === 'warning' || step.diagnostic
+                        ? { ...step, diagnostic: {
+                            ...step.diagnostic,
+                            ...diagnoseRuntimeError(step.error, step.diagnostic),
+                        } }
+                        : { ...step }
+                )),
+            } : null,
         },
     };
 }
@@ -53,7 +65,7 @@ export function renderValidationReportHtml(report: ValidationReport): string {
             <tr>
                 <td><span class="runtime-${step.status}">${escapeHtml(step.status.toUpperCase())}</span></td>
                 <td><code>${escapeHtml(step.name)}</code></td>
-                <td>${step.error ? escapeHtml(step.error) : '&mdash;'}</td>
+                <td>${renderRuntimeMessage(step)}</td>
             </tr>`).join('') ?? '';
     const runtimeSection = runtimeRows
         ? `<h2>Runtime Test</h2>
@@ -110,7 +122,7 @@ function renderIssueSection(issues: ValidationIssue[], color: string, label: str
             <tr>
                 <td><code>${escapeHtml(issue.code)}</code></td>
                 <td>${issue.path ? `<code>${escapeHtml(issue.path)}</code>` : '&mdash;'}</td>
-                <td>${escapeHtml(issue.message)}</td>
+                <td>${escapeHtml(issue.message)}${renderSpecReference(issue.specRef)}</td>
             </tr>`).join('');
     return `
             <h2 style="color:${color}">${label} (${issues.length})</h2>
@@ -118,6 +130,24 @@ function renderIssueSection(issues: ValidationIssue[], color: string, label: str
                 <thead><tr><th>Code</th><th>Path</th><th>Message</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
+}
+
+function renderRuntimeMessage(step: RuntimeTestStep): string {
+    const message = step.error ? escapeHtml(step.error) : '&mdash;';
+    if (step.status !== 'fail' && step.status !== 'warning' && !step.diagnostic) return message;
+    const diagnostic = diagnoseRuntimeError(step.error, step.diagnostic);
+
+    return `${message}<p><code>${escapeHtml(diagnostic.code)}</code></p>`
+        + `<p><strong>Next step:</strong> ${escapeHtml(diagnostic.hint)}</p>`
+        + renderSpecReference(diagnostic.specRef);
+}
+
+function renderSpecReference(reference?: string): string {
+    const href = safeSpecReference(reference);
+
+    return href
+        ? `<p><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Specification reference</a></p>`
+        : '';
 }
 
 function runtimeEmptyMessage(report: ValidationReport): string {

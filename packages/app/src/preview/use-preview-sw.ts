@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserFS } from '../fs/browser-fs.js';
-import { buildSchemaDefaultsValue } from './schema-defaults.js';
+import { buildSchemaDefaultsValue, SchemaDefaultLimitError } from './schema-defaults.js';
 import {
     PREVIEW_PROTOCOL_VERSION,
     assertPreviewSessionId,
@@ -173,14 +173,23 @@ export function buildImportUrl(mainFile: string, sessionId = createPreviewSessio
 }
 
 /** Extract default preview data from GDD schema properties. */
-export function buildPreviewData(manifest: unknown): Record<string, unknown> {
+export function buildPreviewData(
+    manifest: unknown,
+    options: { throwOnGenerationLimit?: boolean } = {},
+): Record<string, unknown> {
     if (typeof manifest !== 'object' || manifest === null) return {};
     const schema = (manifest as Record<string, unknown>)['schema'];
     if (typeof schema !== 'object' || schema === null) return {};
-    const value = buildSchemaDefaultsValue(schema);
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? value as Record<string, unknown>
-        : {};
+    try {
+        const value = buildSchemaDefaultsValue(schema);
+
+        return typeof value === 'object' && value !== null && !Array.isArray(value)
+            ? value as Record<string, unknown> : {};
+    } catch (error) {
+        if (!(error instanceof SchemaDefaultLimitError) || options.throwOnGenerationLimit) throw error;
+
+        return {};
+    }
 }
 
 export interface PreviewSW {

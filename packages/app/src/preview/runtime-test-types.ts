@@ -1,3 +1,5 @@
+import type { RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
+
 /**
  * Types for the automated runtime test runner.
  * Tests the Web Component lifecycle (import → load → play → stop → dispose).
@@ -16,4 +18,5 @@ export interface RuntimeTestStep {
     status: 'pass' | 'fail' | 'warning' | 'skip';
     durationMs: number;
     error?: string;
+    diagnostic?: RuntimeDiagnosticDetails;
 }

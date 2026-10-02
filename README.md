@@ -31,11 +31,30 @@ graphics developers.
 
 The validator reports three kinds of results:
 
-- **Errors** mean the manifest, package, or Graphic API is not OGraf compliant.
+- **Errors** identify a manifest, package, or Graphic API violation, or an observed
+  execution failure. The diagnostic explains which was detected; an exception
+  alone does not establish a specific OGraf contract violation.
 - **Warnings** point to problems that should be reviewed but may still allow the
   package to run.
 - **Inconclusive checks** mean the isolated browser preview could not test a
   feature reliably. They are not reported as OGraf errors.
+
+Automatic runtime checks use manifest defaults. If required input is missing,
+invalid, exceeds the test-data generator's limits, or uses schema assertions the
+input checker cannot evaluate, the affected calls are not executed and readiness
+is **Needs Review**. Test suitable
+input manually in Preview, or correct the defaults for the next automatic run.
+Explicitly parameterless custom actions (`schema: null`) are executed; actions
+without a usable schema or payload remain visible as untested. Runtime results
+cover the observed test cycle, including cleanup, rather than all possible inputs
+or future asynchronous behavior.
+
+Diagnostics include method-specific guidance and specification references in the
+UI and exported JSON/HTML reports. The pinned specification is unchanged by
+diagnostic corrections. Where the official prose, examples, and informative
+TypeScript definitions disagree, existing compatibility is preserved (including
+`dispose()` resolving to `undefined`, the `result` field, and `currentStep:
+undefined` at the end).
 
 ## Features
 

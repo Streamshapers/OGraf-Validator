@@ -118,7 +118,7 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
     await expect(alphaFrame.locator('#stage > *')).toHaveAttribute('data-srcset-width', '16');
     await expect(alphaFrame.locator('#stage > *')).toHaveAttribute('data-module-worker', 'module:lazy:worker data');
     await expect(alphaFrame.locator('#stage > *')).toHaveAttribute('data-classic-worker', 'classic:classic data');
-    await expect(alphaFrame.locator('#stage > *')).toHaveAttribute('data-worker-error', 'worker fixture failure');
+    await expect(alphaFrame.locator('#stage > *')).toHaveAttribute('data-worker-error', /worker fixture failure/);
 
     const parentState = await page.evaluate(() => ({
         marker: document.body.dataset['sandboxMutation'],
@@ -763,7 +763,7 @@ function fixtureFiles(): Record<string, string> {
             '});',
             'const waitForImage = (image) => new Promise((resolve, reject) => { image.onload = () => resolve(image.currentSrc); image.onerror = () => reject(new Error("srcset image failed: " + (image.currentSrc || image.src))); });',
             'const waitForValue = async (read, label) => { for (let attempt = 0; attempt < 100; attempt += 1) { const value = read(); if (value.includes("blob:")) return value; await new Promise(resolve => setTimeout(resolve, 10)); } throw new Error(label + " was not rewritten to a package Blob URL"); };',
-            'const waitForWorker = (worker) => new Promise((resolve, reject) => { worker.onmessage = (event) => resolve(event.data); worker.onerror = (event) => reject(new Error(event.message || event.error?.message || (event.filename ? `Worker failed at ${event.filename}:${event.lineno}:${event.colno}` : "Worker failed without browser details"))); worker.postMessage("start"); });',
+            'const waitForWorker = (worker) => new Promise((resolve, reject) => { worker.onmessage = (event) => resolve(event.data); worker.onerror = (event) => { event.preventDefault(); reject(new Error(event.message || event.error?.message || (event.filename ? `Worker failed at ${event.filename}:${event.lineno}:${event.colno}` : "Worker failed without browser details"))); }; worker.postMessage("start"); });',
             "const unusedDynamicWorker = (path) => new Worker(path, { type: 'module' });",
             "const unusedSharedWorker = () => new SharedWorker('./workers/module-worker.mjs', { type: 'module' });",
             'const loadResourceFeatures = async (element) => {',

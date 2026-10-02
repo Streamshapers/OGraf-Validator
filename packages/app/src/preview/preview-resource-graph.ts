@@ -2,6 +2,7 @@ import postcss, { type AtRule, type Declaration, type Root } from 'postcss';
 import valueParser, { type Node as ValueNode } from 'postcss-value-parser';
 import { parsePreviewResourceUrl } from './preview-resources.js';
 import { previewMimeTypeForPath } from './preview-module-graph.js';
+import { PreviewDiagnosticError } from './preview-errors.js';
 
 const MAX_STYLESHEETS = 128;
 const MAX_ASSETS = 512;
@@ -14,13 +15,14 @@ export interface PreviewResourceGraphErrorShape {
     message: string;
 }
 
-export class PreviewResourceGraphError extends Error implements PreviewResourceGraphErrorShape {
+export class PreviewResourceGraphError extends PreviewDiagnosticError implements PreviewResourceGraphErrorShape {
     readonly code: string;
     readonly resourceKind: 'stylesheet' | 'asset';
     readonly path: string;
 
     constructor(shape: PreviewResourceGraphErrorShape) {
-        super(shape.message);
+        super(shape.message, ['RESOURCE_GRAPH_TOO_LARGE', 'TOO_MANY_ASSETS', 'TOO_MANY_STYLESHEETS']
+            .includes(shape.code) ? { code: 'PREVIEW_LIMITATION', reason: shape.code } : undefined);
         this.name = 'PreviewResourceGraphError';
         this.code = shape.code;
         this.resourceKind = shape.resourceKind;

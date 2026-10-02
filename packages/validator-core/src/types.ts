@@ -167,6 +167,17 @@ export interface GddSchema extends GddField {
 
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
+export interface GddValueIssue {
+    /** Data location, beginning with $, with bracket escaping for non-identifier keys. */
+    path: string;
+    message: string;
+}
+
+export interface GddValueValidationResult {
+    status: 'valid' | 'invalid' | 'unsupported';
+    issues: GddValueIssue[];
+}
+
 export type ValidationIssueCode =
     | 'INVALID_MANIFEST'
     | 'MISSING_FIELD'
@@ -186,6 +197,7 @@ export type ValidationIssueCode =
     | 'INVALID_RENDER_REQUIREMENTS'
     | 'INVALID_RENDER_REQUIREMENT'
     | 'INVALID_GDD'
+    | 'GDD_DEFAULT_MISMATCH'
     | 'INVALID_GDD_TYPE'
     | 'MISSING_GDD_PROPERTIES'
     | 'INVALID_GDD_FIELD'

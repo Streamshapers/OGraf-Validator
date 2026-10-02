@@ -1,3 +1,4 @@
+import { validateGddValue } from '@streamshapers/ograf-validator-core';
 import {
     NON_REALTIME_METHODS,
     REQUIRED_METHODS,
@@ -6,14 +7,16 @@ import {
 } from './preview-contract.js';
 import {
     PreviewRunnerAbortError,
+    PreviewRunnerError,
     PreviewRunnerTimeoutError,
     createPreviewRunner,
     type PreviewRunner,
 } from './preview-runner-client.js';
 import { parsePreviewResourceUrl } from './preview-resources.js';
 import { selectRuntimeRenderRequirement } from './render-requirements.js';
+import type { RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
 import type { RuntimeTestResult, RuntimeTestStep } from './runtime-test-types.js';
-import { buildSchemaDefaultValue } from './schema-defaults.js';
+import { buildSchemaDefaultValue, type SchemaDefaultResult } from './schema-defaults.js';
 import {
     toOgrafRenderCharacteristics,
 } from './preview-types.js';
@@ -74,17 +77,26 @@ export async function runRuntimeTest(
             throw new Error('Runtime test sessionId does not match the import URL.');
         }
     } catch (error) {
-        push(failStep('Preview session URL', error));
+        push(warningStep('Preview session URL', errorMessage(error), { code: 'PREVIEW_LIMITATION' }));
         return result(steps, started, inconclusive);
     }
 
     const manifest = record(options.manifest);
-    const data = buildPreviewData(options.manifest);
+    let data: Record<string, unknown>;
+    try {
+        data = buildPreviewData(options.manifest, { throwOnGenerationLimit: true });
+    } catch (error) {
+        push(generationLimitationStep('load() test data', 'load', error));
+
+        return result(steps, started, inconclusive);
+    }
     const supportsRealTime = manifest['supportsRealTime'] === true;
     const supportsNonRealTime = manifest['supportsNonRealTime'] === true;
 
     if (options.signal?.aborted) {
-        push(warningStep('Runtime test', 'Runtime test was aborted before it started.'));
+        push(warningStep('Runtime test', 'Runtime test was aborted before it started.', {
+            code: 'RUNTIME_ABORTED',
+        }));
     } else if (supportsRealTime) {
         await runFreshCycle('RT', 'realtime', options, parsedResource.path, data, push);
     } else {
@@ -93,7 +105,11 @@ export async function runRuntimeTest(
 
     if (options.signal?.aborted) {
         if (!steps.some((step) => step.name === 'Runtime test' && step.status === 'warning')) {
-            push(warningStep('Runtime test', 'Runtime test was aborted; remaining checks are inconclusive.'));
+            push(warningStep(
+                'Runtime test',
+                'Runtime test was aborted; remaining checks are inconclusive.',
+                { code: 'RUNTIME_ABORTED' },
+            ));
         }
     } else if (supportsNonRealTime) {
         await runFreshCycle('NRT', 'non-realtime', options, parsedResource.path, data, push);
@@ -131,6 +147,11 @@ async function runCycle(
     data: Record<string, unknown>,
     push: (step: RuntimeTestStep) => void,
 ): Promise<void> {
+    const schema = record(options.manifest)['schema'];
+    if (schema !== undefined && schema !== null && !checkGeneratedInput(
+        `${label}: load() test data`, 'load', schema, data, push,
+    )) return;
+
     let runner: PreviewRunner | null = null;
     const importStarted = performance.now();
     const renderRequirement = selectRuntimeRenderRequirement(options.manifest);
@@ -143,6 +164,11 @@ async function runCycle(
             height: renderRequirement.characteristics.height,
             hidden: true,
             timeoutMs: RUNTIME_STEP_TIMEOUT_MS,
+            onRuntimeError: (message, diagnostic = { code: 'UNCAUGHT_RUNTIME_ERROR' }) => {
+                push(isInconclusiveDiagnostic(diagnostic)
+                    ? warningStep(`${label}: isolated preview limitation`, message, diagnostic)
+                    : failStep(`${label}: unhandled runtime error`, message, 0, diagnostic));
+            },
             ...(options.signal ? { signal: options.signal } : {}),
         });
         push({ name: `${label}: sandbox import`, status: 'pass', durationMs: elapsed(importStarted) });
@@ -152,10 +178,13 @@ async function runCycle(
                 status: 'warning',
                 durationMs: 0,
                 error: diagnostic.message,
+                diagnostic: { code: 'PREVIEW_LIMITATION', reason: diagnostic.code },
             });
         }
     } catch (error) {
-        push(classifyError(`${label}: sandbox import`, importStarted, error));
+        push(classifyError(`${label}: sandbox import`, importStarted, error, {
+            code: 'SANDBOX_IMPORT_FAILED',
+        }));
         return;
     }
 
@@ -173,6 +202,7 @@ async function runCycle(
                 status: 'warning',
                 durationMs: 0,
                 error: limitation,
+                diagnostic: { code: 'PREVIEW_LIMITATION' },
             });
         }
 
@@ -186,6 +216,7 @@ async function runCycle(
                 status: 'fail',
                 durationMs: 0,
                 error: `Missing required method(s): ${missing.map((method) => `${method}()`).join(', ')}.`,
+                diagnostic: { code: 'MISSING_REQUIRED_METHODS' },
             });
             return;
         }
@@ -205,9 +236,8 @@ async function runCycle(
         );
         if (!loaded) return;
 
-        const stepCount = Number.isInteger(record(options.manifest)['stepCount'])
-            ? record(options.manifest)['stepCount'] as number
-            : undefined;
+        const manifestStepCount = record(options.manifest)['stepCount'];
+        const stepCount = Number.isInteger(manifestStepCount) ? manifestStepCount as number : 1;
         for (const call of createRuntimeCycleCalls(renderType, data, stepCount)) {
             if (!await runCall(
                 runner,
@@ -216,21 +246,39 @@ async function runCycle(
                 call.params,
                 options.signal,
                 push,
+                call.method === 'playAction' && stepCount >= 0
+                    ? { currentStep: stepCount === 0 ? null : 0 }
+                    : undefined,
             )) return;
         }
 
         for (const action of readCustomActions(options.manifest)) {
-            const payload = buildSchemaDefaultValue(action.schema);
-            if (!payload.ok) {
-                push({
-                    name: `${label}: customAction(${action.id})`,
-                    status: 'skip',
-                    durationMs: 0,
-                    error: `Skipped: ${payload.reason}`,
-                });
+            const name = `${label}: customAction(${action.id})`;
+            if (action.schema === undefined) {
+                push(warningStep(name, 'Not tested: this custom action has no payload schema.', {
+                    code: 'CUSTOM_ACTION_NOT_TESTED', method: 'customAction',
+                }));
                 continue;
             }
-            if (!await runCall(runner, `${label}: customAction(${action.id})`, 'customAction', {
+            let payload: SchemaDefaultResult;
+            try {
+                payload = action.schema === null
+                    ? { ok: true, value: undefined }
+                    : buildSchemaDefaultValue(action.schema);
+            } catch (error) {
+                push(generationLimitationStep(name, 'customAction', error));
+                continue;
+            }
+            if (!payload.ok) {
+                push(warningStep(name, `Cannot generate valid test data: ${payload.reason}`, {
+                    code: 'INVALID_TEST_DATA', method: 'customAction',
+                }));
+                continue;
+            }
+            if (action.schema !== null && !checkGeneratedInput(
+                name, 'customAction', action.schema, payload.value, push,
+            )) continue;
+            if (!await runCall(runner, name, 'customAction', {
                 id: action.id,
                 payload: payload.value,
                 skipAnimation: true,
@@ -239,7 +287,14 @@ async function runCycle(
 
         await runCall(runner, `${label}: dispose()`, 'dispose', {}, options.signal, push);
     } finally {
-        await runner.destroy();
+        try {
+            // destroy() waits for the runner's final error-event delivery before removing it.
+            await runner.destroy();
+        } catch (error) {
+            push(classifyError(`${label}: cleanup`, performance.now(), error, {
+                code: 'RUNTIME_CHECK_FAILED', method: 'dispose',
+            }));
+        }
     }
 }
 
@@ -250,6 +305,7 @@ async function runCall(
     params: unknown,
     signal: AbortSignal | undefined,
     push: (step: RuntimeTestStep) => void,
+    expected?: { currentStep: number | null },
 ): Promise<boolean> {
     const started = performance.now();
     try {
@@ -263,6 +319,7 @@ async function runCall(
                 status: 'fail',
                 durationMs: elapsed(started),
                 error: `${method}() must return a Promise.`,
+                diagnostic: { code: 'METHOD_MUST_RETURN_PROMISE', method },
             });
             return false;
         }
@@ -272,6 +329,7 @@ async function runCall(
                 status: 'fail',
                 durationMs: elapsed(started),
                 error: call.normalized.error ?? `${method}() returned an invalid payload.`,
+                diagnostic: call.normalized.diagnostic ?? { code: 'INVALID_RETURN_PAYLOAD', method },
             });
             return false;
         }
@@ -283,27 +341,41 @@ async function runCall(
                 error: `${method}() returned status ${call.normalized.statusCode}${
                     call.normalized.statusMessage ? `: ${call.normalized.statusMessage}` : ''
                 }.`,
+                diagnostic: {
+                    code: 'ACTION_RETURNED_ERROR_STATUS', method,
+                    statusCode: call.normalized.statusCode,
+                },
+            });
+            return false;
+        }
+        if (expected && call.normalized.currentStep !== expected.currentStep) {
+            push({
+                name,
+                status: 'fail',
+                durationMs: elapsed(started),
+                error: `playAction() reported currentStep ${formatStep(call.normalized.currentStep)}; ` +
+                    `expected ${formatStep(expected.currentStep)} for the requested first step.`,
+                diagnostic: {
+                    code: 'CURRENT_STEP_MISMATCH', method, field: 'currentStep',
+                },
             });
             return false;
         }
         push({ name, status: 'pass', durationMs: elapsed(started) });
         return true;
     } catch (error) {
-        const step = classifyError(name, started, error);
+        const step = classifyError(name, started, error, { code: 'RUNTIME_CHECK_FAILED', method });
         push(step);
         return false;
     }
 }
 
-function classifyError(name: string, started: number, error: unknown): RuntimeTestStep {
-    if (error instanceof Error && error.message.includes('OGRAF_PREVIEW_INCONCLUSIVE:')) {
-        return {
-            name,
-            status: 'warning',
-            durationMs: elapsed(started),
-            error: error.message.replace(/^.*OGRAF_PREVIEW_INCONCLUSIVE:\s*/, ''),
-        };
-    }
+function classifyError(
+    name: string,
+    started: number,
+    error: unknown,
+    context: RuntimeDiagnosticDetails,
+): RuntimeTestStep {
     if (error instanceof PreviewRunnerTimeoutError || error instanceof PreviewRunnerAbortError) {
         return {
             name,
@@ -312,22 +384,92 @@ function classifyError(name: string, started: number, error: unknown): RuntimeTe
             error: error instanceof PreviewRunnerTimeoutError
                 ? `${error.message} Result is inconclusive; manifest actionDurations are not a test timeout.`
                 : error.message,
+            diagnostic: {
+                ...context,
+                code: error instanceof PreviewRunnerTimeoutError ? 'RUNTIME_TIMEOUT' : 'RUNTIME_ABORTED',
+            },
         };
     }
-    return failStep(name, error, elapsed(started));
+    const diagnostic = error instanceof PreviewRunnerError && error.diagnostic
+        ? { ...context, ...error.diagnostic } : context;
+    if (isInconclusiveDiagnostic(diagnostic)) {
+        return {
+            ...warningStep(name, errorMessage(error), diagnostic),
+            durationMs: elapsed(started),
+        };
+    }
+
+    return failStep(name, error, elapsed(started), diagnostic);
 }
 
-function failStep(name: string, error: unknown, durationMs = 0): RuntimeTestStep {
+function failStep(
+    name: string,
+    error: unknown,
+    durationMs: number,
+    diagnostic: RuntimeDiagnosticDetails,
+): RuntimeTestStep {
     return {
         name,
         status: 'fail',
         durationMs,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
+        diagnostic,
     };
 }
 
-function warningStep(name: string, message: string): RuntimeTestStep {
-    return { name, status: 'warning', durationMs: 0, error: message };
+function warningStep(
+    name: string,
+    message: string,
+    diagnostic: RuntimeDiagnosticDetails,
+): RuntimeTestStep {
+    return { name, status: 'warning', durationMs: 0, error: message, diagnostic };
+}
+
+function isInconclusiveDiagnostic(diagnostic: RuntimeDiagnosticDetails): boolean {
+    return diagnostic.code === 'PREVIEW_LIMITATION'
+        || diagnostic.code === 'RUNTIME_TIMEOUT'
+        || diagnostic.code === 'RUNTIME_ABORTED';
+}
+
+function generationLimitationStep(
+    name: string,
+    method: 'load' | 'customAction',
+    error: unknown,
+): RuntimeTestStep {
+    return warningStep(name, `Cannot generate test data: ${errorMessage(error)}`, {
+        code: 'PREVIEW_LIMITATION', method, reason: 'test-data-generation',
+        hint: 'Automatic test data exceeds the validator generation budget. Supply suitable data ' +
+            'manually in Preview or test with another renderer; this is not an OGraf schema violation.',
+    });
+}
+
+function checkGeneratedInput(
+    name: string,
+    method: 'load' | 'customAction',
+    schema: unknown,
+    value: unknown,
+    push: (step: RuntimeTestStep) => void,
+): boolean {
+    const validation = validateGddValue(schema, value);
+    if (validation.status === 'valid') return true;
+
+    const reason = validation.issues.map((issue) => `${issue.path}: ${issue.message}`).join(' ');
+    const unsupported = validation.status === 'unsupported';
+    push(warningStep(
+        name,
+        `${unsupported ? 'Cannot verify generated test data' : 'Generated test data is invalid'}: ${reason}`,
+        { code: unsupported ? 'UNSUPPORTED_TEST_SCHEMA' : 'INVALID_TEST_DATA', method },
+    ));
+
+    return false;
+}
+
+function formatStep(step: number | null | undefined): string {
+    return step === null || step === undefined ? 'undefined' : String(step);
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 function skipStep(name: string): RuntimeTestStep {
