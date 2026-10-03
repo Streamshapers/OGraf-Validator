@@ -1,3 +1,4 @@
+import { packageResourceDiagnostic } from './resource-diagnostics.js';
 import postcss, { type AtRule, type Declaration, type Root } from 'postcss';
 import valueParser, { type Node as ValueNode } from 'postcss-value-parser';
 import { parsePreviewResourceUrl } from './preview-resources.js';
@@ -13,6 +14,7 @@ export interface PreviewResourceGraphErrorShape {
     resourceKind: 'stylesheet' | 'asset';
     path: string;
     message: string;
+    cause?: unknown;
 }
 
 export class PreviewResourceGraphError extends PreviewDiagnosticError implements PreviewResourceGraphErrorShape {
@@ -22,7 +24,9 @@ export class PreviewResourceGraphError extends PreviewDiagnosticError implements
 
     constructor(shape: PreviewResourceGraphErrorShape) {
         super(shape.message, ['RESOURCE_GRAPH_TOO_LARGE', 'TOO_MANY_ASSETS', 'TOO_MANY_STYLESHEETS']
-            .includes(shape.code) ? { code: 'PREVIEW_LIMITATION', reason: shape.code } : undefined);
+            .includes(shape.code) ? { code: 'PREVIEW_LIMITATION', reason: shape.code }
+                : shape.code === 'RESOURCE_READ_FAILED' ? packageResourceDiagnostic(shape.path, shape.cause)
+                    : undefined);
         this.name = 'PreviewResourceGraphError';
         this.code = shape.code;
         this.resourceKind = shape.resourceKind;
@@ -296,12 +300,11 @@ async function readResource(
     try {
         return await options.readFile(resource.path);
     } catch (error) {
-        throw resourceError(
-            'RESOURCE_READ_FAILED',
-            kind,
-            resource.path,
-            `Could not read ${kind} "${resource.path}": ${readErrorMessage(error)}`,
-        );
+        throw new PreviewResourceGraphError({
+            code: 'RESOURCE_READ_FAILED', resourceKind: kind, path: resource.path,
+            message: `Could not read ${kind} "${resource.path}": ${readErrorMessage(error)}`,
+            cause: error,
+        });
     }
 }
 

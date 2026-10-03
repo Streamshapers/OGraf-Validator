@@ -25,9 +25,27 @@ graphics developers.
 
 1. Open the [hosted validator](https://validator.streamshapers.com) in a current
    version of Chrome or Edge.
-2. Select a folder that contains one or more `*.ograf.json` manifests.
+2. Select a folder, choose **Open ZIP**, or drop a ZIP containing one or more
+   `*.ograf.json` manifests onto the app.
 3. Static validation and runtime checks start automatically.
 4. Select a Graphic to inspect its manifest, data schema, assets, and preview.
+
+ZIP files are read locally into a read-only snapshot for the current tab. Nothing
+is extracted to your disk or uploaded. Multiple manifests and shared relative
+assets work like folder imports; the configured scan depth still applies. Reopen
+the ZIP after changing it. It does not replace your saved last folder.
+
+ZIP import supports unencrypted stored or Deflate-compressed entries with UTF-8
+or ASCII filenames, up to 50 MiB compressed, 100 MiB expanded, 2,000 entries and
+20 path levels. ZIP64, split archives, symbolic links, unsafe or conflicting
+paths, and corrupt contents are rejected. Cancellation or a rejected archive
+keeps the currently opened project available.
+
+**Test coverage** separates standard and extended results, showing check counts,
+confirmed step indices, Custom Actions and the render configurations actually
+sent to Load. Unrun checks and missing evidence remain explicit. A successful
+call does not verify the visual output or establish coverage of other profiles.
+JSON and HTML reports include the same coverage data.
 
 The validator reports three kinds of results:
 
@@ -49,12 +67,95 @@ without a usable schema or payload remain visible as untested. Runtime results
 cover the observed test cycle, including cleanup, rather than all possible inputs
 or future asynchronous behavior.
 
+Use **Run extended tests** in the Validation tab to check additional step targets,
+relative navigation, repeated use with animations enabled, and NRT timeline seeking.
+It uses the same validated manifest defaults as the standard test. Automatic tests
+on opening or changing files remain standard tests.
+
+Extended tests run in the background when you select another Graphic. The global
+activity indicator offers **Cancel**. The default total budget is two minutes;
+after a timeout, you can restart with five or ten minutes. Each independent
+scenario starts in a fresh sandbox, and every retry starts the complete suite again.
+
+Extended failures affect package readiness. Cancelled, timed-out, or partially
+covered runs are inconclusive, and known failures remain visible until a complete,
+conclusive retry replaces them. Changing package files clears results for the old
+version. Known step counts above 20 use a representative set of 20 targets and
+report the omitted coverage. Dynamic step models receive up to three consecutive
+contract checks without requiring an artificial end. Successful calls do not prove
+visual correctness or animation duration.
+
+JSON reports retain standard results in `runtimeTest` and add extended results in
+`extendedRuntimeTest`; HTML reports include both suites and their coverage.
+Matching contract failures appear once under **Runtime findings**, with their
+observations from both suites in expandable details. Test sections link to those
+shared findings. Issue counts exclude coverage notes about checks that could not
+run; incomplete coverage remains visible and continues to affect readiness.
+JSON also includes `runtimeFindings` while preserving the individual test results.
+
+Reports include app/core versions, the pinned EBU commit, browser user agent,
+run timestamps, package fingerprints, and captured invocation parameters and raw
+responses. The load invocation records the actual render configuration and test
+data; schedules and subsequent calls retain their own parameters. Missing or
+bounded evidence is explicitly marked rather than reconstructed from current files.
+Before either download, **Review report contents** shows the included data and
+allows cancellation. Defaults and Graphic responses may contain names, URLs or
+other private values; package source files are not embedded and no upload occurs.
+
+`reportFormatVersion: 1` identifies this report format. Invocation evidence uses
+`type: json`, `type: undefined`, or `type: unavailable`; `undefinedPaths` identifies
+nested undefined values represented by null placeholders in the JSON view.
+The package fingerprint is SHA-256 over the UTF-8 JSON serialization of sorted
+`[relativePath, byteLength, fileSha256]` tuples. Paths use JavaScript's default string
+sort order. It covers the package directory using the validator's file scope,
+including shared local resources and excluding ignored directories. External
+resources are not included. Capture is limited to 2,000 files, 100 MiB and five
+seconds per snapshot. Individual evidence values are bounded to 100,000 characters,
+20,000 nodes and 50 levels; exceeding these limits does not change validation results.
+Before/after comparisons are not atomic filesystem snapshots. The separate
+export-time fingerprint must not be mistaken for the tested package's fingerprint.
+Reports support manual reproduction with the matching package; importing a report
+and automatically replaying scenarios remains a future extension.
+
+Runtime findings show **Expected / Received** for known API contract failures.
+Expand **Show calls and scenarios** to inspect each observation's actual inputs and
+response. Exceptions retain their recorded context without inferred expectations.
+Static issues offer **Show in manifest** when the diagnostic path identifies a unique
+field; missing fields link to their existing parent. Ambiguous paths are not linked.
+JavaScript source-line navigation is not offered without a verified mapping to the
+original package file.
+
 Diagnostics include method-specific guidance and specification references in the
 UI and exported JSON/HTML reports. The pinned specification is unchanged by
 diagnostic corrections. Where the official prose, examples, and informative
 TypeScript definitions disagree, existing compatibility is preserved (including
 `dispose()` resolving to `undefined`, the `result` field, and `currentStep:
 undefined` at the end).
+
+## Resource observations
+
+Runtime tests group observed resource problems across standard and extended runs.
+The resource review section distinguishes unreadable/missing package files,
+external fetch failures (including exposed HTTP statuses), and actual browser CSP
+violations. It includes occurrence details, copy support and the same grouped
+evidence in JSON/HTML reports. These observations produce an inconclusive review
+result, not an automatic OGraf contract failure: optional resources can have
+fallbacks, and renderer restrictions can prevent otherwise valid Graphics from
+loading them. Successful external fetches and intentional fetch cancellation are
+neutral. No extra requests are made to probe external services.
+
+This follows the [EBU RenderRequirements model](https://ograf.ebu.io/v1/specification/docs/Specification.html#renderrequirements),
+including `accessToPublicInternet`; the validator does not infer an undeclared
+internet requirement or claim to measure public Internet availability.
+
+Observation is bounded by the test lifecycle and browser visibility. Main-frame
+fetch, observed element load errors, local CSS/asset preparation and CSP events
+are covered. This is not a complete network recorder: handled Worker/XHR
+requests, some font/CSS/media failures, late loads and exact initiating source
+lines may be unavailable. Generic browser rejection does not identify CORS, DNS
+or connectivity conclusively. Displayed resource labels omit URL credentials,
+queries and fragments; raw Graphic errors and captured call data can still
+contain sensitive values, so review reports before sharing.
 
 ## Features
 
@@ -71,6 +172,7 @@ undefined` at the end).
   one asset folder.
 - Runs automatic realtime and non-realtime API checks for statically valid
   Graphics.
+- Offers optional extended checks for steps, repeated lifecycles, and NRT seeking.
 - Shows clear package readiness states for static and runtime results.
 - Provides an interactive preview with editable GDD data and action controls.
 

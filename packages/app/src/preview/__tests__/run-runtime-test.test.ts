@@ -105,6 +105,18 @@ describe('automated runtime evaluation', () => {
         expect(mocks.closeSession).toHaveBeenCalledOnce();
     });
 
+    it('does not blame a graphic when no declared render requirement can be selected', async () => {
+        const result = await run({ supportsNonRealTime: true,
+            renderRequirements: [{ frameRate: { exact: 0 } }] });
+        expect(result).toMatchObject({ passed: true, inconclusive: true });
+        expect(mocks.createRunner).not.toHaveBeenCalled();
+        expect(call).not.toHaveBeenCalled();
+        expect(result.steps.filter((step) => step.status === 'warning')).toHaveLength(2);
+        expect(result.steps[0]?.diagnostic).toMatchObject({
+            code: 'PREVIEW_LIMITATION', reason: 'unmatched-render-requirements',
+        });
+    });
+
     it.each([
         { type: 'string' },
         { type: 'string', default: 'tiny', minLength: 10 },
@@ -262,7 +274,9 @@ describe('automated runtime evaluation', () => {
         const result = await run();
 
         expect(result.passed).toBe(false);
-        expect(result.inconclusive).toBeUndefined();
+        // Coverage is incomplete because load failed; the exception remains a genuine failure.
+        expect(result.inconclusive).toBe(true);
+        expect(result.steps.some((step) => step.status === 'warning')).toBe(false);
         expect(result.steps).toContainEqual(expect.objectContaining({
             error: error.message,
             diagnostic: expect.objectContaining({ code: 'RUNTIME_CHECK_FAILED', method: 'load' }),
@@ -393,6 +407,29 @@ describe('automated runtime evaluation', () => {
         expect(result.steps).toContainEqual(expect.objectContaining({
             diagnostic: expect.objectContaining({ code: 'MISSING_REQUIRED_METHODS' }),
         }));
+    });
+
+    it('records actual call inputs and raw responses, including undefined end states', async () => {
+        payloads.playAction = { statusCode: 200, currentStep: undefined };
+        const result = await run({ stepCount: 0 });
+        const load = result.steps.find((step) => step.invocation?.method === 'load');
+        expect(load?.invocation).toMatchObject({
+            method: 'load', timeoutMs: 10_000,
+            parameters: { type: 'json', value: { renderType: 'realtime', data: {} } },
+            response: { type: 'undefined' }, wasPromise: true,
+        });
+        const play = result.steps.find((step) => step.invocation?.method === 'playAction');
+        expect(play?.invocation?.response).toEqual({ type: 'json',
+            value: { statusCode: 200, currentStep: null }, undefinedPaths: [['currentStep']] });
+    });
+
+    it('retains invocation evidence for a rejected call', async () => {
+        call.mockRejectedValueOnce(new Error('Rejected input'));
+        const result = await run();
+        expect(result.steps.find((step) => step.status === 'fail')).toMatchObject({
+            invocation: { method: 'load', parameters: { type: 'json' } },
+        });
+        expect(result.steps.find((step) => step.status === 'fail')?.invocation).not.toHaveProperty('response');
     });
 
     it('does not start a cycle after cancellation', async () => {

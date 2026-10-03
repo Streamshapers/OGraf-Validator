@@ -11,9 +11,12 @@ const currentDir = fileURLToPath(new URL('.', import.meta.url));
 const appPkg  = JSON.parse(readFileSync(resolve(currentDir, 'package.json'), 'utf-8')) as { version: string };
 const corePkg = JSON.parse(readFileSync(resolve(currentDir, '../validator-core/package.json'), 'utf-8')) as { version: string };
 
+const spec = JSON.parse(readFileSync(resolve(currentDir, '../validator-core/spec/ebu-ograf-v1-8a74757b/SNAPSHOT.json'), 'utf-8')) as { commit: string };
+
 export default defineConfig({
     plugins: [tailwindcss(), react()],
     define: {
+        __SPEC_COMMIT__: JSON.stringify(spec.commit),
         __APP_VERSION__:  JSON.stringify(appPkg.version),
         __CORE_VERSION__: JSON.stringify(corePkg.version),
     },

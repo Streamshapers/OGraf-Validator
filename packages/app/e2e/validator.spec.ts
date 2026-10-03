@@ -23,6 +23,12 @@ interface SerializedOpfsFile {
     contents: string;
 }
 
+async function expandStandardChecks(page: Page): Promise<void> {
+    await expect(page.getByRole('button', { name: 'Rerun', exact: true })).toBeVisible();
+    const summary = page.getByText(/^Passed and skipped checks/);
+    if (await summary.locator('..').getAttribute('open') === null) await summary.click();
+}
+
 test.beforeEach(async ({ context, page }) => {
     await installDirectoryPicker(context);
     await page.goto('/');
@@ -96,9 +102,14 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
 
     await openFixture(page);
     await selectGraphic(page, 'Alpha Graphic');
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Passed', { exact: true }).first()).toBeVisible();
+    const summary = page.getByRole('region', { name: 'Validation summary' });
+    await expect(summary).toContainText('Manifest Valid');
+    await expect(summary).toContainText('Extended tests have not been run.');
+    await expect(summary).not.toContainText('100%');
     await expect.poll(() => automaticAlphaDisposals.length).toBe(1);
 
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
@@ -145,12 +156,23 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
     expect(teardownResourceErrors).toEqual([]);
 
     const play = page.getByRole('button', { name: 'Play', exact: true });
-    await play.click();
-    await play.click();
-    await expect.poll(async () => {
-        const frame = await currentPreviewFrame(page);
-        return frame?.locator('#stage > *').getAttribute('data-max-concurrent');
-    }).toBe('2');
+    const concurrentGraphic = page.frameLocator('iframe[aria-label="OGraf graphic preview"]')
+        .locator('#stage > *');
+    // Hold the first action until overlap is observed instead of racing two clicks against a timer.
+    await concurrentGraphic.evaluate((graphic) => graphic.setAttribute('data-hold-play', ''));
+    try {
+        await play.click();
+        await expect(concurrentGraphic).toHaveAttribute('data-active', '1');
+        await play.click();
+        await expect(concurrentGraphic).toHaveAttribute('data-active', '2');
+        await expect(concurrentGraphic).toHaveAttribute('data-max-concurrent', '2');
+    } finally {
+        await concurrentGraphic.evaluate((graphic) => {
+            graphic.removeAttribute('data-hold-play');
+            graphic.dispatchEvent(new Event('release-play'));
+        });
+    }
+    await expect(concurrentGraphic).toHaveAttribute('data-active', '0');
 
     const secondPage = await context.newPage();
     await secondPage.goto('/');
@@ -173,6 +195,7 @@ test('runs RT and NRT lifecycles and reports non-2xx payloads', async ({ page })
     await openFixture(page);
     await selectGraphic(page, 'Beta Dual');
 
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: setActionsSchedule()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: goToTime(0)', { exact: true })).toBeVisible();
@@ -185,7 +208,7 @@ test('runs RT and NRT lifecycles and reports non-2xx payloads', async ({ page })
 
     await selectGraphic(page, 'Static Invalid');
     await expect(page.getByText('Manifest Invalid', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Not Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Failed', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Inspect', exact: true }).click();
     await expect(page.getByRole('button', { name: '1 error. View in Validation' })).toBeVisible();
@@ -481,10 +504,10 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByText('Football Scoreboard').first()).toBeVisible();
     await expect(page.getByText('Goal Flash').first()).toBeVisible();
     await expect(page.getByText('4/4', { exact: true })).toBeVisible({ timeout: 90_000 });
-    await expect(page.getByTitle('1 runtime test failed')).toBeVisible();
+    await expect(page.getByTitle('1 package with runtime failures')).toBeVisible();
     const packageMedia = page.getByTestId('package-media');
     await expect(packageMedia).toHaveCount(4);
-    await expect(packageMedia.getByText('Production-Ready', { exact: true })).toHaveCount(0);
+    await expect(packageMedia.getByText('Checks Passed', { exact: true })).toHaveCount(0);
     const mediaRatios = await packageMedia.evaluateAll((elements) => elements.map((element) => {
         const bounds = element.getBoundingClientRect();
         return bounds.width / bounds.height;
@@ -493,8 +516,8 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByRole('img', { name: 'OGraf placeholder: Graphic package' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'OGraf placeholder: External thumbnail not loaded' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Goal Flash thumbnail' })).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Overall status: Production-Ready' })).toBeVisible();
-    await expect(page.getByTitle('Production-Ready', { exact: true })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Overall status: Checks Passed' })).toBeVisible();
+    await expect(page.getByTitle('Checks Passed', { exact: true })).toBeVisible();
     const lowerThirdOverviewCard = page.locator('main').getByRole('button').filter({ hasText: 'Lower Third' }).first();
     await expect(lowerThirdOverviewCard.getByText('1 warning', { exact: true })).toBeVisible();
     await expect(lowerThirdOverviewCard.getByText('Render 1920 × 1080 ideal', { exact: true })).toBeVisible();
@@ -507,6 +530,7 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByText('· 1 failed', { exact: true })).toBeVisible();
 
     await selectGraphic(page, 'Lower Third');
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: required methods', { exact: true })).toBeVisible();
     await expect(page.getByText('RT: load()', { exact: true })).toBeVisible();
     await expect(page.getByText('RT: updateAction()', { exact: true })).toBeVisible();
@@ -525,9 +549,10 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByText('Static validation passed.', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Manifest Valid', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Runtime Failed', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Not Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Failed', { exact: true }).first()).toBeVisible();
 
     await selectGraphic(page, 'Football Scoreboard');
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: setActionsSchedule()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: goToTime(0)', { exact: true })).toBeVisible();
@@ -885,10 +910,16 @@ export default class PlaywrightGraphic extends HTMLElement {
 
     async playAction(params) {
         this.active += 1;
+        this.dataset.active = String(this.active);
         this.maxConcurrent = Math.max(this.maxConcurrent, this.active);
         this.dataset.maxConcurrent = String(this.maxConcurrent);
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        if (this.hasAttribute('data-hold-play')) {
+            await new Promise((resolve) => this.addEventListener('release-play', resolve, { once: true }));
+        } else {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+        }
         this.active -= 1;
+        this.dataset.active = String(this.active);
         return { statusCode: 200, currentStep: params.goto };
     }
 

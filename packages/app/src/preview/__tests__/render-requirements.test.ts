@@ -41,4 +41,22 @@ describe('render requirement alternatives', () => {
         expect(selected.index).toBe(1);
         expect(selected.characteristics).toMatchObject({ width: 1280, height: 720 });
     });
+
+    it.each([{ exact: 0 }, { exact: 40, min: 50 }])(
+        'does not silently certify defaults when no alternative matches (%j)', (frameRate) => {
+            const selected = selectRuntimeRenderRequirement({
+                renderRequirements: [{ frameRate }],
+            });
+            expect(selected.unavailableReason).toContain('No declared render requirement');
+            expect(selected.unverifiable).toContain(selected.unavailableReason);
+        },
+    );
+
+    it.each([{}, { renderRequirements: [] }])(
+        'retains unrestricted defaults when requirements are absent or empty (%j)', (manifest) => {
+            const selected = selectRuntimeRenderRequirement(manifest);
+            expect(selected.unavailableReason).toBeUndefined();
+            expect(selected.unverifiable).toEqual([]);
+        },
+    );
 });

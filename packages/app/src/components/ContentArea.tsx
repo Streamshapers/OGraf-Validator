@@ -1,3 +1,6 @@
+import ResourceObservations from './ResourceObservations.js';
+import RuntimeCoverage from './RuntimeCoverage.js';
+import type { ManifestLocation } from '../inspector/manifest-location.js';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, Loader2, FolderOpen, Cpu, History, FileCode2 } from 'lucide-react';
 
@@ -9,16 +12,21 @@ import IssueList from './IssueList.js';
 import PreviewFrame from '../preview/PreviewFrame.js';
 import PackageOverview from './PackageOverview.js';
 import RuntimeTestCard from './RuntimeTestCard.js';
-import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
+import RuntimeFindings from './RuntimeFindings.js';
+import { getRuntimeFindings } from '../preview/runtime-findings.js';
+import ExtendedRuntimeTestCard from './ExtendedRuntimeTestCard.js';
+import type {
+    RuntimeBudgetMinutes,
+    RuntimeSuiteState,
+    RuntimeTestResult,
+    RuntimeTestStep,
+} from '../preview/runtime-test-types.js';
 import {
     derivePackageReadiness,
     type PackageReadiness,
     type RuntimeTestPhase,
 } from '../readiness/package-readiness.js';
-import {
-    createValidationReport,
-    renderValidationReportHtml,
-} from '../readiness/validation-report.js';
+import ExportButtons from './ExportButtons.js';
 
 export interface PackageCache {
     validationResult: ValidationResult;
@@ -30,6 +38,8 @@ export interface PackageCache {
     runtimeTest?: RuntimeTestResult;
     runtimeTestPhase?: RuntimeTestPhase;
     runtimeTestSteps?: RuntimeTestStep[];
+    standardRuntimeTest?: RuntimeSuiteState;
+    extendedRuntimeTest?: RuntimeSuiteState;
 }
 
 type Tab = 'validation' | 'inspect' | 'preview';
@@ -52,6 +62,8 @@ interface Props {
     onOpenDirectory: () => void;
     onReopenLastDirectory: () => void;
     onRerunRuntimeTest?: () => void;
+    onRunExtendedTest?: (budgetMinutes: RuntimeBudgetMinutes) => void;
+    onCancelExtendedTest?: () => void;
 
     // Package overview props
     rootName: string | null;
@@ -61,13 +73,17 @@ interface Props {
     onSelectPackage: (entry: PackageEntry) => void;
 }
 
-export default function ContentArea({ selectedPackage, cache, packageReadiness, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
+export default function ContentArea({ selectedPackage, cache, packageReadiness, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, onRunExtendedTest, onCancelExtendedTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>('validation');
+    const [manifestLocation, setManifestLocation] = useState<ManifestLocation>();
 
     // Reset to validation tab whenever a different package is selected
     useEffect(() => {
         setActiveTab('validation');
+        setManifestLocation(undefined);
     }, [selectedPackage?.key]);
+
+    useEffect(() => { setManifestLocation(undefined); }, [cache?.manifest]);
 
     if (!selectedPackage && rootName) {
         return (
@@ -83,6 +99,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
 
     if (!selectedPackage) return <WelcomeScreen onOpenDirectory={onOpenDirectory} onReopenLastDirectory={onReopenLastDirectory} />;
 
+    const runtimeFindings = getRuntimeFindings(cache?.runtimeTest, cache?.extendedRuntimeTest);
     const version = readManifestVersion(cache?.manifest);
     const stability = readManifestStability(cache?.manifest);
     const readiness = cache
@@ -90,6 +107,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
             cache.fullValidationResult ?? cache.validationResult,
             cache.runtimeTest,
             cache.runtimeTestPhase,
+            cache.extendedRuntimeTest,
         )
         : null;
 
@@ -158,6 +176,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                             <InspectTab
                                 key={selectedPackage.key}
                                 manifest={cache.manifest}
+                                location={manifestLocation}
                                 previousManifest={cache.previousManifest}
                                 assets={cache.assets}
                                 dirHandle={selectedPackage.dirHandle}
@@ -195,20 +214,36 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                         {cache && activeTab === 'validation' && (
                             <div className={`flex flex-col gap-3 sm:gap-4 transition-opacity ${isValidating ? 'opacity-50' : 'opacity-100'}`}>
                                 <ValidationOverview
+                                    manifest={cache.manifest}
                                     readiness={readiness!}
                                     result={cache.validationResult}
                                     fullResult={cache.fullValidationResult}
                                     isValidating={isValidating}
                                     packageName={selectedPackage.displayName}
+                                    packageEntry={selectedPackage}
                                     runtimeResult={cache.runtimeTest}
                                     runtimePhase={cache.runtimeTestPhase}
+                                    extendedState={cache.extendedRuntimeTest}
                                 />
-                                <IssueList result={cache.validationResult} />
+                                <RuntimeCoverage manifest={cache.manifest} standard={cache.runtimeTest}
+                                    extended={cache.extendedRuntimeTest} phase={cache.runtimeTestPhase} />
+                                <IssueList result={cache.validationResult} manifest={cache.manifest}
+                                    onShowManifest={(location) => { setManifestLocation(location); setActiveTab('inspect'); }} />
+                                <RuntimeFindings findings={runtimeFindings} />
+                                <ResourceObservations standard={cache?.runtimeTest} extended={cache?.extendedRuntimeTest} />
                                 <RuntimeTestCard
+                                    findings={runtimeFindings}
                                     result={cache.runtimeTest}
                                     phase={cache.runtimeTestPhase}
                                     liveSteps={cache.runtimeTestSteps}
                                     onRerun={onRerunRuntimeTest}
+                                />
+                                <ExtendedRuntimeTestCard
+                                    findings={runtimeFindings}
+                                    state={cache.extendedRuntimeTest}
+                                    onRun={cache.validationResult.valid && !isValidating
+                                        ? onRunExtendedTest : undefined}
+                                    onCancel={onCancelExtendedTest}
                                 />
                             </div>
                         )}
@@ -360,21 +395,27 @@ function runtimeHeaderTone(status: PackageReadiness['runtimeStatus']): 'success'
 }
 
 function ValidationOverview({
+    manifest,
     readiness,
     result,
     fullResult,
     isValidating,
     packageName,
+    packageEntry,
     runtimeResult,
     runtimePhase,
+    extendedState,
 }: {
+    manifest: unknown;
     readiness: PackageReadiness;
     result: ValidationResult;
     fullResult?: ValidationResult;
     isValidating: boolean;
     packageName: string;
+    packageEntry: PackageEntry;
     runtimeResult?: RuntimeTestResult;
     runtimePhase?: RuntimeTestPhase;
+    extendedState?: RuntimeSuiteState;
 }) {
     const hiddenWarnings = Math.max(
         0,
@@ -387,7 +428,7 @@ function ValidationOverview({
         : readiness.staticWarnings > 0
             ? `Static validation needs review: ${readiness.staticWarnings} warning${readiness.staticWarnings === 1 ? '' : 's'}.`
             : 'Static validation passed.';
-    const statusTone = readiness.status === 'production-ready'
+    const statusTone = readiness.status === 'checks-passed'
         ? 'text-ss-success'
         : readiness.status === 'needs-review'
             ? 'text-ss-warning'
@@ -413,31 +454,38 @@ function ValidationOverview({
                     {isValidating && <Spinner />}
                     <ExportButtons
                         result={fullResult ?? result}
+                        manifest={manifest}
+                        key={packageEntry.key}
                         packageName={packageName}
+                        packageEntry={packageEntry}
                         runtimeResult={runtimeResult}
                         runtimePhase={runtimePhase}
+                        extendedState={extendedState}
                     />
                 </div>
             </div>
 
+            <p className="px-3 sm:px-4 pb-3 text-[11px] text-ss-on-surface-variant">
+                {readiness.scope}
+            </p>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-px bg-ss-outline-variant/20"
                  style={{ borderTop: '1px solid var(--ss-border-subtle)' }}>
                 <OverviewMetric
-                    label="Overall readiness"
+                    label="Overall result"
                     value={readiness.label}
-                    detail={readiness.status === 'production-ready' ? 'Ready for production' : 'Action required'}
+                    detail={readiness.detail}
                     valueClass={statusTone}
                 />
                 <OverviewMetric
                     label="Static validation"
-                    value={`${readiness.staticScore}%`}
+                    value={readiness.staticLabel}
                     detail={`${readiness.staticErrors} error${readiness.staticErrors === 1 ? '' : 's'} · ${readiness.staticWarnings} warning${readiness.staticWarnings === 1 ? '' : 's'}`}
                     valueClass={readiness.staticErrors > 0 ? 'text-ss-error' : readiness.staticWarnings > 0 ? 'text-ss-warning' : 'text-ss-success'}
                 />
                 <OverviewMetric
                     label="Runtime"
                     value={readiness.runtimeLabel}
-                    detail={runtimeFindings > 0 ? `${runtimeFindings} runtime finding${runtimeFindings === 1 ? '' : 's'}` : 'No runtime findings'}
+                    detail={`${runtimeFindings} issue${runtimeFindings === 1 ? '' : 's'}${readiness.runtimeCoverageIncomplete ? ' · Coverage incomplete' : ''}`}
                     valueClass={runtimeHeaderTone(readiness.runtimeStatus) === 'success'
                         ? 'text-ss-success'
                         : runtimeHeaderTone(readiness.runtimeStatus) === 'warning'
@@ -460,7 +508,7 @@ function ValidationOverview({
 }
 
 function ValidationStatusIcon({ readiness }: { readiness: PackageReadiness }) {
-    if (readiness.status === 'production-ready') {
+    if (readiness.status === 'checks-passed') {
         return <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-ss-success" />;
     }
     if (readiness.status === 'needs-review') {
@@ -488,7 +536,7 @@ function OverviewMetric({ label, value, detail, valueClass }: {
 }
 
 function readinessClass(status: PackageReadiness['status']): string {
-    if (status === 'production-ready') {
+    if (status === 'checks-passed') {
         return 'text-ss-success border-ss-success/30 bg-ss-success/10';
     }
     if (status === 'needs-review') {
@@ -583,64 +631,6 @@ function Spinner() {
 }
 
 // ─── Validation report export ─────────────────────────────────────────────────
-
-function ExportButtons({
-    result,
-    packageName,
-    runtimeResult,
-    runtimePhase,
-}: {
-    result: ValidationResult;
-    packageName: string;
-    runtimeResult?: RuntimeTestResult;
-    runtimePhase?: RuntimeTestPhase;
-}) {
-    const slug = packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const report = () => createValidationReport(packageName, result, runtimeResult, runtimePhase);
-
-    const btnCls = 'inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1.5 sm:py-1 rounded-sm text-[11px] sm:text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors';
-    const btnStyle = { border: '1px solid rgba(64, 72, 80, 0.5)' };
-
-    return (
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-            <button
-                onClick={() => downloadJson(report(), slug)}
-                className={btnCls}
-                style={btnStyle}
-                title="Download validation result as JSON"
-            >
-                Export JSON
-            </button>
-            <button
-                onClick={() => downloadHtml(report(), slug)}
-                className={btnCls}
-                style={btnStyle}
-                title="Download validation report as HTML"
-            >
-                Export HTML
-            </button>
-        </div>
-    );
-}
-
-function triggerDownload(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-function downloadJson(report: ReturnType<typeof createValidationReport>, slug: string): void {
-    const data = JSON.stringify(report, null, 2);
-    triggerDownload(new Blob([data], { type: 'application/json' }), `${slug}-validation-report.json`);
-}
-
-function downloadHtml(report: ReturnType<typeof createValidationReport>, slug: string): void {
-    const html = renderValidationReportHtml(report);
-    triggerDownload(new Blob([html], { type: 'text/html' }), `${slug}-validation-report.html`);
-}
 
 function PackageSizeBadge({ result }: { result: ValidationResult | undefined }) {
     if (!result) return null;

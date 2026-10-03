@@ -1,3 +1,6 @@
+import { findingDetectionText } from '../preview/runtime-findings.js';
+import RuntimeEvidence from './RuntimeEvidence.js';
+import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import {
     AlertTriangle,
     CheckCircle2,
@@ -11,192 +14,88 @@ import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test
 import type { RuntimeTestPhase } from '../readiness/package-readiness.js';
 import {
     diagnoseRuntimeError,
-    groupRuntimeFailures,
     type RuntimeFailureGroup,
     type RuntimeMode,
 } from '../preview/runtime-diagnostics.js';
 import { safeSpecReference } from '../readiness/spec-reference.js';
 import SpecReferenceLink from './SpecReferenceLink.js';
+import RuntimeFindingLinks from './RuntimeFindingLinks.js';
+import { isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
 
 interface Props {
     result?: RuntimeTestResult;
     phase?: RuntimeTestPhase;
     liveSteps?: RuntimeTestStep[];
     onRerun?: () => void;
+    findings: RuntimeFailureGroup[];
 }
 
-export default function RuntimeTestCard({ result, phase, liveSteps, onRerun }: Props) {
-    if (phase === 'pending') return <PendingCard />;
-    if (phase === 'running') return <RunningCard steps={liveSteps ?? []} />;
-    if (!result) return null;
+export default function RuntimeTestCard({ result, phase, liveSteps, onRerun, findings }: Props) {
+    if (!result && !phase) return null;
+    const failed = result && (!result.passed || result.steps.some((step) => step.status === 'fail'));
+    const inconclusive = result && !isConclusiveRuntimeResult(result);
+    const status = failed ? 'Failed' : phase === 'pending' ? 'Pending'
+        : phase === 'running' ? 'Running' : inconclusive ? 'Inconclusive' : 'Passed';
+    const steps = phase ? liveSteps ?? [] : result?.steps ?? [];
+    const warnings = steps.filter((step) => step.status === 'warning' && step.diagnostic?.code !== 'RESOURCE_LOAD_FAILED');
+    const checks = steps.filter((step) => step.status === 'pass' || step.status === 'skip');
 
-    const failureGroups = groupRuntimeFailures(result.steps);
-    const warningSteps = result.steps.filter((step) => step.status === 'warning');
-    const passedSteps = result.steps.filter((step) => step.status === 'pass' || step.status === 'skip');
-
-    if (!result.passed) {
-        const visibleFailures = failureGroups.length > 0
-            ? failureGroups
-            : groupRuntimeFailures([{
-                name: 'Runtime test',
-                status: 'fail' as const,
-                durationMs: 0,
-                error: 'The runtime test failed without returning a failed check.',
-            }]);
-        return (
-            <FailureCard
-                failures={visibleFailures}
-                warnings={warningSteps}
-                passedSteps={passedSteps}
-                totalDurationMs={result.totalDurationMs}
-                onRerun={onRerun}
-            />
-        );
-    }
-
-    return (
-        <CompletedCard
-            result={result}
-            warningSteps={warningSteps}
-            onRerun={onRerun}
-        />
-    );
-}
-
-function PendingCard() {
-    return (
-        <div className="rounded-sm bg-ss-surface" style={{ border: '1px solid rgba(75, 161, 226, 0.3)' }}>
-            <div className="flex items-center gap-2 px-4 py-3">
-                <span className="h-2 w-2 rounded-full bg-ss-primary-container shrink-0" />
-                <span className="text-xs font-semibold text-ss-on-surface">Runtime Test</span>
-                <span className="text-[10px] text-ss-primary-container">Pending</span>
+    return <section aria-label="Standard runtime test"
+        className="rounded-sm overflow-hidden bg-ss-surface border border-ss-outline-variant/40">
+        <div className="flex flex-wrap justify-between items-center gap-3 px-3 sm:px-4 py-3 border-b border-ss-outline-variant/30">
+            <div className="flex items-center gap-2">
+                {phase ? <Loader2 size={14} className="animate-spin text-ss-primary-container" />
+                    : failed ? <XCircle size={14} className="text-ss-error" />
+                        : inconclusive ? <AlertTriangle size={14} className="text-ss-warning" />
+                            : <CheckCircle2 size={14} className="text-ss-success" />}
+                <h3 className="text-xs font-semibold text-ss-on-surface">Standard Runtime Test</h3>
+                <span className={`text-[10px] ${failed ? 'text-ss-error' : 'text-ss-on-surface-variant'}`}>{status}</span>
             </div>
+            {!phase && <RerunButton onRerun={onRerun} />}
         </div>
-    );
-}
-
-function RunningCard({ steps }: { steps: RuntimeTestStep[] }) {
-    return (
-        <div className="rounded-sm overflow-hidden bg-ss-surface"
-             style={{ border: '1px solid rgba(75, 161, 226, 0.3)' }}>
-            <div className="flex items-center gap-2 px-4 py-3"
-                 style={{ borderBottom: steps.length > 0 ? '1px solid rgba(64, 72, 80, 0.2)' : undefined }}>
-                <Loader2 size={14} className="animate-spin text-ss-primary-container shrink-0" />
-                <span className="text-xs font-semibold text-ss-on-surface">Runtime Test</span>
-                <span className="text-[10px] text-ss-primary-container">Running</span>
-            </div>
-            {steps.length > 0 && (
-                <div className="flex flex-col">
-                    {steps.map((step, index) => <StepRow key={`${step.name}-${index}`} step={step} />)}
-                </div>
-            )}
+        <div className="px-3 sm:px-4 py-3 space-y-3">
+            <p className="text-xs text-ss-on-surface-variant">
+                {phase === 'pending' ? 'Waiting to start.' : phase === 'running'
+                    ? 'Checking the basic API contracts. Previous findings remain visible.'
+                    : `Basic API contracts checked · ${result?.totalDurationMs ?? 0} ms`}
+            </p>
+            <RuntimeFindingLinks findings={findings} suite="standard" />
+            {inconclusive && <p className="text-xs text-ss-warning">
+                Not fully tested. Some checks could not be completed.
+            </p>}
+            {warnings.map((step, index) => <StepRow key={index} step={step} />)}
+            {checks.length > 0 && <details>
+                <summary className="cursor-pointer text-xs text-ss-on-surface-variant">
+                    Passed and skipped checks ({checks.length})
+                </summary>
+                {checks.map((step, index) => <StepRow key={index} step={step} />)}
+            </details>}
         </div>
-    );
+    </section>;
 }
 
-function FailureCard({
-    failures,
-    warnings,
-    passedSteps,
-    totalDurationMs,
-    onRerun,
-}: {
-    failures: RuntimeFailureGroup[];
-    warnings: RuntimeTestStep[];
-    passedSteps: RuntimeTestStep[];
-    totalDurationMs: number;
-    onRerun?: () => void;
-}) {
-    return (
-        <section className="rounded-sm overflow-hidden bg-ss-surface"
-                 style={{ border: '1px solid rgba(204, 86, 98, 0.45)' }}>
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 px-3 sm:px-4 py-3 bg-ss-error/10"
-                 style={{ borderBottom: '1px solid rgba(204, 86, 98, 0.28)' }}>
-                <div className="flex items-start gap-3 min-w-0">
-                    <XCircle size={18} className="text-ss-error shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm font-semibold text-ss-on-surface">Runtime validation failed</h3>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-ss-error bg-ss-error/10 border border-ss-error/30">
-                                {failures.length} {failures.length === 1 ? 'issue' : 'issues'}
-                            </span>
-                        </div>
-                        <p className="text-xs text-ss-on-surface-variant mt-1 leading-relaxed">
-                            The manifest is valid, but the Graphic did not pass the OGraf runtime checks.
-                        </p>
-                    </div>
-                </div>
-                <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3 shrink-0 pl-7 sm:pl-0">
-                    <span className="text-[10px] font-mono text-ss-on-surface-variant/60">
-                        {totalDurationMs.toLocaleString()} ms
-                    </span>
-                    <RerunButton onRerun={onRerun} />
-                </div>
-            </div>
-
-            <div className="px-3 sm:px-4 py-3 sm:py-4 flex flex-col gap-4">
-                <div>
-                    <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ss-error mb-2">
-                        Runtime issues ({failures.length})
-                    </h4>
-                    <div className="flex flex-col gap-2">
-                        {failures.map((failure, index) => (
-                            <FailureDiagnostic key={`${failure.code}-${failure.label}-${index}`} failure={failure} />
-                        ))}
-                    </div>
-                </div>
-
-                {warnings.length > 0 && (
-                    <div>
-                        <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ss-warning mb-2">
-                            Warnings ({warnings.length})
-                        </h4>
-                        <div className="rounded-sm overflow-hidden border border-ss-warning/20">
-                            {warnings.map((step, index) => (
-                                <StepRow key={`${step.name}-${index}`} step={step} />
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {passedSteps.length > 0 && (
-                    <details className="rounded-sm bg-ss-surface-lowest"
-                             style={{ border: '1px solid rgba(64, 72, 80, 0.25)' }}>
-                        <summary className="cursor-pointer select-none px-3 py-2 text-xs text-ss-on-surface-variant hover:text-ss-on-surface transition-colors">
-                            Passed and skipped checks ({passedSteps.length})
-                        </summary>
-                        <div className="flex flex-col" style={{ borderTop: '1px solid rgba(64, 72, 80, 0.2)' }}>
-                            {passedSteps.map((step, index) => (
-                                <StepRow key={`${step.name}-${index}`} step={step} />
-                            ))}
-                        </div>
-                    </details>
-                )}
-            </div>
-        </section>
-    );
-}
-
-function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
+export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
     const modes = uniqueModes(failure);
-    const occurrenceLabel = failure.occurrences.length === 1
-        ? '1 occurrence'
-        : `${failure.occurrences.length} occurrences`;
-    const durationLabel = failure.occurrences.map(({ mode, step }) => (
-        `${mode ? `${mode} ` : ''}${step.durationMs} ms`
-    )).join(' · ');
+    const detectionText = findingDetectionText(failure);
     const modePrefix = modes.length > 0 ? `${modes.join('/')}: ` : '';
+    const contexts = [...new Set(failure.occurrences.map(({ step }) => stepContext(step)).filter(Boolean))];
     const copyText = [
         `${modePrefix}${failure.label}`,
         failure.code,
         failure.error,
+        detectionText,
         modes.length > 0 ? `Affected modes: ${modes.join(', ')}` : undefined,
+        ...contexts,
+        ...failure.occurrences.map(({ step }) => {
+            const explanation = explainRuntimeStep(step);
+            return `${stepContext(step)}\n${step.name}\n${explanation.expected ? `Expected: ${explanation.expected}\n` : ''}Received: ${explanation.received}\nCall inputs: ${explanation.parameters}`;
+        }),
         failure.hint,
         safeSpecReference(failure.specRef),
     ].filter(Boolean).join('\n');
 
     return (
-        <article aria-label={`${modePrefix}${failure.label} failed`} className="rounded-sm overflow-hidden bg-ss-error/5"
+        <article id={failure.id} tabIndex={-1} aria-label={`${modePrefix}${failure.label} failed`} className="rounded-sm overflow-hidden bg-ss-error/5"
                  style={{ border: '1px solid rgba(204, 86, 98, 0.3)', borderLeft: '3px solid #cc5662' }}>
             <div className="p-3 sm:p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -210,18 +109,18 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                             <code className="text-xs font-semibold font-mono text-ss-on-surface [overflow-wrap:anywhere]">{failure.label}</code>
                         </div>
                         <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] font-mono text-ss-on-surface-variant/50">
-                            <span>{occurrenceLabel}</span>
-                            <span>{durationLabel}</span>
+                            <span>{detectionText}</span>
                         </div>
                         <p className="text-[10px] font-semibold font-mono text-ss-error mt-2 tracking-wide">
                             {failure.code}
                         </p>
+
                     </div>
                     <button
                         type="button"
                         onClick={() => void navigator.clipboard?.writeText(copyText)}
                         className="inline-flex h-8 w-8 sm:h-auto sm:w-auto items-center justify-center gap-1 sm:px-2 sm:py-1 rounded-sm text-[10px] text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors shrink-0"
-                        title="Copy diagnostic"
+                        title="Copy diagnostic, including captured inputs and responses"
                         aria-label="Copy diagnostic"
                     >
                         <Copy size={10} />
@@ -231,6 +130,10 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                 <p title={failure.error} className="mt-2 text-[13px] sm:text-xs leading-relaxed text-ss-error whitespace-pre-wrap [overflow-wrap:anywhere]">
                     {failure.error ?? 'The runtime check failed without an error message.'}
                 </p>
+                {failure.occurrences[0] && <RuntimeEvidence step={failure.occurrences[0].step} />}
+                {failure.occurrences.length > 1 && <p className="mt-1 text-[11px] text-ss-on-surface-variant">
+                    First observation shown. Expand calls below to inspect each observation and its inputs.
+                </p>}
                 {failure.hint && (
                     <div className="mt-3 rounded-sm px-3 sm:px-4 py-3 bg-ss-surface-lowest text-xs leading-relaxed text-ss-on-surface-variant"
                          style={{ border: '1px solid rgba(64, 72, 80, 0.28)' }}>
@@ -239,6 +142,17 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                     </div>
                 )}
                 <SpecReferenceLink reference={failure.specRef} />
+                <details className="mt-3 text-xs text-ss-on-surface-variant">
+                    <summary className="cursor-pointer">Show calls and scenarios ({failure.occurrences.length})</summary>
+                    <ul className="mt-2 space-y-2 list-disc pl-4">
+                        {failure.occurrences.map(({ step }, index) => <li key={index}>
+                            <span className="font-medium">{step.suite === 'extended' ? 'Extended test' : 'Standard test'}</span>
+                            {' · '}{step.name} · {step.durationMs} ms
+                            <p className="mt-1 [overflow-wrap:anywhere]">{stepContext(step)}</p>
+                            <RuntimeEvidence step={step} inputs />
+                        </li>)}
+                    </ul>
+                </details>
             </div>
         </article>
     );
@@ -246,46 +160,6 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
 
 function uniqueModes(failure: RuntimeFailureGroup): RuntimeMode[] {
     return [...new Set(failure.occurrences.flatMap(({ mode }) => mode ? [mode] : []))];
-}
-
-function CompletedCard({
-    result,
-    warningSteps,
-    onRerun,
-}: {
-    result: RuntimeTestResult;
-    warningSteps: RuntimeTestStep[];
-    onRerun?: () => void;
-}) {
-    const inconclusive = result.inconclusive || warningSteps.length > 0;
-    return (
-        <section className="rounded-sm overflow-hidden bg-ss-surface"
-                 style={{ border: `1px solid ${inconclusive ? 'rgba(217, 164, 65, 0.35)' : 'rgba(40, 175, 98, 0.3)'}` }}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 sm:px-4 py-2.5"
-                 style={{ borderBottom: '1px solid rgba(64, 72, 80, 0.2)' }}>
-                <div className="flex items-center gap-2">
-                    {inconclusive
-                        ? <AlertTriangle size={14} className="text-ss-warning" />
-                        : <CheckCircle2 size={14} className="text-ss-success" />}
-                    <span className="text-xs font-semibold text-ss-on-surface">Runtime Test</span>
-                    <span className={`text-[10px] ${inconclusive ? 'text-ss-warning' : 'text-ss-success'}`}>
-                        {inconclusive ? 'Inconclusive' : 'Passed'}
-                    </span>
-                </div>
-                <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-3 pl-5 sm:pl-0">
-                    <span className="text-[10px] font-mono text-ss-on-surface-variant/60">
-                        {result.totalDurationMs.toLocaleString()} ms
-                    </span>
-                    <RerunButton onRerun={onRerun} />
-                </div>
-            </div>
-            <div className="flex flex-col">
-                {result.steps.map((step, index) => (
-                    <StepRow key={`${step.name}-${index}`} step={step} />
-                ))}
-            </div>
-        </section>
-    );
 }
 
 function RerunButton({ onRerun }: { onRerun?: () => void }) {
@@ -304,7 +178,7 @@ function RerunButton({ onRerun }: { onRerun?: () => void }) {
     );
 }
 
-function StepRow({ step }: { step: RuntimeTestStep }) {
+export function StepRow({ step }: { step: RuntimeTestStep }) {
     const diagnostic = step.status === 'fail' || step.status === 'warning' || step.diagnostic
         ? diagnoseRuntimeError(step.error, step.diagnostic)
         : undefined;
@@ -334,6 +208,11 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
                         </span>
                     )}
                 </div>
+                {stepContext(step) && (
+                    <p className="text-[10px] mt-1 text-ss-on-surface-variant [overflow-wrap:anywhere]">
+                        {stepContext(step)}
+                    </p>
+                )}
                 {step.error && (
                     <p className={`text-[11px] leading-relaxed mt-1 whitespace-pre-wrap break-words ${
                         step.status === 'warning'
@@ -355,4 +234,15 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
             </div>
         </div>
     );
+}
+
+function stepContext(step: RuntimeTestStep): string {
+    const context = [step.suite, step.renderMode, step.scenarioId, step.checkId];
+    if (step.expectedCurrentStep !== undefined) {
+        context.push(`Expected step: ${step.expectedCurrentStep === null ? 'END' : step.expectedCurrentStep}`);
+        context.push(`Actual step: ${step.actualCurrentStep === null
+            ? 'END' : step.actualCurrentStep ?? 'not reported'}`);
+    }
+
+    return context.filter(Boolean).join(' · ');
 }

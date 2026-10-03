@@ -2,6 +2,41 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## 0.3.0 - 2026-10-03
+
+### Added
+
+- Grouped resource observations for package reads, external fetch failures, element load errors and browser CSP restrictions, with copy support and JSON/HTML evidence. Treat observations as review requirements rather than inferred OGraf contract violations.
+
+- Compact standard/extended test coverage in the UI and JSON/HTML reports, based on captured calls, confirmed steps, Custom Actions and attempted render configurations.
+- Local ZIP selection and drag-and-drop with multiple Graphics, shared assets, cancellable read-only snapshots, integrity checks and bounded extraction.
+
+- Expected/received runtime explanations with captured inputs per observation, consistent clipboard/report details, and explicit missing-evidence labels.
+- Manifest issue links that expand and focus the affected field (or the parent of a missing field), with current-value inspection and ambiguity checks.
+
+- Reproduction context in JSON/HTML reports: build and EBU versions, browser, run times, bounded package fingerprints, actual call parameters, render configuration and raw responses with explicit undefined/unavailable evidence.
+- Local export review with included-data inspection and cancellation before download; retained observations keep their original runtime context.
+
+- Optional extended runtime tests for relative and absolute step navigation, animation-enabled actions, repeated lifecycles, and NRT seeking.
+- Separate standard and extended results with scenario progress, background execution, cancellation, and two-minute budgets with five- and ten-minute retries after timeouts.
+- Scenario and step expectations in diagnostic details and exports, with explicit coverage limits and fresh sandbox sessions for independent scenarios.
+
+### Fixed
+
+- Reject empty non-vendor payload field names consistently in both runtime normalizers.
+- Accept exported Web Component classes that register themselves, while preserving genuine constructor failures.
+- Keep runtime progress pending while an extended attempt is active and retain known failures during retries.
+- Mark unsatisfied declared render profiles and precision-unsafe step navigation as test limitations instead of silently testing incorrect expectations.
+- Make the concurrent-action browser regression synchronize with pending calls rather than a fixed timing window; cover export cancellation on package navigation.
+
+- Count distinct runtime issues in the coverage summary; show repeated detections separately and move individual check counts into expandable details, consistently in the UI and reports.
+
+- Describe executed checks with Checks Passed/Failed and Manifest Valid/Invalid instead of production readiness and a synthetic percentage. Share scope notes across the UI and exports; JSON readiness now uses `checks-passed`, `checksPassed`, and `staticLabel` in place of the former production status and score.
+
+- Show repeated contract failures once across standard and extended tests, with all observations available in expandable details and exports. Keep incomplete coverage separate from issue counts.
+- Preserve known runtime failures during retries and incomplete or cancelled attempts; replace them only after a conclusive run of the same suite.
+- Ignore stale progress and results after package changes and await sandbox cleanup before advancing the runtime queue.
+
 ## 0.2.4 - 2026-10-03
 
 ### Fixed

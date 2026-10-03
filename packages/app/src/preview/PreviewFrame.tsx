@@ -7,6 +7,7 @@ import { DEFAULT_BACKGROUND, type PreviewBackground } from './preview-types.js';
 import { usePreviewGraphic } from './use-preview-graphic.js';
 import {
     getRenderRequirementOptions,
+    selectRuntimeRenderRequirement,
     sameRenderCharacteristics,
     type RenderRequirementOption,
 } from './render-requirements.js';
@@ -69,6 +70,7 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
     const schema = readSchema(manifest);
     const customActions = readCustomActions(manifest);
     const renderRequirementOptions = getRenderRequirementOptions(manifest);
+    const renderRequirementLimitation = selectRuntimeRenderRequirement(manifest).unavailableReason;
 
     const [background, setBackground] = useState<PreviewBackground>(loadBackground);
     const preview = usePreviewGraphic({ swReady, dirHandle, manifest, packagePath, background });
@@ -116,6 +118,14 @@ export default function PreviewFrame({ swReady, dirHandle, manifest, packagePath
                         <StatusBadge phase={preview.state.phase} error={preview.state.error} />
                     </div>
                 </div>
+
+                {renderRequirementLimitation && (
+                    <p role="status" className="px-4 py-2 text-xs text-ss-on-surface-variant">
+                        {renderRequirementLimitation}{' '}
+                        Manual preview uses custom/default values and does not establish that
+                        a declared render requirement is met.
+                    </p>
+                )}
 
                 {/* Stage -- aspect ratio from renderCharacteristics */}
                 <PreviewStage

@@ -15,6 +15,7 @@ export interface RuntimeFailureOccurrence {
 }
 
 export interface RuntimeFailureGroup extends RuntimeDiagnostic {
+    id: string;
     label: string;
     error?: string;
     occurrences: RuntimeFailureOccurrence[];
@@ -27,21 +28,18 @@ export function splitRuntimeStepName(name: string): { mode?: RuntimeMode; label:
         : { label: name };
 }
 
-/**
- * Group repeated observations of the same OGraf contract violation. The exact
- * check label and error remain part of the identity, so unrelated methods,
- * custom actions, and failures are never merged merely because they share a
- * diagnostic code.
- */
+/** Contract identity spans suites; uncertain exceptions keep their execution context. */
 export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): RuntimeFailureGroup[] {
     const groups = new Map<string, RuntimeFailureGroup>();
 
     for (const step of steps) {
         if (step.status !== 'fail') continue;
         const diagnostic = diagnoseRuntimeError(step.error, step.diagnostic);
-        const { mode, label } = splitRuntimeStepName(step.name);
+        const parsed = splitRuntimeStepName(step.name);
+        const mode = step.renderMode ?? parsed.mode;
+        const label = hasContractIdentity(step) ? `${step.diagnostic?.method}()` : parsed.label;
         const error = step.error?.trim();
-        const key = JSON.stringify([diagnostic.code, step.diagnostic?.reason, step.diagnostic?.method, step.diagnostic?.field, label, error ?? '']);
+        const key = runtimeFailureIdentity(step);
         const existing = groups.get(key);
         const occurrence: RuntimeFailureOccurrence = {
             ...(mode ? { mode } : {}),
@@ -52,6 +50,7 @@ export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): Runtime
             existing.occurrences.push(occurrence);
         } else {
             groups.set(key, {
+                id: `runtime-finding-${groups.size + 1}`,
                 ...diagnostic,
                 label,
                 ...(error ? { error } : {}),
@@ -61,6 +60,28 @@ export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): Runtime
     }
 
     return [...groups.values()];
+}
+
+function hasContractIdentity(step: RuntimeTestStep): boolean {
+    const { code, method } = step.diagnostic ?? {};
+    return !!method && method !== 'customAction' && !!code
+        && ['INVALID_EMPTY_PAYLOAD', 'INVALID_RETURN_PAYLOAD', 'INVALID_STATUS_CODE',
+            'INVALID_STATUS_MESSAGE', 'INVALID_CURRENT_STEP', 'CURRENT_STEP_MISMATCH',
+            'ACTION_RETURNED_ERROR_STATUS', 'METHOD_MUST_RETURN_PROMISE'].includes(code);
+}
+
+export function runtimeFailureIdentity(step: RuntimeTestStep): string {
+    const contract = hasContractIdentity(step);
+    const details = step.diagnostic;
+    return JSON.stringify([
+        details?.code ?? 'RUNTIME_CHECK_FAILED', details?.reason, details?.method,
+        details?.field, details?.statusCode, step.error?.trim() ?? '',
+        ...(contract ? [] : [splitRuntimeStepName(step.name).label, step.suite ?? 'standard',
+            step.scenarioId?.replace(/^(?:rt|nrt)\./, ''),
+            step.checkId?.replace(/^(?:rt|nrt)\./, '')]),
+        step.expectedCurrentStep === undefined ? 'not-specified' : step.expectedCurrentStep,
+        step.actualCurrentStep === undefined ? 'not-reported' : step.actualCurrentStep,
+    ]);
 }
 
 const SPEC = 'https://ograf.ebu.io/v1/specification/docs/Specification.html';
@@ -78,13 +99,24 @@ export function diagnoseRuntimeError(
     });
 
     switch (code) {
+        case 'RESOURCE_LOAD_FAILED':
+            return diagnostic(
+                details?.reason === 'package-missing'
+                    ? 'The requested file was not found in the selected package. Check its path and filename, including case. Optional fallback resources may fail intentionally; review the visual output.'
+                    : details?.reason === 'package-unreadable'
+                        ? 'The package resource could not be read. Check the selected files and access permissions. This observation alone does not establish an OGraf violation.'
+                        : details?.reason === 'sandbox-policy'
+                            ? 'A browser content security policy blocked this resource. Review the applicable policy and test in a compatible renderer; this observation is not an OGraf violation.'
+                            : 'Review the external resource and the declared render requirements. A browser failure may reflect CORS, connectivity or server behavior; the exact cause is not always exposed. This observation alone does not establish an OGraf violation.',
+                `${SPEC}#renderrequirements`,
+            );
         case 'INVALID_EMPTY_PAYLOAD':
             return diagnostic(
                 'setActionsSchedule must resolve to undefined, {}, or an object containing only v_-prefixed vendor fields. Do not return statusCode, statusMessage, or result.',
                 `${SPEC}#setactionsschedule`,
             );
         case 'INVALID_RETURN_PAYLOAD': {
-            if (details?.reason !== 'non-vendor-field' || !details.field) {
+            if (details?.reason !== 'non-vendor-field' || details.field === undefined) {
                 if (details?.method === 'playAction') {
                     return diagnostic('playAction must resolve to an object containing statusCode and currentStep. Use the zero-based active step, or currentStep: undefined at the end. The complete payload must not be undefined.', methodRef);
                 }
@@ -130,6 +162,21 @@ export function diagnoseRuntimeError(
         case 'RUNTIME_ABORTED':
             return diagnostic('The test was interrupted. Rerun it to obtain results for the remaining checks.');
         case 'PREVIEW_LIMITATION':
+            if (details?.reason === 'unmatched-render-requirements') {
+                return diagnostic('No declared render alternative can be selected for this test. '
+                    + 'Check the manifest constraints and use a compatible renderer. '
+                    + 'Default preview values do not establish that a requirement is met.',
+                `${SPEC}#renderrequirements`);
+            }
+            if (details?.reason === 'blocked-dependent-checks' || details?.reason === 'blocked-prerequisite') {
+                return diagnostic('Resolve the preceding failure or test limitation, then rerun the full suite. Earlier findings remain until the dependent checks can be evaluated.');
+            }
+            if (details?.reason === 'bounded-step-coverage') {
+                return diagnostic('Some target steps are outside this suite\'s bounded coverage. Check the omitted steps manually in Preview or another renderer. A larger time budget does not expand the selected targets.');
+            }
+            if (details?.reason === 'incomplete-runtime-harness') {
+                return diagnostic('The validator could not complete the test. Inspect the harness error and rerun the suite; earlier findings remain until a conclusive replacement finishes.');
+            }
             if (details?.reason === 'test-data-generation') {
                 return diagnostic('The validator could not generate test data within its resource limits. Provide suitable input manually in Preview or another renderer. These limits are not OGraf schema restrictions.');
             }

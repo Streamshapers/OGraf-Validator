@@ -6,6 +6,55 @@ import {
 } from '../runtime-diagnostics.js';
 
 describe('runtime diagnostics', () => {
+    it('explains omitted coverage without attributing it to missing renderer capabilities', () => {
+        const blocked = diagnoseRuntimeError(undefined, {
+            code: 'PREVIEW_LIMITATION', reason: 'blocked-dependent-checks',
+        });
+        expect(blocked.hint).toContain('preceding failure');
+        expect(blocked.hint).toContain('Earlier findings remain');
+        expect(blocked.specRef).toBeUndefined();
+        const bounded = diagnoseRuntimeError(undefined, {
+            code: 'PREVIEW_LIMITATION', reason: 'bounded-step-coverage',
+        });
+        expect(bounded.hint).toContain('omitted steps');
+        expect(bounded.hint).toContain('time budget does not expand');
+        const harness = diagnoseRuntimeError(undefined, {
+            code: 'PREVIEW_LIMITATION', reason: 'incomplete-runtime-harness',
+        });
+        expect(harness.hint).toContain('validator could not complete');
+        expect(harness.specRef).toBeUndefined();
+        const render = diagnoseRuntimeError(undefined, {
+            code: 'PREVIEW_LIMITATION', reason: 'unmatched-render-requirements',
+        });
+        expect(render.hint).toContain('Default preview values do not establish');
+        expect(render.specRef).toMatch(/#renderrequirements$/);
+    });
+
+    it('groups equivalent extended RT/NRT checks without losing their scenario context', () => {
+        const groups = groupRuntimeFailures((['RT', 'NRT'] as const).map((renderMode) => ({
+            name: `${renderMode}: playAction()`, status: 'fail', durationMs: 1,
+            error: 'Wrong step', suite: 'extended', renderMode,
+            scenarioId: `${renderMode.toLowerCase()}.steps`,
+            checkId: `${renderMode.toLowerCase()}.steps.goto`,
+            expectedCurrentStep: 2, actualCurrentStep: 0,
+        })));
+        expect(groups).toHaveLength(1);
+        expect(groups[0]?.occurrences.map(({ mode }) => mode)).toEqual(['RT', 'NRT']);
+        expect(groups[0]?.occurrences[1]?.step.scenarioId).toBe('nrt.steps');
+    });
+
+    it('does not merge identical errors from distinct extended scenarios or expectations', () => {
+        const base = {
+            name: 'RT: playAction()', status: 'fail' as const, durationMs: 1,
+            error: 'Wrong step', suite: 'extended' as const, renderMode: 'RT' as const,
+        };
+        expect(groupRuntimeFailures([
+            { ...base, scenarioId: 'rt.steps', expectedCurrentStep: 1 },
+            { ...base, scenarioId: 'rt.repeat', expectedCurrentStep: 1 },
+            { ...base, scenarioId: 'rt.steps', expectedCurrentStep: 2 },
+        ])).toHaveLength(3);
+    });
+
     it('separates the runtime mode from the check label', () => {
         expect(splitRuntimeStepName('NRT: playAction(goto: 0)')).toEqual({
             mode: 'NRT',
@@ -21,6 +70,9 @@ describe('runtime diagnostics', () => {
             code: 'INVALID_RETURN_PAYLOAD',
             hint: expect.stringContaining('result: { segment: value }'),
         });
+        expect(diagnoseRuntimeError(undefined, {
+            code: 'INVALID_RETURN_PAYLOAD', reason: 'non-vendor-field', field: '', method: 'load',
+        }).hint).toContain('result: { "": value }');
     });
 
     it('recognizes missing API methods', () => {
@@ -119,7 +171,7 @@ describe('runtime diagnostics', () => {
         expect(groups).toHaveLength(1);
         expect(groups[0]).toMatchObject({
             code: 'INVALID_RETURN_PAYLOAD',
-            label: 'playAction(goto: 0)',
+            label: 'playAction()',
             occurrences: [
                 { mode: 'RT', step: { durationMs: 7 } },
                 { mode: 'NRT', step: { durationMs: 9 } },

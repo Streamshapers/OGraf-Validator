@@ -37,7 +37,7 @@ function createWorker(reply: { error?: string; buffer?: ArrayBuffer } = {}) {
     }));
     handlers.get('message')?.({
         source: client,
-        data: { protocol: 5, type: 'OGRAF_PREVIEW_SESSION_REGISTER', sessionId, tabToken },
+        data: { protocol: 6, type: 'OGRAF_PREVIEW_SESSION_REGISTER', sessionId, tabToken },
     });
 
     return {
