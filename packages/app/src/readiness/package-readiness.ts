@@ -1,6 +1,7 @@
 import type { ValidationResult } from '@streamshapers/ograf-validator-core';
 import { groupRuntimeFailures } from '../preview/runtime-diagnostics.js';
-import type { RuntimeTestResult } from '../preview/runtime-test-types.js';
+import type { RuntimeSuiteState, RuntimeTestResult } from '../preview/runtime-test-types.js';
+import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
 
 export type PackageReadinessStatus =
     | 'static-invalid'
@@ -38,21 +39,26 @@ export function derivePackageReadiness(
     validation: ValidationResult,
     runtimeResult?: RuntimeTestResult,
     runtimePhase?: RuntimeTestPhase,
+    extendedState?: RuntimeSuiteState,
 ): PackageReadiness {
     const staticErrors = validation.errors.length;
     const staticWarnings = validation.warnings.length;
     const staticInvalid = !validation.valid || staticErrors > 0;
-    const evaluatedRuntimeResult = runtimePhase ? undefined : runtimeResult;
-    const failedSteps = evaluatedRuntimeResult?.steps.filter((step) => step.status === 'fail').length ?? 0;
-    const runtimeFailureIssues = groupRuntimeFailures(evaluatedRuntimeResult?.steps ?? []).length;
-    const warningSteps = evaluatedRuntimeResult?.steps.filter((step) => step.status === 'warning').length ?? 0;
-    const runtimeFailed = evaluatedRuntimeResult !== undefined && (!evaluatedRuntimeResult.passed || failedSteps > 0);
+    const extendedResult = getRuntimeSuiteResult(extendedState);
+    const results = [runtimeResult, extendedResult]
+        .filter((result): result is RuntimeTestResult => result !== undefined);
+    const steps = results.flatMap((result) => result.steps);
+    const failedSteps = steps.filter((step) => step.status === 'fail').length;
+    const runtimeFailureIssues = groupRuntimeFailures(steps).length;
+    const warningSteps = steps.filter((step) => step.status === 'warning').length;
+    const runtimeFailed = results.some((result) => !result.passed) || failedSteps > 0;
+    const runtimeInconclusive = results.some((result) => !isConclusiveRuntimeResult(result));
     const runtimeErrors = !staticInvalid && runtimeFailed
         ? Math.max(1, runtimeFailureIssues)
         : 0;
     const runtimeWarnings = staticInvalid
         ? 0
-        : evaluatedRuntimeResult?.inconclusive
+        : runtimeInconclusive
             ? Math.max(1, warningSteps)
             : warningSteps;
     const totalIssues = staticErrors + staticWarnings + runtimeErrors + runtimeWarnings;
@@ -64,21 +70,24 @@ export function derivePackageReadiness(
     if (staticInvalid) {
         status = 'static-invalid';
         runtimeStatus = 'not-run';
+    } else if (runtimeFailed) {
+        status = 'runtime-failed';
+        runtimeStatus = 'failed';
     } else if (runtimePhase === 'running') {
         status = 'runtime-running';
         runtimeStatus = 'running';
     } else if (runtimePhase === 'pending') {
         status = 'runtime-pending';
         runtimeStatus = 'pending';
-    } else if (!evaluatedRuntimeResult) {
+    } else if (!runtimeResult) {
         status = 'runtime-pending';
         runtimeStatus = 'pending';
-    } else if (runtimeFailed) {
-        status = 'runtime-failed';
-        runtimeStatus = 'failed';
-    } else if (evaluatedRuntimeResult.inconclusive || runtimeWarnings > 0 || staticWarnings > 0) {
+    } else if (extendedState?.active) {
+        status = extendedState.active.phase === 'pending' ? 'runtime-pending' : 'runtime-running';
+        runtimeStatus = extendedState.active.phase === 'pending' ? 'pending' : 'running';
+    } else if (runtimeInconclusive || runtimeWarnings > 0 || staticWarnings > 0) {
         status = 'needs-review';
-        runtimeStatus = evaluatedRuntimeResult.inconclusive || runtimeWarnings > 0 ? 'inconclusive' : 'passed';
+        runtimeStatus = runtimeInconclusive || runtimeWarnings > 0 ? 'inconclusive' : 'passed';
     } else {
         status = 'production-ready';
         runtimeStatus = 'passed';

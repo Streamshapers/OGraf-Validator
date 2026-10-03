@@ -1,5 +1,11 @@
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
-import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
+import type {
+    RuntimeActiveAttempt,
+    RuntimeSuiteState,
+    RuntimeTestResult,
+    RuntimeTestStep,
+} from '../preview/runtime-test-types.js';
+import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
 import { diagnoseRuntimeError } from '../preview/runtime-diagnostics.js';
 import { safeSpecReference } from './spec-reference.js';
 import {
@@ -19,6 +25,16 @@ export interface ValidationReport {
         phase: RuntimeTestPhase | null;
         result: RuntimeTestResult | null;
     };
+    extendedRuntimeTest?: {
+        status: string;
+        label: string;
+        latestAttempt: RuntimeTestResult | null;
+        lastCompleted: RuntimeTestResult | null;
+        retainedFailures: RuntimeTestStep[];
+        active: RuntimeActiveAttempt | null;
+        progress: RuntimeActiveAttempt['progress'] | null;
+        result: RuntimeTestResult | null;
+    };
 }
 
 export function createValidationReport(
@@ -27,29 +43,24 @@ export function createValidationReport(
     runtimeResult?: RuntimeTestResult,
     runtimePhase?: RuntimeTestPhase,
     generatedAt = new Date(),
+    extendedState?: RuntimeSuiteState,
 ): ValidationReport {
-    const readiness = derivePackageReadiness(staticValidation, runtimeResult, runtimePhase);
+    const readiness = derivePackageReadiness(
+        staticValidation, runtimeResult, runtimePhase, extendedState,
+    );
+    const standardReadiness = derivePackageReadiness(staticValidation, runtimeResult, runtimePhase);
     return {
         generatedAt: generatedAt.toISOString(),
         packageName,
         readiness,
         staticValidation,
         runtimeTest: {
-            status: readiness.runtimeStatus,
-            label: readiness.runtimeLabel,
+            status: standardReadiness.runtimeStatus,
+            label: standardReadiness.runtimeLabel,
             phase: runtimePhase ?? null,
-            result: runtimeResult ? {
-                ...runtimeResult,
-                steps: runtimeResult.steps.map((step) => (
-                    step.status === 'fail' || step.status === 'warning' || step.diagnostic
-                        ? { ...step, diagnostic: {
-                            ...step.diagnostic,
-                            ...diagnoseRuntimeError(step.error, step.diagnostic),
-                        } }
-                        : { ...step }
-                )),
-            } : null,
+            result: enrichResult(runtimeResult),
         },
+        ...(extendedState ? { extendedRuntimeTest: createExtendedReport(extendedState) } : {}),
     };
 }
 
@@ -64,7 +75,7 @@ export function renderValidationReportHtml(report: ValidationReport): string {
     const runtimeRows = report.runtimeTest.result?.steps.map((step) => `
             <tr>
                 <td><span class="runtime-${step.status}">${escapeHtml(step.status.toUpperCase())}</span></td>
-                <td><code>${escapeHtml(step.name)}</code></td>
+                <td><code>${escapeHtml(step.name)}</code>${renderStepContext(step)}</td>
                 <td>${renderRuntimeMessage(step)}</td>
             </tr>`).join('') ?? '';
     const runtimeSection = runtimeRows
@@ -112,8 +123,96 @@ ${report.staticValidation.errors.length === 0 && report.staticValidation.warning
     : ''}
 ${staticIssues}
 ${runtimeSection}
+${renderExtendedReport(report.extendedRuntimeTest)}
 </body>
 </html>`;
+}
+
+function enrichStep(step: RuntimeTestStep): RuntimeTestStep {
+    return step.status === 'fail' || step.status === 'warning' || step.diagnostic
+        ? { ...step, diagnostic: {
+            ...step.diagnostic,
+            ...diagnoseRuntimeError(step.error, step.diagnostic),
+        } }
+        : { ...step };
+}
+
+function enrichResult(result: RuntimeTestResult | undefined): RuntimeTestResult | null {
+    return result ? { ...result, steps: result.steps.map(enrichStep) } : null;
+}
+
+function createExtendedReport(state: RuntimeSuiteState): NonNullable<ValidationReport['extendedRuntimeTest']> {
+    const result = getRuntimeSuiteResult(state);
+    const failed = result && (!result.passed || result.steps.some((step) => step.status === 'fail'));
+    const status = failed ? 'failed'
+        : state.active ? state.active.phase
+            : !result ? 'not-run'
+                : isConclusiveRuntimeResult(result) ? 'passed' : 'inconclusive';
+
+    return {
+        status,
+        label: status === 'not-run' ? 'Not Run' : status[0]!.toUpperCase() + status.slice(1),
+        latestAttempt: enrichResult(state.latestAttempt),
+        lastCompleted: enrichResult(state.lastCompleted),
+        retainedFailures: (state.retainedFailures ?? []).map(enrichStep),
+        active: state.active ? { ...state.active, steps: state.active.steps.map(enrichStep) } : null,
+        progress: state.active?.progress ?? null,
+        result: enrichResult(result),
+    };
+}
+
+function renderExtendedReport(extended: ValidationReport['extendedRuntimeTest']): string {
+    if (!extended) return '';
+
+    const attempt = extended.latestAttempt;
+    const budget = extended.active?.budgetMinutes ?? attempt?.budgetMinutes;
+    const progress = extended.progress;
+    const rows = extended.result?.steps.map((step) => `<tr>
+        <td class="runtime-${step.status}">${escapeHtml(step.status.toUpperCase())}</td>
+        <td><code>${escapeHtml(step.name)}</code>${renderStepContext(step)}</td>
+        <td>${step.durationMs} ms</td><td>${renderRuntimeMessage(step)}</td>
+    </tr>`).join('') ?? '';
+    const scenarios = attempt?.scenarios ?? extended.lastCompleted?.scenarios ?? [];
+    const scenarioRows = scenarios.map((scenario) => `<tr>
+        <td>${escapeHtml(scenario.renderMode)}</td>
+        <td>${escapeHtml(scenario.label)}</td><td>${escapeHtml(scenario.status)}</td>
+        <td>${scenario.executedChecks}/${scenario.plannedChecks}</td>
+        <td>${escapeHtml(scenario.reason ?? '')}</td>
+    </tr>`).join('');
+    const metadata = [
+        budget ? `Budget: ${budget} minutes` : undefined,
+        attempt?.outcome ? `Latest attempt: ${attempt.outcome}` : undefined,
+        attempt?.runId ? `Run: ${attempt.runId}` : undefined,
+        extended.lastCompleted?.runId ? `Last conclusive run: ${extended.lastCompleted.runId}` : undefined,
+        extended.active ? `Current attempt: ${extended.active.phase}` : undefined,
+    ].filter((entry): entry is string => entry !== undefined).map(escapeHtml).join(' · ');
+
+    return `<h2>Extended Runtime Test — ${escapeHtml(extended.label)}</h2>
+        <p>${metadata}</p>
+        ${progress ? `<p>${progress.completedScenarios}/${progress.totalScenarios} scenarios completed
+            ${escapeHtml(progress.renderMode ?? '')} ${escapeHtml(progress.scenarioLabel ?? '')}
+            ${escapeHtml(progress.currentCheck ?? '')}</p>` : ''}
+        ${extended.retainedFailures.length > 0 ? '<p>Known failures from earlier attempts remain until a complete, conclusive replacement test finishes.</p>' : ''}
+        ${scenarioRows ? `<h3>Scenario coverage</h3><table><thead><tr>
+            <th>Mode</th><th>Scenario</th><th>Status</th><th>Checks executed/planned</th><th>Reason</th>
+            </tr></thead><tbody>${scenarioRows}</tbody></table>` : ''}
+        <p>Checks cover API contracts and observed runtime errors. Visual correctness is not tested.</p>
+        ${rows ? `<table><thead><tr><th>Status</th><th>Check</th><th>Duration</th><th>Message</th>
+            </tr></thead><tbody>${rows}</tbody></table>` : ''}`;
+}
+
+function renderStepContext(step: RuntimeTestStep): string {
+    const context = [step.renderMode, step.scenarioId, step.checkId]
+        .filter((entry): entry is string => entry !== undefined);
+    const expectation = step.expectedCurrentStep !== undefined
+        ? `<p>Expected step: ${escapeHtml(formatCurrentStep(step.expectedCurrentStep))}; `
+            + `actual: ${escapeHtml(formatCurrentStep(step.actualCurrentStep))}</p>` : '';
+
+    return (context.length > 0 ? `<p>${context.map(escapeHtml).join(' · ')}</p>` : '') + expectation;
+}
+
+function formatCurrentStep(step: number | null | undefined): string {
+    return step === null ? 'END' : step === undefined ? 'not reported' : String(step);
 }
 
 function renderIssueSection(issues: ValidationIssue[], color: string, label: string): string {

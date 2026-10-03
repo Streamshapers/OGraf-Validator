@@ -9,7 +9,13 @@ import IssueList from './IssueList.js';
 import PreviewFrame from '../preview/PreviewFrame.js';
 import PackageOverview from './PackageOverview.js';
 import RuntimeTestCard from './RuntimeTestCard.js';
-import type { RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
+import ExtendedRuntimeTestCard from './ExtendedRuntimeTestCard.js';
+import type {
+    RuntimeBudgetMinutes,
+    RuntimeSuiteState,
+    RuntimeTestResult,
+    RuntimeTestStep,
+} from '../preview/runtime-test-types.js';
 import {
     derivePackageReadiness,
     type PackageReadiness,
@@ -30,6 +36,8 @@ export interface PackageCache {
     runtimeTest?: RuntimeTestResult;
     runtimeTestPhase?: RuntimeTestPhase;
     runtimeTestSteps?: RuntimeTestStep[];
+    standardRuntimeTest?: RuntimeSuiteState;
+    extendedRuntimeTest?: RuntimeSuiteState;
 }
 
 type Tab = 'validation' | 'inspect' | 'preview';
@@ -52,6 +60,8 @@ interface Props {
     onOpenDirectory: () => void;
     onReopenLastDirectory: () => void;
     onRerunRuntimeTest?: () => void;
+    onRunExtendedTest?: (budgetMinutes: RuntimeBudgetMinutes) => void;
+    onCancelExtendedTest?: () => void;
 
     // Package overview props
     rootName: string | null;
@@ -61,7 +71,7 @@ interface Props {
     onSelectPackage: (entry: PackageEntry) => void;
 }
 
-export default function ContentArea({ selectedPackage, cache, packageReadiness, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
+export default function ContentArea({ selectedPackage, cache, packageReadiness, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, onRunExtendedTest, onCancelExtendedTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>('validation');
 
     // Reset to validation tab whenever a different package is selected
@@ -90,6 +100,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
             cache.fullValidationResult ?? cache.validationResult,
             cache.runtimeTest,
             cache.runtimeTestPhase,
+            cache.extendedRuntimeTest,
         )
         : null;
 
@@ -202,6 +213,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                     packageName={selectedPackage.displayName}
                                     runtimeResult={cache.runtimeTest}
                                     runtimePhase={cache.runtimeTestPhase}
+                                    extendedState={cache.extendedRuntimeTest}
                                 />
                                 <IssueList result={cache.validationResult} />
                                 <RuntimeTestCard
@@ -209,6 +221,12 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                     phase={cache.runtimeTestPhase}
                                     liveSteps={cache.runtimeTestSteps}
                                     onRerun={onRerunRuntimeTest}
+                                />
+                                <ExtendedRuntimeTestCard
+                                    state={cache.extendedRuntimeTest}
+                                    onRun={cache.validationResult.valid && !isValidating
+                                        ? onRunExtendedTest : undefined}
+                                    onCancel={onCancelExtendedTest}
                                 />
                             </div>
                         )}
@@ -367,6 +385,7 @@ function ValidationOverview({
     packageName,
     runtimeResult,
     runtimePhase,
+    extendedState,
 }: {
     readiness: PackageReadiness;
     result: ValidationResult;
@@ -375,6 +394,7 @@ function ValidationOverview({
     packageName: string;
     runtimeResult?: RuntimeTestResult;
     runtimePhase?: RuntimeTestPhase;
+    extendedState?: RuntimeSuiteState;
 }) {
     const hiddenWarnings = Math.max(
         0,
@@ -416,6 +436,7 @@ function ValidationOverview({
                         packageName={packageName}
                         runtimeResult={runtimeResult}
                         runtimePhase={runtimePhase}
+                        extendedState={extendedState}
                     />
                 </div>
             </div>
@@ -589,14 +610,18 @@ function ExportButtons({
     packageName,
     runtimeResult,
     runtimePhase,
+    extendedState,
 }: {
     result: ValidationResult;
     packageName: string;
     runtimeResult?: RuntimeTestResult;
     runtimePhase?: RuntimeTestPhase;
+    extendedState?: RuntimeSuiteState;
 }) {
     const slug = packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const report = () => createValidationReport(packageName, result, runtimeResult, runtimePhase);
+    const report = () => createValidationReport(
+        packageName, result, runtimeResult, runtimePhase, undefined, extendedState,
+    );
 
     const btnCls = 'inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1.5 sm:py-1 rounded-sm text-[11px] sm:text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors';
     const btnStyle = { border: '1px solid rgba(64, 72, 80, 0.5)' };

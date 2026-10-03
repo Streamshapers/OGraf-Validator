@@ -39,9 +39,17 @@ export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): Runtime
     for (const step of steps) {
         if (step.status !== 'fail') continue;
         const diagnostic = diagnoseRuntimeError(step.error, step.diagnostic);
-        const { mode, label } = splitRuntimeStepName(step.name);
+        const parsed = splitRuntimeStepName(step.name);
+        const mode = step.renderMode ?? parsed.mode;
+        const label = parsed.label;
         const error = step.error?.trim();
-        const key = JSON.stringify([diagnostic.code, step.diagnostic?.reason, step.diagnostic?.method, step.diagnostic?.field, label, error ?? '']);
+        const key = JSON.stringify([
+            diagnostic.code, step.diagnostic?.reason, step.diagnostic?.method,
+            step.diagnostic?.field, label, error ?? '', step.suite,
+            step.scenarioId?.replace(/^(?:rt|nrt)\./, ''),
+            step.checkId?.replace(/^(?:rt|nrt)\./, ''),
+            step.expectedCurrentStep, step.actualCurrentStep,
+        ]);
         const existing = groups.get(key);
         const occurrence: RuntimeFailureOccurrence = {
             ...(mode ? { mode } : {}),
@@ -130,6 +138,15 @@ export function diagnoseRuntimeError(
         case 'RUNTIME_ABORTED':
             return diagnostic('The test was interrupted. Rerun it to obtain results for the remaining checks.');
         case 'PREVIEW_LIMITATION':
+            if (details?.reason === 'blocked-dependent-checks' || details?.reason === 'blocked-prerequisite') {
+                return diagnostic('Resolve the preceding failure or test limitation, then rerun the full suite. Earlier findings remain until the dependent checks can be evaluated.');
+            }
+            if (details?.reason === 'bounded-step-coverage') {
+                return diagnostic('Some target steps are outside this suite\'s bounded coverage. Check the omitted steps manually in Preview or another renderer. A larger time budget does not expand the selected targets.');
+            }
+            if (details?.reason === 'incomplete-runtime-harness') {
+                return diagnostic('The validator could not complete the test. Inspect the harness error and rerun the suite; earlier findings remain until a conclusive replacement finishes.');
+            }
             if (details?.reason === 'test-data-generation') {
                 return diagnostic('The validator could not generate test data within its resource limits. Provide suitable input manually in Preview or another renderer. These limits are not OGraf schema restrictions.');
             }

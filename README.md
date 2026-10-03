@@ -49,6 +49,27 @@ without a usable schema or payload remain visible as untested. Runtime results
 cover the observed test cycle, including cleanup, rather than all possible inputs
 or future asynchronous behavior.
 
+Use **Run extended tests** in the Validation tab to check additional step targets,
+relative navigation, repeated use with animations enabled, and NRT timeline seeking.
+It uses the same validated manifest defaults as the standard test. Automatic tests
+on opening or changing files remain standard tests.
+
+Extended tests run in the background when you select another Graphic. The global
+activity indicator offers **Cancel**. The default total budget is two minutes;
+after a timeout, you can restart with five or ten minutes. Each independent
+scenario starts in a fresh sandbox, and every retry starts the complete suite again.
+
+Extended failures affect package readiness. Cancelled, timed-out, or partially
+covered runs are inconclusive, and known failures remain visible until a complete,
+conclusive retry replaces them. Changing package files clears results for the old
+version. Known step counts above 20 use a representative set of 20 targets and
+report the omitted coverage. Dynamic step models receive up to three consecutive
+contract checks without requiring an artificial end. Successful calls do not prove
+visual correctness or animation duration.
+
+JSON reports retain standard results in `runtimeTest` and add extended results in
+`extendedRuntimeTest`; HTML reports include both suites and their coverage.
+
 Diagnostics include method-specific guidance and specification references in the
 UI and exported JSON/HTML reports. The pinned specification is unchanged by
 diagnostic corrections. Where the official prose, examples, and informative
@@ -71,6 +92,7 @@ undefined` at the end).
   one asset folder.
 - Runs automatic realtime and non-realtime API checks for statically valid
   Graphics.
+- Offers optional extended checks for steps, repeated lifecycles, and NRT seeking.
 - Shows clear package readiness states for static and runtime results.
 - Provides an interactive preview with editable GDD data and action controls.
 

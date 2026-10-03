@@ -17,7 +17,12 @@ import ContentArea, { type PackageCache } from './components/ContentArea.js';
 import SettingsPanel from './components/SettingsPanel.js';
 import StatusBar from './components/StatusBar.js';
 import { derivePackageReadiness } from './readiness/package-readiness.js';
-import { prioritizeRuntimeQueue } from './runtime-queue.js';
+import { enqueueRuntimeJob, prioritizeRuntimeQueue } from './runtime-queue.js';
+import type {
+    RuntimeBudgetMinutes, RuntimeSuiteState, RuntimeTestResult, RuntimeTestSuite,
+} from './preview/runtime-test-types.js';
+import { completeRuntimeSuite, startRuntimeSuite } from './preview/runtime-suite-state.js';
+import { readRuntimeSuite, updateRuntimeAttempt, writeRuntimeSuite } from './runtime-package-state.js';
 
 interface AppState {
     rootHandle: FileSystemDirectoryHandle | null;
@@ -43,12 +48,23 @@ const INITIAL_STATE: AppState = {
     view: 'packages',
 };
 
-type RuntimeQueueItem = { entry: PackageEntry; manifest: unknown; generation: number };
+interface RuntimeQueueItem {
+    entry: PackageEntry;
+    manifest: unknown;
+    generation: number;
+    suite: RuntimeTestSuite;
+    runId: string;
+    budgetMinutes: RuntimeBudgetMinutes;
+}
 
 interface ActiveRuntimeTest {
     key: string;
     generation: number;
     controller: AbortController;
+    suite: RuntimeTestSuite;
+    runId: string;
+    budgetMinutes: RuntimeBudgetMinutes;
+    abortReason?: 'user' | 'invalidated' | 'unmount';
 }
 
 export default function App() {
@@ -57,9 +73,11 @@ export default function App() {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [settings, updateSettings] = useSettings();
 
+    const mountedRef = useRef(true);
     const scanGenerationRef = useRef(0);
     const scanAbortRef = useRef<AbortController | null>(null);
     const validationRequestRef = useRef<Map<string, number>>(new Map());
+    const validatedManifestRef = useRef<Map<string, unknown>>(new Map());
     const assetListCacheRef = useRef<WeakMap<FileSystemDirectoryHandle, Promise<string[]>>>(new WeakMap());
     const runtimeQueueRef = useRef<RuntimeQueueItem[]>([]);
     const runtimeDrainingRef = useRef(false);
@@ -72,126 +90,99 @@ export default function App() {
     swReadyRef.current = swReady;
 
     const drainRuntimeQueue = useCallback(async () => {
-        if (runtimeDrainingRef.current || !swReadyRef.current) return;
+        if (runtimeDrainingRef.current || !swReadyRef.current || !mountedRef.current) return;
         runtimeDrainingRef.current = true;
 
         try {
-            while (runtimeQueueRef.current.length > 0 && swReadyRef.current) {
+            while (runtimeQueueRef.current.length > 0 && swReadyRef.current && mountedRef.current) {
                 const item = runtimeQueueRef.current.shift();
                 if (!item || item.generation !== scanGenerationRef.current) continue;
-                const { entry, manifest, generation } = item;
+                const { entry, manifest, generation, suite, runId, budgetMinutes } = item;
                 const main = readManifestMain(manifest);
                 if (!main) continue;
 
                 const controller = new AbortController();
-                const active: ActiveRuntimeTest = { key: entry.key, generation, controller };
+                const active: ActiveRuntimeTest = {
+                    key: entry.key, generation, controller, suite, runId, budgetMinutes,
+                };
                 runtimeActiveRef.current = active;
-                setState((prev) => {
-                    if (generation !== scanGenerationRef.current) return prev;
-                    const existing = prev.packageCache[entry.key];
-                    if (!existing) return prev;
-                    return {
-                        ...prev,
-                        packageCache: {
-                            ...prev.packageCache,
-                            [entry.key]: {
-                                ...existing,
-                                runtimeTest: undefined,
-                                runtimeTestPhase: 'running',
-                                runtimeTestSteps: [],
-                            },
-                        },
-                    };
-                });
+                const updateAttempt = (update: (current: RuntimeSuiteState) => RuntimeSuiteState) => {
+                    if (!mountedRef.current) return;
+                    setState((prev) => {
+                        if (generation !== scanGenerationRef.current || !mountedRef.current) return prev;
+                        const existing = prev.packageCache[entry.key];
+                        if (!existing) return prev;
+                        const next = updateRuntimeAttempt(existing, suite, runId, update);
+                        if (next === existing) return prev;
+                        return { ...prev, packageCache: { ...prev.packageCache, [entry.key]: next } };
+                    });
+                };
+                updateAttempt((current) => ({
+                    ...current,
+                    active: { ...current.active!, phase: 'running' },
+                }));
 
-                const session = createPreviewSession(entry.dirHandle);
+                let session: ReturnType<typeof createPreviewSession> | undefined;
                 try {
+                    session = createPreviewSession(entry.dirHandle);
                     const runtimeResult = await runRuntimeTest({
                         importUrl: session.buildUrl(main),
                         manifest,
                         dirHandle: entry.dirHandle,
                         sessionId: session.sessionId,
                         signal: controller.signal,
+                        suite,
+                        runId,
+                        budgetMinutes,
                         onStepComplete: (step) => {
-                            if (
-                                controller.signal.aborted ||
-                                generation !== scanGenerationRef.current ||
-                                runtimeActiveRef.current !== active
-                            ) return;
-                            setState((prev) => {
-                                const existing = prev.packageCache[entry.key];
-                                if (!existing) return prev;
-                                return {
-                                    ...prev,
-                                    packageCache: {
-                                        ...prev.packageCache,
-                                        [entry.key]: {
-                                            ...existing,
-                                            runtimeTestSteps: [...(existing.runtimeTestSteps ?? []), step],
-                                        },
-                                    },
-                                };
-                            });
+                            updateAttempt((current) => ({
+                                ...current,
+                                active: {
+                                    ...current.active!,
+                                    steps: [...current.active!.steps, step],
+                                },
+                            }));
+                        },
+                        onProgress: (progress) => {
+                            updateAttempt((current) => ({
+                                ...current, active: { ...current.active!, progress },
+                            }));
                         },
                     });
-
-                    if (
-                        controller.signal.aborted ||
-                        generation !== scanGenerationRef.current ||
-                        runtimeActiveRef.current !== active
-                    ) continue;
-                    setState((prev) => {
-                        const existing = prev.packageCache[entry.key];
-                        if (!existing) return prev;
-                        return {
-                            ...prev,
-                            packageCache: {
-                                ...prev.packageCache,
-                                [entry.key]: {
-                                    ...existing,
-                                    runtimeTest: runtimeResult,
-                                    runtimeTestPhase: undefined,
-                                    runtimeTestSteps: undefined,
-                                },
-                            },
-                        };
-                    });
+                    updateAttempt((current) => completeRuntimeSuite(current, {
+                        ...runtimeResult, suite, runId, budgetMinutes,
+                    }));
                 } catch (error) {
-                    if (
-                        !controller.signal.aborted &&
-                        generation === scanGenerationRef.current &&
-                        runtimeActiveRef.current === active
-                    ) {
-                        const message = readErrorMessage(error);
-                        setState((prev) => {
-                            const existing = prev.packageCache[entry.key];
-                            if (!existing) return prev;
-                            return {
-                                ...prev,
-                                packageCache: {
-                                    ...prev.packageCache,
-                                    [entry.key]: {
-                                        ...existing,
-                                        runtimeTest: {
-                                            passed: false,
-                                            steps: [{ name: 'Runtime harness', status: 'fail', durationMs: 0, error: message }],
-                                            totalDurationMs: 0,
-                                        },
-                                        runtimeTestPhase: undefined,
-                                        runtimeTestSteps: undefined,
-                                    },
+                    updateAttempt((current) => {
+                        const cancelled = controller.signal.aborted;
+                        const result: RuntimeTestResult = {
+                            suite, runId, budgetMinutes,
+                            outcome: cancelled ? 'cancelled' : 'completed',
+                            passed: !current.active!.steps.some((step) => step.status === 'fail'),
+                            inconclusive: true,
+                            steps: [...current.active!.steps, {
+                                name: 'Runtime harness',
+                                status: 'warning',
+                                durationMs: 0,
+                                error: cancelled ? 'Runtime test cancelled before completion.' : readErrorMessage(error),
+                                diagnostic: {
+                                    code: cancelled ? 'RUNTIME_ABORTED' : 'PREVIEW_LIMITATION',
+                                    reason: 'incomplete-runtime-harness',
                                 },
-                            };
-                        });
-                    }
+                                suite, runId,
+                            }],
+                            totalDurationMs: 0,
+                        };
+                        return completeRuntimeSuite(current, result);
+                    });
                 } finally {
-                    session.close();
+                    session?.close();
                     if (runtimeActiveRef.current === active) runtimeActiveRef.current = null;
                 }
             }
         } finally {
             runtimeDrainingRef.current = false;
-            if (runtimeQueueRef.current.length > 0 && swReadyRef.current) {
+            if (runtimeQueueRef.current.length > 0 && swReadyRef.current && mountedRef.current) {
                 queueMicrotask(() => void drainRuntimeQueue());
             }
         }
@@ -202,16 +193,33 @@ export default function App() {
         manifest: unknown,
         generation: number,
         priority = false,
+        suite: RuntimeTestSuite = 'standard',
+        budgetMinutes: RuntimeBudgetMinutes = 2,
     ) => {
-        if (generation !== scanGenerationRef.current) return;
-        runtimeTestedRef.current.add(entry.key);
-        runtimeQueueRef.current = runtimeQueueRef.current.filter((item) => item.entry.key !== entry.key);
-        const item: RuntimeQueueItem = { entry, manifest, generation };
-        if (priority) {
-            runtimeQueueRef.current.unshift(item);
-        } else {
-            runtimeQueueRef.current.push(item);
-        }
+        if (generation !== scanGenerationRef.current || !mountedRef.current) return;
+        const active = runtimeActiveRef.current;
+        if ((active?.key === entry.key && active.suite === suite && active.generation === generation
+                && active.abortReason !== 'invalidated')
+            || runtimeQueueRef.current.some((item) => item.entry.key === entry.key && item.suite === suite)) return;
+        if (suite === 'standard') runtimeTestedRef.current.add(entry.key);
+        const runId = crypto.randomUUID();
+        const item: RuntimeQueueItem = { entry, manifest, generation, suite, runId, budgetMinutes };
+        runtimeQueueRef.current = enqueueRuntimeJob(runtimeQueueRef.current, item, priority);
+        setState((prev) => {
+            if (generation !== scanGenerationRef.current || !mountedRef.current) return prev;
+            const existing = prev.packageCache[entry.key];
+            if (!existing) return prev;
+            const next = startRuntimeSuite(readRuntimeSuite(existing, suite), {
+                runId, budgetMinutes, phase: 'pending', steps: [],
+            });
+            return {
+                ...prev,
+                packageCache: {
+                    ...prev.packageCache,
+                    [entry.key]: writeRuntimeSuite(existing, suite, next),
+                },
+            };
+        });
         void drainRuntimeQueue();
     }, [drainRuntimeQueue]);
 
@@ -223,6 +231,20 @@ export default function App() {
     useEffect(() => {
         if (swReady) void drainRuntimeQueue();
     }, [swReady, drainRuntimeQueue]);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            scanGenerationRef.current++;
+            scanAbortRef.current?.abort();
+            runtimeQueueRef.current = [];
+            if (runtimeActiveRef.current) {
+                runtimeActiveRef.current.abortReason = 'unmount';
+                runtimeActiveRef.current.controller.abort();
+            }
+        };
+    }, []);
 
     // Apply theme class to <html>
     useEffect(() => {
@@ -256,14 +278,19 @@ export default function App() {
             validationRequestRef.current.get(entry.key) !== requestVersion
         ) return;
 
+        const manifestChanged = validatedManifestRef.current.has(entry.key)
+            && !sameJson(validatedManifestRef.current.get(entry.key), loaded.manifest);
+        validatedManifestRef.current.set(entry.key, loaded.manifest);
+        const resetRuntime = manifestChanged || !loaded.validationResult.valid;
         const shouldRunRuntime = loaded.validationResult.valid &&
             readManifestMain(loaded.manifest) !== undefined &&
-            (options.forceRuntime === true || !runtimeTestedRef.current.has(entry.key));
+            (manifestChanged || options.forceRuntime === true || !runtimeTestedRef.current.has(entry.key));
 
-        if (!loaded.validationResult.valid) {
+        if (resetRuntime) {
             runtimeQueueRef.current = runtimeQueueRef.current.filter((item) => item.entry.key !== entry.key);
             runtimeTestedRef.current.delete(entry.key);
             if (runtimeActiveRef.current?.key === entry.key) {
+                runtimeActiveRef.current.abortReason = 'invalidated';
                 runtimeActiveRef.current.controller.abort();
             }
         }
@@ -293,17 +320,18 @@ export default function App() {
                 packageCache: {
                     ...prev.packageCache,
                     [entry.key]: {
+                        ...existing,
                         validationResult: loaded.validationResult,
                         manifest: loaded.manifest,
                         previousManifest,
                         assets: loaded.assets,
-                        runtimeTest: shouldRunRuntime || !loaded.validationResult.valid
-                            ? undefined
-                            : existing?.runtimeTest,
+                        standardRuntimeTest: resetRuntime ? undefined : existing?.standardRuntimeTest,
+                        extendedRuntimeTest: resetRuntime ? undefined : existing?.extendedRuntimeTest,
+                        runtimeTest: resetRuntime ? undefined : existing?.runtimeTest,
                         runtimeTestPhase: shouldRunRuntime
                             ? 'pending'
-                            : loaded.validationResult.valid ? existing?.runtimeTestPhase : undefined,
-                        runtimeTestSteps: shouldRunRuntime ? undefined : existing?.runtimeTestSteps,
+                            : resetRuntime ? undefined : existing?.runtimeTestPhase,
+                        runtimeTestSteps: shouldRunRuntime || resetRuntime ? undefined : existing?.runtimeTestSteps,
                     },
                 },
             };
@@ -319,7 +347,10 @@ export default function App() {
         options: { preserveSelectionKey?: string } = {},
     ) => {
         scanAbortRef.current?.abort();
-        runtimeActiveRef.current?.controller.abort();
+        if (runtimeActiveRef.current) {
+            runtimeActiveRef.current.abortReason = 'invalidated';
+            runtimeActiveRef.current.controller.abort();
+        }
         const generation = scanGenerationRef.current + 1;
         scanGenerationRef.current = generation;
         const scanController = new AbortController();
@@ -328,6 +359,7 @@ export default function App() {
         runtimeQueueRef.current = [];
         runtimeTestedRef.current.clear();
         validationRequestRef.current.clear();
+        validatedManifestRef.current.clear();
         assetListCacheRef.current = new WeakMap();
 
         try { localStorage.setItem('ograf-last-directory', dirHandle.name); } catch { /* quota */ }
@@ -444,33 +476,35 @@ export default function App() {
         }
     }, [prioritizeQueuedRuntimeTest, validateEntry]);
 
-    const rerunRuntimeTest = useCallback(() => {
+    const requestRuntimeTest = useCallback((suite: RuntimeTestSuite, budgetMinutes: RuntimeBudgetMinutes = 2) => {
         const entry = state.selectedPackage;
         if (!entry) return;
         const cached = state.packageCache[entry.key];
         if (!cached || !cached.validationResult.valid || !readManifestMain(cached.manifest)) return;
-        const generation = scanGenerationRef.current;
-        runtimeQueueRef.current = runtimeQueueRef.current.filter((item) => item.entry.key !== entry.key);
-        if (runtimeActiveRef.current?.key === entry.key) runtimeActiveRef.current.controller.abort();
-        runtimeTestedRef.current.delete(entry.key);
-        setState((prev) => {
-            const existing = prev.packageCache[entry.key];
-            if (!existing) return prev;
-            return {
-                ...prev,
-                packageCache: {
-                    ...prev.packageCache,
-                    [entry.key]: {
-                        ...existing,
-                        runtimeTest: undefined,
-                        runtimeTestPhase: 'pending',
-                        runtimeTestSteps: undefined,
-                    },
-                },
-            };
-        });
-        enqueueRuntimeTest(entry, cached.manifest, generation, true);
+        enqueueRuntimeTest(entry, cached.manifest, scanGenerationRef.current, true, suite, budgetMinutes);
     }, [state.selectedPackage, state.packageCache, enqueueRuntimeTest]);
+
+    const cancelRuntimeTest = useCallback((packageKey: string, suite: RuntimeTestSuite) => {
+        const queued = runtimeQueueRef.current.find((item) => item.entry.key === packageKey && item.suite === suite);
+        runtimeQueueRef.current = runtimeQueueRef.current.filter((item) => item !== queued);
+        const active = runtimeActiveRef.current;
+        if (active?.key === packageKey && active.suite === suite) {
+            active.abortReason = 'user';
+            active.controller.abort();
+        }
+        const runId = queued?.runId ?? (active?.key === packageKey && active.suite === suite ? active.runId : undefined);
+        const generation = queued?.generation ?? active?.generation;
+        if (!runId) return;
+        setState((prev) => {
+            if (generation !== scanGenerationRef.current) return prev;
+            const cache = prev.packageCache[packageKey];
+            if (!cache) return prev;
+            const next = updateRuntimeAttempt(cache, suite, runId, (current) => queued
+                ? completeRuntimeSuite(current, cancelledQueuedResult(queued))
+                : { ...current, active: { ...current.active!, phase: 'cancelling' } });
+            return { ...prev, packageCache: { ...prev.packageCache, [packageKey]: next } };
+        });
+    }, []);
 
     const handleRootDirectoryChange = useCallback(() => {
         const rootHandle = state.rootHandle;
@@ -522,6 +556,7 @@ export default function App() {
             entry.validationResult,
             entry.runtimeTest,
             entry.runtimeTestPhase,
+            entry.extendedRuntimeTest,
         ));
         const failed = readiness.filter((entry) => entry.status === 'runtime-failed').length;
         const inconclusive = readiness.filter((entry) => entry.runtimeStatus === 'inconclusive').length;
@@ -539,6 +574,7 @@ export default function App() {
                     value.validationResult,
                     value.runtimeTest,
                     value.runtimeTestPhase,
+                    value.extendedRuntimeTest,
                 ),
             }] as const);
         return Object.fromEntries(entries);
@@ -552,8 +588,19 @@ export default function App() {
             currentRawCache.validationResult,
             currentRawCache.runtimeTest,
             currentRawCache.runtimeTestPhase,
+            currentRawCache.extendedRuntimeTest,
         )
         : null;
+
+    const extendedEntries = Object.entries(state.packageCache)
+        .filter(([, cache]) => cache.extendedRuntimeTest?.active);
+    const activeExtended = extendedEntries.find(([, cache]) => cache.extendedRuntimeTest?.active?.phase !== 'pending')
+        ?? extendedEntries[0];
+    const extendedActivity = activeExtended ? {
+        packageName: state.packages.find((entry) => entry.key === activeExtended[0])?.displayName ?? activeExtended[0],
+        attempt: activeExtended[1].extendedRuntimeTest!.active!,
+        onCancel: () => cancelRuntimeTest(activeExtended[0], 'extended'),
+    } : undefined;
 
     return (
         <div className="flex flex-col h-full min-w-0">
@@ -664,7 +711,11 @@ export default function App() {
                         swReady={swReady}
                         onOpenDirectory={openDirectory}
                         onReopenLastDirectory={reopenLastDirectory}
-                        onRerunRuntimeTest={rerunRuntimeTest}
+                        onRerunRuntimeTest={() => requestRuntimeTest('standard')}
+                        onRunExtendedTest={(budget) => requestRuntimeTest('extended', budget)}
+                        onCancelExtendedTest={() => {
+                            if (state.selectedPackage) cancelRuntimeTest(state.selectedPackage.key, 'extended');
+                        }}
 
                         rootName={state.rootName}
                         packages={state.packages}
@@ -685,6 +736,7 @@ export default function App() {
                 lastScan={lastScan}
                 autoRevalidate={settings.autoRevalidate}
                 runtimeProgress={runtimeProgress}
+                extendedActivity={extendedActivity}
             />
         </div>
     );
@@ -718,4 +770,17 @@ function sameJson(a: unknown, b: unknown): boolean {
     } catch {
         return false;
     }
+}
+
+function cancelledQueuedResult(item: RuntimeQueueItem): RuntimeTestResult {
+    return {
+        suite: item.suite, runId: item.runId, budgetMinutes: item.budgetMinutes,
+        outcome: 'cancelled', passed: true, inconclusive: true, totalDurationMs: 0,
+        steps: [{
+            name: 'Runtime test', status: 'warning', durationMs: 0,
+            error: 'Cancelled before the test started. No scenarios were executed.',
+            diagnostic: { code: 'RUNTIME_ABORTED' }, suite: item.suite, runId: item.runId,
+        }],
+        scenarios: [],
+    };
 }

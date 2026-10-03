@@ -75,13 +75,13 @@ describe('statically valid packages', () => {
         });
     });
 
-    it('ignores a stale result while a replacement test is pending', () => {
+    it('keeps a known failure while a replacement test is pending', () => {
         const result = derivePackageReadiness(validation(), runtime(false, []), 'pending');
         expect(result).toMatchObject({
-            status: 'runtime-pending',
-            runtimeStatus: 'pending',
-            runtimeErrors: 0,
-            totalIssues: 0,
+            status: 'runtime-failed',
+            runtimeStatus: 'failed',
+            runtimeErrors: 1,
+            totalIssues: 1,
         });
     });
 
@@ -177,5 +177,32 @@ describe('statically valid packages', () => {
             staticScore: 100,
             productionReady: true,
         });
+    });
+
+    it('does not allow an extended pass to replace the missing standard test', () => {
+        expect(derivePackageReadiness(validation(), undefined, undefined, {
+            latestAttempt: runtime(true, []),
+        })).toMatchObject({ status: 'runtime-pending', productionReady: false });
+    });
+
+    it('keeps extended failures after a successful standard test and during retry', () => {
+        expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {
+            latestAttempt: runtime(false, [{ name: 'RT: replay', status: 'fail', durationMs: 1 }]),
+            active: { runId: 'retry', phase: 'running', budgetMinutes: 5, steps: [] },
+        })).toMatchObject({ status: 'runtime-failed', runtimeErrors: 1, productionReady: false });
+    });
+
+    it.each(['cancelled', 'budget-exhausted'] as const)(
+        'requires review for an attempted extended run with outcome %s', (outcome) => {
+            expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {
+                latestAttempt: { ...runtime(true, []), outcome },
+            })).toMatchObject({ status: 'needs-review', runtimeWarnings: 1, productionReady: false });
+        },
+    );
+
+    it('shows active extended progress while preserving a completed standard result', () => {
+        expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {
+            active: { runId: 'first', phase: 'running', budgetMinutes: 2, steps: [] },
+        })).toMatchObject({ status: 'runtime-running', runtimeStatus: 'running' });
     });
 });

@@ -26,8 +26,14 @@ interface Props {
 }
 
 export default function RuntimeTestCard({ result, phase, liveSteps, onRerun }: Props) {
-    if (phase === 'pending') return <PendingCard />;
-    if (phase === 'running') return <RunningCard steps={liveSteps ?? []} />;
+    if (phase) {
+        return (
+            <div className="flex flex-col gap-3">
+                {phase === 'pending' ? <PendingCard /> : <RunningCard steps={liveSteps ?? []} />}
+                {result && <RuntimeTestCard result={result} />}
+            </div>
+        );
+    }
     if (!result) return null;
 
     const failureGroups = groupRuntimeFailures(result.steps);
@@ -177,7 +183,7 @@ function FailureCard({
     );
 }
 
-function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
+export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
     const modes = uniqueModes(failure);
     const occurrenceLabel = failure.occurrences.length === 1
         ? '1 occurrence'
@@ -186,11 +192,13 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
         `${mode ? `${mode} ` : ''}${step.durationMs} ms`
     )).join(' · ');
     const modePrefix = modes.length > 0 ? `${modes.join('/')}: ` : '';
+    const contexts = [...new Set(failure.occurrences.map(({ step }) => stepContext(step)).filter(Boolean))];
     const copyText = [
         `${modePrefix}${failure.label}`,
         failure.code,
         failure.error,
         modes.length > 0 ? `Affected modes: ${modes.join(', ')}` : undefined,
+        ...contexts,
         failure.hint,
         safeSpecReference(failure.specRef),
     ].filter(Boolean).join('\n');
@@ -216,6 +224,11 @@ function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
                         <p className="text-[10px] font-semibold font-mono text-ss-error mt-2 tracking-wide">
                             {failure.code}
                         </p>
+                        {contexts.map((context) => (
+                            <p key={context} className="text-[10px] mt-1 text-ss-on-surface-variant [overflow-wrap:anywhere]">
+                                {context}
+                            </p>
+                        ))}
                     </div>
                     <button
                         type="button"
@@ -304,7 +317,7 @@ function RerunButton({ onRerun }: { onRerun?: () => void }) {
     );
 }
 
-function StepRow({ step }: { step: RuntimeTestStep }) {
+export function StepRow({ step }: { step: RuntimeTestStep }) {
     const diagnostic = step.status === 'fail' || step.status === 'warning' || step.diagnostic
         ? diagnoseRuntimeError(step.error, step.diagnostic)
         : undefined;
@@ -334,6 +347,11 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
                         </span>
                     )}
                 </div>
+                {stepContext(step) && (
+                    <p className="text-[10px] mt-1 text-ss-on-surface-variant [overflow-wrap:anywhere]">
+                        {stepContext(step)}
+                    </p>
+                )}
                 {step.error && (
                     <p className={`text-[11px] leading-relaxed mt-1 whitespace-pre-wrap break-words ${
                         step.status === 'warning'
@@ -355,4 +373,15 @@ function StepRow({ step }: { step: RuntimeTestStep }) {
             </div>
         </div>
     );
+}
+
+function stepContext(step: RuntimeTestStep): string {
+    const context = [step.suite, step.renderMode, step.scenarioId, step.checkId];
+    if (step.expectedCurrentStep !== undefined) {
+        context.push(`Expected step: ${step.expectedCurrentStep === null ? 'END' : step.expectedCurrentStep}`);
+        context.push(`Actual step: ${step.actualCurrentStep === null
+            ? 'END' : step.actualCurrentStep ?? 'not reported'}`);
+    }
+
+    return context.filter(Boolean).join(' · ');
 }

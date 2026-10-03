@@ -262,7 +262,9 @@ describe('automated runtime evaluation', () => {
         const result = await run();
 
         expect(result.passed).toBe(false);
-        expect(result.inconclusive).toBeUndefined();
+        // Coverage is incomplete because load failed; the exception remains a genuine failure.
+        expect(result.inconclusive).toBe(true);
+        expect(result.steps.some((step) => step.status === 'warning')).toBe(false);
         expect(result.steps).toContainEqual(expect.objectContaining({
             error: error.message,
             diagnostic: expect.objectContaining({ code: 'RUNTIME_CHECK_FAILED', method: 'load' }),

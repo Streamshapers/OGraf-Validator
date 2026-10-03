@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import type { RuntimeActiveAttempt } from '../preview/runtime-test-types.js';
 
 interface Props {
     version: string;
@@ -12,6 +13,11 @@ interface Props {
     lastScan: Date | null;
     autoRevalidate: boolean;
     runtimeProgress?: { done: number; total: number; failed: number; inconclusive: number } | null;
+    extendedActivity?: {
+        packageName: string;
+        attempt: RuntimeActiveAttempt;
+        onCancel: () => void;
+    };
 }
 
 export default function StatusBar({
@@ -25,13 +31,14 @@ export default function StatusBar({
     lastScan,
     autoRevalidate,
     runtimeProgress,
+    extendedActivity,
 }: Props) {
     const hasIssues = errorCount > 0 || warningCount > 0;
     const relativeTime = useRelativeTime(lastScan);
 
     return (
         <div
-            className="shrink-0 h-6 bg-ss-surface-lowest flex items-center justify-between gap-2 px-2 sm:px-3 select-none overflow-hidden"
+            className="shrink-0 min-h-6 bg-ss-surface-lowest flex flex-wrap items-center justify-between gap-2 px-2 sm:px-3 py-1 select-none overflow-hidden"
             style={{ borderTop: '1px solid var(--ss-border-subtle)' }}
         >
             {/* Left */}
@@ -47,6 +54,23 @@ export default function StatusBar({
 
             {/* Right */}
             <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3 font-mono text-[10px] text-ss-on-surface-variant">
+                {extendedActivity && (
+                    <div className="flex min-w-0 items-center gap-2" role="status" aria-label="Extended runtime activity">
+                        <span className="truncate max-w-64" title={extendedActivity.packageName}>
+                            Extended: {extendedActivity.packageName} · {extendedActivity.attempt.phase}
+                            {extendedActivity.attempt.progress && (
+                                <> · {extendedActivity.attempt.progress.completedScenarios}/{extendedActivity.attempt.progress.totalScenarios}</>
+                            )}
+                        </span>
+                        <button
+                            type="button"
+                            className="text-ss-primary-container hover:underline disabled:opacity-50"
+                            disabled={extendedActivity.attempt.phase === 'cancelling'}
+                            onClick={extendedActivity.onCancel}
+                            aria-label={`Cancel extended test for ${extendedActivity.packageName}`}
+                        >Cancel</button>
+                    </div>
+                )}
                 {runtimeProgress && (
                     <RuntimeProgressBar {...runtimeProgress} />
                 )}

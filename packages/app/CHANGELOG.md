@@ -2,6 +2,19 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## 0.3.0 - 2026-10-03
+
+### Added
+
+- Optional extended runtime tests for relative and absolute step navigation, animation-enabled actions, repeated lifecycles, and NRT seeking.
+- Separate standard and extended results with scenario progress, background execution, cancellation, and two-minute budgets with five- and ten-minute retries after timeouts.
+- Scenario and step expectations in diagnostic details and exports, with explicit coverage limits and fresh sandbox sessions for independent scenarios.
+
+### Fixed
+
+- Preserve known runtime failures during retries and incomplete or cancelled attempts; replace them only after a conclusive run of the same suite.
+- Ignore stale progress and results after package changes and await sandbox cleanup before advancing the runtime queue.
+
 ## 0.2.4 - 2026-10-03
 
 ### Fixed

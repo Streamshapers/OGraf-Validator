@@ -91,7 +91,7 @@ function readSpecLabel(manifest: unknown): string {
 
 function PackageCard({ entry, cache, onClick }: { entry: PackageEntry; cache: PackageCache | undefined; onClick: () => void }) {
     const readiness = cache
-        ? derivePackageReadiness(cache.validationResult, cache.runtimeTest, cache.runtimeTestPhase)
+        ? derivePackageReadiness(cache.validationResult, cache.runtimeTest, cache.runtimeTestPhase, cache.extendedRuntimeTest)
         : undefined;
     const borderTop = topBorderColor(readiness);
     const isLoading = !cache;
