@@ -174,7 +174,7 @@ test('extended checks are opt-in and complete RT/NRT navigation with matching ex
         step.checkId === 'rt.steps.previous' && step.expectedCurrentStep === 0
             && step.actualCurrentStep === 0
     ))).toBe(true);
-    await expect(page.getByText('Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Passed', { exact: true }).first()).toBeVisible();
 
     const pending = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export HTML', exact: true }).click();

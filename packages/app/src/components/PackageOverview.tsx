@@ -314,7 +314,7 @@ function ReadinessIcon({ readiness }: { readiness: PackageReadiness }) {
     const tooltip = readinessTooltip(readiness);
     const label = `Overall status: ${tooltip}`;
 
-    if (readiness.status === 'production-ready') {
+    if (readiness.status === 'checks-passed') {
         return (
             <span title={tooltip} aria-label={label} role="img" className={`${sharedClass} bg-ss-success/10 text-ss-success`}>
                 <CheckCircle2 size={14} />

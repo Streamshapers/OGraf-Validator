@@ -73,7 +73,7 @@ export function renderValidationReportHtml(report: ValidationReport): string {
         { latestAttempt: report.extendedRuntimeTest?.result ?? undefined },
     );
     const statusColor = readinessColor(report.readiness.status);
-    const staticStatus = report.staticValidation.valid ? 'Manifest Valid' : 'Manifest Invalid';
+    const staticStatus = report.readiness.staticLabel;
     const staticIssues = [
         renderIssueSection(report.staticValidation.errors, '#ef4444', 'Static Errors'),
         renderIssueSection(report.staticValidation.warnings, '#f59e0b', 'Static Warnings'),
@@ -121,10 +121,12 @@ export function renderValidationReportHtml(report: ValidationReport): string {
 <h1>${escapeHtml(report.packageName)} <span class="badge">${escapeHtml(report.readiness.label)}</span></h1>
 <p class="meta">Generated ${escapeHtml(report.generatedAt)} &middot; OGraf Validator</p>
 <div class="summary">
-  <div>Static Validation<strong>${staticStatus}</strong></div>
+  <div>Static Validation<strong>${escapeHtml(staticStatus)}</strong></div>
   <div>Runtime tests<strong>${escapeHtml(report.readiness.runtimeLabel)}</strong></div>
-  <div>Overall Readiness<strong>${escapeHtml(report.readiness.label)}</strong></div>
+  <div>Overall Result<strong>${escapeHtml(report.readiness.label)}</strong></div>
 </div>
+<p>${escapeHtml(report.readiness.detail)}</p>
+<p>${escapeHtml(report.readiness.scope)}</p>
 ${report.staticValidation.errors.length === 0 && report.staticValidation.warnings.length === 0
     ? '<p class="ok">No static validation issues found.</p>'
     : ''}
@@ -296,7 +298,7 @@ function runtimeEmptyMessage(report: ValidationReport): string {
 }
 
 function readinessColor(status: PackageReadiness['status']): string {
-    if (status === 'production-ready') return '#16a34a';
+    if (status === 'checks-passed') return '#16a34a';
     if (status === 'needs-review') return '#d97706';
     if (status === 'runtime-pending' || status === 'runtime-running') return '#2563eb';
     return '#dc2626';

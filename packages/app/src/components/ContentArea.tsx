@@ -413,7 +413,7 @@ function ValidationOverview({
         : readiness.staticWarnings > 0
             ? `Static validation needs review: ${readiness.staticWarnings} warning${readiness.staticWarnings === 1 ? '' : 's'}.`
             : 'Static validation passed.';
-    const statusTone = readiness.status === 'production-ready'
+    const statusTone = readiness.status === 'checks-passed'
         ? 'text-ss-success'
         : readiness.status === 'needs-review'
             ? 'text-ss-warning'
@@ -447,17 +447,20 @@ function ValidationOverview({
                 </div>
             </div>
 
+            <p className="px-3 sm:px-4 pb-3 text-[11px] text-ss-on-surface-variant">
+                {readiness.scope}
+            </p>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-px bg-ss-outline-variant/20"
                  style={{ borderTop: '1px solid var(--ss-border-subtle)' }}>
                 <OverviewMetric
-                    label="Overall readiness"
+                    label="Overall result"
                     value={readiness.label}
-                    detail={readiness.status === 'production-ready' ? 'Ready for production' : 'Action required'}
+                    detail={readiness.detail}
                     valueClass={statusTone}
                 />
                 <OverviewMetric
                     label="Static validation"
-                    value={`${readiness.staticScore}%`}
+                    value={readiness.staticLabel}
                     detail={`${readiness.staticErrors} error${readiness.staticErrors === 1 ? '' : 's'} · ${readiness.staticWarnings} warning${readiness.staticWarnings === 1 ? '' : 's'}`}
                     valueClass={readiness.staticErrors > 0 ? 'text-ss-error' : readiness.staticWarnings > 0 ? 'text-ss-warning' : 'text-ss-success'}
                 />
@@ -487,7 +490,7 @@ function ValidationOverview({
 }
 
 function ValidationStatusIcon({ readiness }: { readiness: PackageReadiness }) {
-    if (readiness.status === 'production-ready') {
+    if (readiness.status === 'checks-passed') {
         return <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-ss-success" />;
     }
     if (readiness.status === 'needs-review') {
@@ -515,7 +518,7 @@ function OverviewMetric({ label, value, detail, valueClass }: {
 }
 
 function readinessClass(status: PackageReadiness['status']): string {
-    if (status === 'production-ready') {
+    if (status === 'checks-passed') {
         return 'text-ss-success border-ss-success/30 bg-ss-success/10';
     }
     if (status === 'needs-review') {

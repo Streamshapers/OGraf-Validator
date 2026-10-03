@@ -105,7 +105,11 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
     await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Passed', { exact: true }).first()).toBeVisible();
+    const summary = page.getByRole('region', { name: 'Validation summary' });
+    await expect(summary).toContainText('Manifest Valid');
+    await expect(summary).toContainText('Extended tests have not been run.');
+    await expect(summary).not.toContainText('100%');
     await expect.poll(() => automaticAlphaDisposals.length).toBe(1);
 
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
@@ -193,7 +197,7 @@ test('runs RT and NRT lifecycles and reports non-2xx payloads', async ({ page })
 
     await selectGraphic(page, 'Static Invalid');
     await expect(page.getByText('Manifest Invalid', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Not Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Failed', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Inspect', exact: true }).click();
     await expect(page.getByRole('button', { name: '1 error. View in Validation' })).toBeVisible();
@@ -492,7 +496,7 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByTitle('1 runtime test failed')).toBeVisible();
     const packageMedia = page.getByTestId('package-media');
     await expect(packageMedia).toHaveCount(4);
-    await expect(packageMedia.getByText('Production-Ready', { exact: true })).toHaveCount(0);
+    await expect(packageMedia.getByText('Checks Passed', { exact: true })).toHaveCount(0);
     const mediaRatios = await packageMedia.evaluateAll((elements) => elements.map((element) => {
         const bounds = element.getBoundingClientRect();
         return bounds.width / bounds.height;
@@ -501,8 +505,8 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByRole('img', { name: 'OGraf placeholder: Graphic package' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'OGraf placeholder: External thumbnail not loaded' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Goal Flash thumbnail' })).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Overall status: Production-Ready' })).toBeVisible();
-    await expect(page.getByTitle('Production-Ready', { exact: true })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Overall status: Checks Passed' })).toBeVisible();
+    await expect(page.getByTitle('Checks Passed', { exact: true })).toBeVisible();
     const lowerThirdOverviewCard = page.locator('main').getByRole('button').filter({ hasText: 'Lower Third' }).first();
     await expect(lowerThirdOverviewCard.getByText('1 warning', { exact: true })).toBeVisible();
     await expect(lowerThirdOverviewCard.getByText('Render 1920 × 1080 ideal', { exact: true })).toBeVisible();
@@ -534,7 +538,7 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByText('Static validation passed.', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Manifest Valid', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Runtime Failed', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Not Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Failed', { exact: true }).first()).toBeVisible();
 
     await selectGraphic(page, 'Football Scoreboard');
     await expandStandardChecks(page);

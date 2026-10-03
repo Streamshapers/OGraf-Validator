@@ -31,10 +31,10 @@ it('marks static failures invalid without requiring a runtime result', () => {
     const result = derivePackageReadiness(validation(2));
     expect(result).toMatchObject({
         status: 'static-invalid',
-        label: 'Not Production-Ready',
+        label: 'Checks Failed',
         runtimeStatus: 'not-run',
         totalIssues: 2,
-        productionReady: false,
+        checksPassed: false,
     });
 });
 
@@ -95,7 +95,7 @@ describe('statically valid packages', () => {
             runtimeStatus: 'failed',
             runtimeErrors: 1,
             totalIssues: 1,
-            productionReady: false,
+            checksPassed: false,
         });
     });
 
@@ -119,7 +119,7 @@ describe('statically valid packages', () => {
             status: 'runtime-failed',
             runtimeStatus: 'failed',
             runtimeErrors: 1,
-            productionReady: false,
+            checksPassed: false,
         });
     });
 
@@ -165,38 +165,39 @@ describe('statically valid packages', () => {
         });
     });
 
-    it('is production-ready only after a conclusive passing runtime test', () => {
+    it('is checks-passed only after a conclusive passing runtime test', () => {
         const result = derivePackageReadiness(validation(), runtime(true, [
             { name: 'RT: load()', status: 'pass', durationMs: 1 },
         ]));
         expect(result).toMatchObject({
-            status: 'production-ready',
-            label: 'Production-Ready',
+            status: 'checks-passed',
+            label: 'Checks Passed',
             runtimeStatus: 'passed',
             totalIssues: 0,
-            staticScore: 100,
-            productionReady: true,
+            staticLabel: 'Manifest Valid',
+            detail: 'All executed checks passed.',
+            checksPassed: true,
         });
     });
 
     it('does not allow an extended pass to replace the missing standard test', () => {
         expect(derivePackageReadiness(validation(), undefined, undefined, {
             latestAttempt: runtime(true, []),
-        })).toMatchObject({ status: 'runtime-pending', productionReady: false });
+        })).toMatchObject({ status: 'runtime-pending', checksPassed: false });
     });
 
     it('keeps extended failures after a successful standard test and during retry', () => {
         expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {
             latestAttempt: runtime(false, [{ name: 'RT: replay', status: 'fail', durationMs: 1 }]),
             active: { runId: 'retry', phase: 'running', budgetMinutes: 5, steps: [] },
-        })).toMatchObject({ status: 'runtime-failed', runtimeErrors: 1, productionReady: false });
+        })).toMatchObject({ status: 'runtime-failed', runtimeErrors: 1, checksPassed: false });
     });
 
     it.each(['cancelled', 'budget-exhausted'] as const)(
         'requires review for an attempted extended run with outcome %s', (outcome) => {
             expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {
                 latestAttempt: { ...runtime(true, []), outcome },
-            })).toMatchObject({ status: 'needs-review', runtimeWarnings: 1, productionReady: false });
+            })).toMatchObject({ status: 'needs-review', runtimeWarnings: 1, checksPassed: false });
         },
     );
 
@@ -205,4 +206,19 @@ describe('statically valid packages', () => {
             active: { runId: 'first', phase: 'running', budgetMinutes: 2, steps: [] },
         })).toMatchObject({ status: 'runtime-running', runtimeStatus: 'running' });
     });
+});
+
+it('describes a valid manifest with warnings without implying a clean overall result', () => {
+    const result = derivePackageReadiness(validation(0, 1), runtime(true, []));
+    expect(result.staticLabel).toBe('Manifest Valid');
+    expect(result.label).toBe('Needs Review');
+    expect(result.detail).toBe('Review warnings or incomplete checks.');
+});
+
+it('distinguishes an unstarted extended suite from an active one in the scope note', () => {
+    expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {}).scope)
+        .toContain('Extended tests have not been run.');
+    expect(derivePackageReadiness(validation(), runtime(true, []), undefined, {
+        latestAttempt: runtime(true, []),
+    }).scope).not.toContain('Extended tests have not been run.');
 });

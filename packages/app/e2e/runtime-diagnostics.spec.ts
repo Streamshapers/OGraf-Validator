@@ -225,7 +225,7 @@ test('accepts conforming zero-step and EmptyPayload results', async ({ page }) =
         async setActionsSchedule() { return { v_example: true }; }
     `), { stepCount: 0, supportsRealTime: false, supportsNonRealTime: true });
     await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Production-Ready', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Checks Passed', { exact: true }).first()).toBeVisible();
 });
 
 test('explains invalid schedule input in the editor and permits partial updates', async ({ page }) => {

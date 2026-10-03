@@ -161,7 +161,7 @@ describe('validation reports', () => {
         );
 
         expect(report).toMatchObject({
-            readiness: { status: 'runtime-failed', productionReady: false },
+            readiness: { status: 'runtime-failed', checksPassed: false },
             staticValidation: { valid: true },
             runtimeTest: { status: 'failed', result: { passed: false } },
         });
@@ -176,7 +176,7 @@ describe('validation reports', () => {
 
         expect(html).toContain('No static validation issues found.');
         expect(html).toContain('Runtime tests<strong>Failed</strong>');
-        expect(html).toContain('Overall Readiness<strong>Not Production-Ready</strong>');
+        expect(html).toContain('Overall Result<strong>Checks Failed</strong>');
         expect(html).not.toContain('fully valid');
     });
 
@@ -214,7 +214,7 @@ describe('validation reports', () => {
 
         expect(displayedResult.warnings).toEqual([]);
         expect(report.staticValidation.warnings).toHaveLength(1);
-        expect(report.readiness).toMatchObject({ status: 'needs-review', productionReady: false });
+        expect(report.readiness).toMatchObject({ status: 'needs-review', checksPassed: false });
     });
 
     it('keeps hidden warnings in readiness and exports after both suites pass', () => {
@@ -231,7 +231,7 @@ describe('validation reports', () => {
         expect(report.runtimeTest.status).toBe('passed');
         expect(report.extendedRuntimeTest?.status).toBe('passed');
         expect(report.readiness).toMatchObject({
-            status: 'needs-review', productionReady: false, staticWarnings: 1,
+            status: 'needs-review', checksPassed: false, staticWarnings: 1,
         });
         expect(report.staticValidation.warnings).toHaveLength(1);
         expect(renderValidationReportHtml(report)).toContain('Renderer needs review');
@@ -256,4 +256,19 @@ describe('validation reports', () => {
         expect(html).not.toContain('<script>');
         expect(html).not.toContain('<img src=x>');
     });
+});
+
+it('exports tested-result terminology and scope without a synthetic score or production claim', () => {
+    const report = createValidationReport('Scope', STATIC_VALID, {
+        passed: true, totalDurationMs: 1,
+        steps: [{ name: 'load()', status: 'pass', durationMs: 1 }],
+    });
+    const html = renderValidationReportHtml(report);
+    expect(report.readiness.label).toBe('Checks Passed');
+    expect(report.readiness.staticLabel).toBe('Manifest Valid');
+    expect(report.readiness.scope).toContain('Extended tests have not been run.');
+    expect(html).toContain(report.readiness.scope);
+    expect(html).toContain('Overall Result<strong>Checks Passed</strong>');
+    expect(JSON.stringify(report)).not.toMatch(/staticScore|productionReady|production-ready/);
+    expect(html).not.toContain('Production-Ready');
 });

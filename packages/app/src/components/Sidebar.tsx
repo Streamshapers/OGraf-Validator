@@ -30,7 +30,7 @@ interface Props {
     onClose?: () => void;
 }
 
-type StatusFilter = 'all' | 'errors' | 'warnings' | 'ready';
+type StatusFilter = 'all' | 'errors' | 'warnings' | 'passed';
 
 export default function Sidebar({
     rootName,
@@ -63,7 +63,7 @@ export default function Sidebar({
             return readiness.status === 'static-invalid' || readiness.status === 'runtime-failed';
         }
         if (statusFilter === 'warnings') return readiness.status === 'needs-review';
-        if (statusFilter === 'ready') return readiness.status === 'production-ready';
+        if (statusFilter === 'passed') return readiness.status === 'checks-passed';
         return true;
     });
 
@@ -114,7 +114,7 @@ export default function Sidebar({
             {/* Status filter chips */}
             {packages.length > 0 && (
                 <div className="flex gap-1 px-2 pb-1.5">
-                    {(['all', 'errors', 'warnings', 'ready'] as const).map((status) => (
+                    {(['all', 'errors', 'warnings', 'passed'] as const).map((status) => (
                         <StatusChip
                             key={status}
                             label={status}
@@ -244,7 +244,7 @@ function StatusDot({ result, runtimeInfo }: { result: ValidationResult | undefin
     if (readiness.status === 'runtime-pending') {
         return <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: '#4ba1e2' }} />;
     }
-    if (readiness.status === 'production-ready') {
+    if (readiness.status === 'checks-passed') {
         return <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: '#28af62' }} />;
     }
     return <span className="h-2 w-2 shrink-0 rounded-full bg-ss-on-surface-variant/30" />;

@@ -9,7 +9,7 @@ export type PackageReadinessStatus =
     | 'runtime-running'
     | 'runtime-failed'
     | 'needs-review'
-    | 'production-ready';
+    | 'checks-passed';
 
 export type RuntimeReadinessStatus =
     | 'not-run'
@@ -32,8 +32,10 @@ export interface PackageReadiness {
     runtimeWarnings: number;
     runtimeCoverageIncomplete: boolean;
     totalIssues: number;
-    staticScore: number;
-    productionReady: boolean;
+    staticLabel: string;
+    detail: string;
+    scope: string;
+    checksPassed: boolean;
 }
 
 export function derivePackageReadiness(
@@ -66,7 +68,6 @@ export function derivePackageReadiness(
             ? Math.max(1, warningSteps)
             : warningSteps;
     const totalIssues = staticErrors + staticWarnings + runtimeErrors + runtimeWarnings;
-    const staticScore = Math.max(0, 100 - Math.min(100, staticErrors * 15 + staticWarnings * 5));
 
     let status: PackageReadinessStatus;
     let runtimeStatus: RuntimeReadinessStatus;
@@ -93,7 +94,7 @@ export function derivePackageReadiness(
         status = 'needs-review';
         runtimeStatus = runtimeInconclusive || runtimeWarnings > 0 ? 'inconclusive' : 'passed';
     } else {
-        status = 'production-ready';
+        status = 'checks-passed';
         runtimeStatus = 'passed';
     }
 
@@ -108,19 +109,22 @@ export function derivePackageReadiness(
         runtimeWarnings,
         runtimeCoverageIncomplete: !staticInvalid && runtimeInconclusive,
         totalIssues,
-        staticScore,
-        productionReady: status === 'production-ready',
+        staticLabel: staticInvalid ? 'Manifest Invalid' : 'Manifest Valid',
+        detail: readinessDetail(status),
+        scope: 'Results describe the checks performed. Visual output and production suitability are not assessed.'
+            + (!extendedResult && !extendedState?.active ? ' Extended tests have not been run.' : ''),
+        checksPassed: status === 'checks-passed',
     };
 }
 
 function readinessLabel(status: PackageReadinessStatus): string {
     switch (status) {
-        case 'static-invalid': return 'Not Production-Ready';
-        case 'runtime-pending': return 'Assessment Pending';
-        case 'runtime-running': return 'Assessment Running';
-        case 'runtime-failed': return 'Not Production-Ready';
+        case 'static-invalid': return 'Checks Failed';
+        case 'runtime-pending': return 'Tests Pending';
+        case 'runtime-running': return 'Tests Running';
+        case 'runtime-failed': return 'Checks Failed';
         case 'needs-review': return 'Needs Review';
-        case 'production-ready': return 'Production-Ready';
+        case 'checks-passed': return 'Checks Passed';
     }
 }
 
@@ -132,5 +136,16 @@ function runtimeLabel(status: RuntimeReadinessStatus): string {
         case 'failed': return 'Failed';
         case 'inconclusive': return 'Inconclusive';
         case 'passed': return 'Passed';
+    }
+}
+
+function readinessDetail(status: PackageReadinessStatus): string {
+    switch (status) {
+        case 'static-invalid': return 'Static validation found errors.';
+        case 'runtime-failed': return 'Runtime tests found errors.';
+        case 'runtime-pending': return 'Waiting for runtime tests.';
+        case 'runtime-running': return 'Runtime tests are in progress.';
+        case 'needs-review': return 'Review warnings or incomplete checks.';
+        case 'checks-passed': return 'All executed checks passed.';
     }
 }
