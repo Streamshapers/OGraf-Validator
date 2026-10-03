@@ -1,3 +1,4 @@
+import { findingDetectionText } from '../preview/runtime-findings.js';
 import RuntimeEvidence from './RuntimeEvidence.js';
 import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import {
@@ -75,18 +76,14 @@ export default function RuntimeTestCard({ result, phase, liveSteps, onRerun, fin
 
 export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup }) {
     const modes = uniqueModes(failure);
-    const occurrenceLabel = failure.occurrences.length === 1
-        ? '1 occurrence'
-        : `${failure.occurrences.length} occurrences`;
-    const suites = [...new Set(failure.occurrences.map(({ step }) =>
-        step.suite === 'extended' ? 'Extended test' : 'Standard test'))];
+    const detectionText = findingDetectionText(failure);
     const modePrefix = modes.length > 0 ? `${modes.join('/')}: ` : '';
     const contexts = [...new Set(failure.occurrences.map(({ step }) => stepContext(step)).filter(Boolean))];
     const copyText = [
         `${modePrefix}${failure.label}`,
         failure.code,
         failure.error,
-        `${occurrenceLabel} · ${suites.join(' · ')}`,
+        detectionText,
         modes.length > 0 ? `Affected modes: ${modes.join(', ')}` : undefined,
         ...contexts,
         ...failure.occurrences.map(({ step }) => {
@@ -112,8 +109,7 @@ export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup })
                             <code className="text-xs font-semibold font-mono text-ss-on-surface [overflow-wrap:anywhere]">{failure.label}</code>
                         </div>
                         <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] font-mono text-ss-on-surface-variant/50">
-                            <span>{occurrenceLabel}</span>
-                            <span>{suites.join(' · ')}</span>
+                            <span>{detectionText}</span>
                         </div>
                         <p className="text-[10px] font-semibold font-mono text-ss-error mt-2 tracking-wide">
                             {failure.code}

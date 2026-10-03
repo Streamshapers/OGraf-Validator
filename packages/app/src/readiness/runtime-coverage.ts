@@ -1,9 +1,12 @@
+import { getRuntimeFindings } from '../preview/runtime-findings.js';
 import type { RuntimeSuiteState, RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
 import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
 
 export interface SuiteCoverage {
     suite: 'Standard' | 'Extended';
     status: string;
+    issueCount: number;
+    issueOccurrences: number;
     checks: Record<RuntimeTestStep['status'], number>;
     modes: { mode: 'RT' | 'NRT'; declared: boolean | null; steps: number[]; profiles: string[] }[];
     declaredStepCount: number | null;
@@ -25,6 +28,7 @@ export function deriveRuntimeCoverage(manifest: unknown, standard?: RuntimeTestR
     return ([['Standard', standard, standardPhase], ['Extended', getRuntimeSuiteResult(extended), extended?.active?.phase]] as const)
         .map(([suite, result, phase]): SuiteCoverage => {
             const steps = result?.steps ?? [];
+            const findings = getRuntimeFindings(result);
             const calls = steps.filter((step) => step.invocation?.dispatched);
             const checks = { pass: 0, fail: 0, warning: 0, skip: 0 };
             for (const step of steps) checks[step.status]++;
@@ -33,6 +37,8 @@ export function deriveRuntimeCoverage(manifest: unknown, standard?: RuntimeTestR
                     : !result ? 'Not run' : isConclusiveRuntimeResult(result) ? 'Passed' : 'Inconclusive';
             return {
                 suite, status, checks, declaredStepCount,
+                issueCount: findings.length,
+                issueOccurrences: findings.reduce((sum, finding) => sum + finding.occurrences.length, 0),
                 evidenceMissing: !!result && !calls.length,
                 modes: (['RT', 'NRT'] as const).map((mode) => {
                     const modeCalls = calls.filter((step) => step.renderMode === mode);
@@ -71,4 +77,12 @@ export function coverageModeText(coverage: SuiteCoverage, mode: SuiteCoverage['m
     const stepText = count === 0 ? 'No fixed steps' : count === -1 ? 'Dynamic steps (bounded test)'
         : count === null ? 'Step count unknown' : `${mode.steps.length} of ${count} steps confirmed`;
     return `${stepText} · ${mode.profiles.length ? mode.profiles.join('; ') : 'No render profile recorded'}`;
+}
+
+export function coverageIssueText(coverage: SuiteCoverage): string {
+    const count = coverage.issueCount;
+    const issues = `${count} ${count === 1 ? 'issue' : 'issues'}`;
+    if (count === 0) return coverage.status === 'Not run' ? 'Not tested yet' : 'No issues detected';
+    return `${issues} · ${coverage.issueOccurrences === 1 ? 'detected once'
+        : `detected in ${coverage.issueOccurrences} checks`}`;
 }

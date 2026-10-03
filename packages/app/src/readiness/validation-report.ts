@@ -1,4 +1,4 @@
-import { deriveRuntimeCoverage, coverageModeText, type SuiteCoverage } from './runtime-coverage.js';
+import { deriveRuntimeCoverage, coverageIssueText, coverageModeText, type SuiteCoverage } from './runtime-coverage.js';
 import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import { reportEnvironment, type PackageFingerprint } from './report-context.js';
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
@@ -10,7 +10,7 @@ import type {
 } from '../preview/runtime-test-types.js';
 import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
 import { diagnoseRuntimeError, runtimeFailureIdentity, type RuntimeFailureGroup } from '../preview/runtime-diagnostics.js';
-import { getRuntimeFindings } from '../preview/runtime-findings.js';
+import { findingDetectionText, getRuntimeFindings } from '../preview/runtime-findings.js';
 import { safeSpecReference } from './spec-reference.js';
 import {
     derivePackageReadiness,
@@ -164,9 +164,10 @@ ${report.readiness.runtimeCoverageIncomplete ? '<p>Test coverage is incomplete. 
 }, null, 2))}</pre>
 <ul>${report.evidenceNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul></details>
 <details><summary>Test coverage</summary>${report.coverage.map((suite) => `<h3>${suite.suite} — ${escapeHtml(suite.status)}</h3>
-<p>${suite.checks.pass} passed · ${suite.checks.fail} failed · ${suite.checks.warning} inconclusive · ${suite.checks.skip} skipped checks</p>
+<p>${escapeHtml(coverageIssueText(suite))}</p>
+<details><summary>Show check counts, steps and actions</summary><p>${suite.checks.pass} passed · ${suite.checks.fail} failed · ${suite.checks.warning} inconclusive · ${suite.checks.skip} skipped checks</p>
 ${suite.modes.map((mode) => `<p>${mode.mode}: ${escapeHtml(coverageModeText(suite, mode))}; confirmed step indices: ${mode.steps.join(', ') || 'None recorded'}</p>`).join('')}
-${suite.customActions.map((action) => `<p>${escapeHtml(action.id)}: ${action.status}</p>`).join('')}`).join('')}
+${suite.customActions.map((action) => `<p>${escapeHtml(action.id)}: ${action.status}</p>`).join('')}</details>`).join('')}
 <p>Recorded results may include retained findings. Profiles show attempted Load configurations, not visual verification.</p></details>
 ${renderRuntimeFindings(findings)}
 ${runtimeSection}
@@ -256,10 +257,7 @@ function renderRuntimeFindings(findings: RuntimeFailureGroup[]): string {
             <h3>${escapeHtml(finding.label)}</h3>
             <p><code>${escapeHtml(finding.code)}</code></p>
             <p>${escapeHtml(finding.error ?? 'The runtime check failed.')}</p>
-            <p>${finding.occurrences.length} ${finding.occurrences.length === 1 ? 'occurrence' : 'occurrences'} · ${
-                [...new Set(finding.occurrences.map(({ step }) => step.suite === 'extended'
-                    ? 'Extended test' : 'Standard test'))].join(' · ')
-            }</p>
+            <p>${escapeHtml(findingDetectionText(finding))}</p>
             ${finding.occurrences[0] ? renderRuntimeExplanation(finding.occurrences[0].step) : ''}
             ${finding.occurrences.length > 1 ? '<p>First observation shown. Expand calls to inspect each observation.</p>' : ''}
             <p><strong>How to fix:</strong> ${escapeHtml(finding.hint)}</p>

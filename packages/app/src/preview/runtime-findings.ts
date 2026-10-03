@@ -20,3 +20,10 @@ function failureSteps(result: RuntimeTestResult | undefined, suite: RuntimeTestS
 
     return steps.map((step) => ({ ...step, suite }));
 }
+
+export function findingDetectionText(finding: RuntimeFailureGroup): string {
+    const suites = [...new Set(finding.occurrences.map(({ step }) =>
+        step.suite === 'extended' ? 'Extended' : 'Standard'))];
+    const count = finding.occurrences.length;
+    return `Detected in ${suites.join(' and ')} ${suites.length === 1 ? 'test' : 'tests'} · ${count} ${count === 1 ? 'occurrence' : 'occurrences'}`;
+}

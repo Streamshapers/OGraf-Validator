@@ -21,6 +21,8 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Fixed
 
+- Count distinct runtime issues in the coverage summary; show repeated detections separately and move individual check counts into expandable details, consistently in the UI and reports.
+
 - Describe executed checks with Checks Passed/Failed and Manifest Valid/Invalid instead of production readiness and a synthetic percentage. Share scope notes across the UI and exports; JSON readiness now uses `checks-passed`, `checksPassed`, and `staticLabel` in place of the former production status and score.
 
 - Show repeated contract failures once across standard and extended tests, with all observations available in expandable details and exports. Keep incomplete coverage separate from issue counts.

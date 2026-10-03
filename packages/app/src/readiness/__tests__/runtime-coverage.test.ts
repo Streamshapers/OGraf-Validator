@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { deriveRuntimeCoverage } from '../runtime-coverage.js';
+import { coverageIssueText, deriveRuntimeCoverage } from '../runtime-coverage.js';
 import type { RuntimeTestStep } from '../../preview/runtime-test-types.js';
 
 function call(method: string, value: unknown, extra: Partial<RuntimeTestStep> = {}): RuntimeTestStep {
@@ -46,4 +46,20 @@ it('keeps incomplete action observations inconclusive and excludes invalid step 
     });
     expect(coverage?.customActions[0]?.status).toBe('Inconclusive');
     expect(coverage?.modes[0]?.steps).toEqual([0, 1]);
+});
+
+it('counts grouped issues separately from repeated failing checks in each suite', () => {
+    const failure = call('setActionsSchedule', {}, { status: 'fail', error: 'Invalid empty payload',
+        diagnostic: { code: 'INVALID_EMPTY_PAYLOAD', method: 'setActionsSchedule',
+            field: 'statusCode', reason: 'non-vendor-field' } });
+    const standard = { passed: false, totalDurationMs: 1, steps: [failure] };
+    const extended = { latestAttempt: { ...standard, steps: [
+        { ...failure, scenarioId: 'contract' }, { ...failure, scenarioId: 'seeking' },
+    ] } };
+    const suites = deriveRuntimeCoverage({}, standard, extended);
+    expect(suites[0]).toMatchObject({ issueCount: 1, issueOccurrences: 1, checks: { fail: 1 } });
+    expect(suites[1]).toMatchObject({ issueCount: 1, issueOccurrences: 2, checks: { fail: 2 } });
+    expect(coverageIssueText(suites[0]!)).toBe('1 issue · detected once');
+    expect(coverageIssueText(suites[1]!)).toBe('1 issue · detected in 2 checks');
+    expect(coverageIssueText(deriveRuntimeCoverage({})[1]!)).toBe('Not tested yet');
 });

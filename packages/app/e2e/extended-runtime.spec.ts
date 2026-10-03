@@ -408,7 +408,11 @@ test('combines the same contract failure across suites in UI, clipboard and repo
     const issue = findings.getByRole('article');
     await expect(issue).toHaveCount(1);
     await expect(issue).toContainText('3 occurrences');
-    await expect(issue).toContainText('Standard test · Extended test');
+    await expect(issue).toContainText('Detected in Standard and Extended tests · 3 occurrences');
+    const coverage = page.getByRole('region', { name: 'Test coverage', exact: true });
+    await expect(coverage.getByText('1 issue · detected once', { exact: true })).toBeVisible();
+    await expect(coverage.getByText('1 issue · detected in 2 checks', { exact: true })).toBeVisible();
+    await expect(coverage.getByText(/60 passed/)).not.toBeVisible();
     await expect(page.getByText('INVALID_EMPTY_PAYLOAD', { exact: true })).toHaveCount(1);
     const standard = page.getByRole('region', { name: 'Standard runtime test', exact: true });
     const extended = page.getByRole('region', { name: 'Extended runtime test', exact: true });
@@ -441,6 +445,8 @@ test('combines the same contract failure across suites in UI, clipboard and repo
     await page.getByRole('button', { name: 'Download HTML', exact: true }).click();
     const html = await readFile((await (await downloading).path())!, 'utf8');
     expect(html.match(/INVALID_EMPTY_PAYLOAD/g)).toHaveLength(1);
+    expect(html).toContain('1 issue · detected in 2 checks');
+    expect(html).toContain('Detected in Standard and Extended tests · 3 occurrences');
     expect(html.match(/href="#runtime-finding-1"/g)).toHaveLength(3);
     for (const width of [390, 640, 1280]) {
         await page.setViewportSize({ width, height: 900 });
