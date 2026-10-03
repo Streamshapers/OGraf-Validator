@@ -20,7 +20,8 @@ function renderCard(state?: RuntimeSuiteState): string {
 
 function buttonLabels(html: string): string[] {
     return [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)]
-        .map((match) => match[1]!.replace(/<[^>]+>/g, '').trim());
+        .map((match) => [...match[1]!.matchAll(/(?:^|>)([^<>]+)(?=<|$)/g)]
+            .map((text) => text[1]).join('').trim());
 }
 
 function completed(overrides: Partial<RuntimeTestResult> = {}): RuntimeSuiteState {
