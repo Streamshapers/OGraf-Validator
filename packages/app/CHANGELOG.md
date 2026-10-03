@@ -23,6 +23,12 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Fixed
 
+- Reject empty non-vendor payload field names consistently in both runtime normalizers.
+- Accept exported Web Component classes that register themselves, while preserving genuine constructor failures.
+- Keep runtime progress pending while an extended attempt is active and retain known failures during retries.
+- Mark unsatisfied declared render profiles and precision-unsafe step navigation as test limitations instead of silently testing incorrect expectations.
+- Make the concurrent-action browser regression synchronize with pending calls rather than a fixed timing window; cover export cancellation on package navigation.
+
 - Count distinct runtime issues in the coverage summary; show repeated detections separately and move individual check counts into expandable details, consistently in the UI and reports.
 
 - Describe executed checks with Checks Passed/Failed and Manifest Valid/Invalid instead of production readiness and a synthetic percentage. Share scope notes across the UI and exports; JSON readiness now uses `checks-passed`, `checksPassed`, and `staticLabel` in place of the former production status and score.

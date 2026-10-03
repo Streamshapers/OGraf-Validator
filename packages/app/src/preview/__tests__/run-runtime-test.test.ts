@@ -105,6 +105,18 @@ describe('automated runtime evaluation', () => {
         expect(mocks.closeSession).toHaveBeenCalledOnce();
     });
 
+    it('does not blame a graphic when no declared render requirement can be selected', async () => {
+        const result = await run({ supportsNonRealTime: true,
+            renderRequirements: [{ frameRate: { exact: 0 } }] });
+        expect(result).toMatchObject({ passed: true, inconclusive: true });
+        expect(mocks.createRunner).not.toHaveBeenCalled();
+        expect(call).not.toHaveBeenCalled();
+        expect(result.steps.filter((step) => step.status === 'warning')).toHaveLength(2);
+        expect(result.steps[0]?.diagnostic).toMatchObject({
+            code: 'PREVIEW_LIMITATION', reason: 'unmatched-render-requirements',
+        });
+    });
+
     it.each([
         { type: 'string' },
         { type: 'string', default: 'tiny', minLength: 10 },

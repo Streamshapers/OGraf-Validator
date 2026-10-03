@@ -229,6 +229,13 @@ async function runExtendedTest(
                 'load() test data', 'load', schema, data, push,
             )) commonBlock = 'Generated load data cannot be used for runtime checks.';
         }
+        const renderRequirement = selectRuntimeRenderRequirement(options.manifest);
+        if (!commonBlock && renderRequirement.unavailableReason) {
+            commonBlock = renderRequirement.unavailableReason;
+            push(warningStep('Render capability check', commonBlock, {
+                code: 'PREVIEW_LIMITATION', reason: 'unmatched-render-requirements',
+            }));
+        }
         const plan = createExtendedRuntimeScenarios(options.manifest, data);
         const blockedModes = new Map<'RT' | 'NRT', string>();
         for (const scenario of plan) {
@@ -384,6 +391,12 @@ async function runCycle(
     let runner: PreviewRunner | null = null;
     const importStarted = performance.now();
     const renderRequirement = selectRuntimeRenderRequirement(options.manifest);
+    if (renderRequirement.unavailableReason) {
+        push(warningStep(`${label}: render capability check`, renderRequirement.unavailableReason, {
+            code: 'PREVIEW_LIMITATION', reason: 'unmatched-render-requirements',
+        }));
+        return { completed: false, blockedReason: renderRequirement.unavailableReason };
+    }
     try {
         beginCheck('import', 'Sandbox import');
         if (options.signal?.aborted) throw new PreviewRunnerAbortError();

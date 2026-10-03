@@ -209,6 +209,17 @@ describe('extended runtime scenarios', () => {
         expect(result.scenarios?.every((scenario) => scenario.status === 'blocked')).toBe(true);
     });
 
+    it('blocks all scenarios when no declared render requirement can be selected', async () => {
+        const result = await run({ supportsNonRealTime: true,
+            renderRequirements: [{ frameRate: { exact: 40, min: 50 } }] });
+        expect(result).toMatchObject({ passed: true, inconclusive: true });
+        expect(instances).toHaveLength(0);
+        expect(result.scenarios?.every((scenario) => scenario.status === 'blocked')).toBe(true);
+        expect(result.steps).toContainEqual(expect.objectContaining({
+            diagnostic: expect.objectContaining({ reason: 'unmatched-render-requirements' }),
+        }));
+    });
+
     it('blocks dependent scenarios after an import failure', async () => {
         mocks.createRunner.mockRejectedValueOnce(new PreviewRunnerError('No default export', { code: 'INVALID_DEFAULT_EXPORT' }));
         const result = await run();

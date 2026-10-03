@@ -20,6 +20,7 @@ import SettingsPanel from './components/SettingsPanel.js';
 import StatusBar from './components/StatusBar.js';
 import { derivePackageReadiness } from './readiness/package-readiness.js';
 import { enqueueRuntimeJob, prioritizeRuntimeQueue } from './runtime-queue.js';
+import { deriveRuntimeProgress } from './runtime-progress.js';
 import type {
     RuntimeBudgetMinutes, RuntimeSuiteState, RuntimeTestResult, RuntimeTestSuite,
 } from './preview/runtime-test-types.js';
@@ -611,20 +612,10 @@ export default function App() {
     }, [state.packageCache, hiddenSet]);
 
     // Derive runtime test progress for status bar
-    const runtimeProgress = useMemo(() => {
-        const entries = Object.values(state.packageCache);
-        const scheduled = entries.filter((entry) => entry.runtimeTest || entry.runtimeTestPhase);
-        const done = scheduled.filter((entry) => entry.runtimeTest && !entry.runtimeTestPhase).length;
-        const readiness = scheduled.map((entry) => derivePackageReadiness(
-            entry.validationResult,
-            entry.runtimeTest,
-            entry.runtimeTestPhase,
-            entry.extendedRuntimeTest,
-        ));
-        const failed = readiness.filter((entry) => entry.status === 'runtime-failed').length;
-        const inconclusive = readiness.filter((entry) => entry.runtimeStatus === 'inconclusive').length;
-        return scheduled.length > 0 ? { done, total: scheduled.length, failed, inconclusive } : null;
-    }, [state.packageCache]);
+    const runtimeProgress = useMemo(
+        () => deriveRuntimeProgress(Object.values(state.packageCache)),
+        [state.packageCache],
+    );
 
     // Derive runtime test results for sidebar
     const sidebarRuntimeResults = useMemo(() => {

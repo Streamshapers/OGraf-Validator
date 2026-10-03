@@ -24,6 +24,8 @@ export interface RuntimeScenario {
 }
 
 const MAX_TARGET_STEPS = 20;
+const IMPRECISE_STEP_COVERAGE = 'Step navigation is not tested because stepCount exceeds '
+    + 'JavaScript exact integer precision. Basic contracts and step-zero lifecycle checks remain available.';
 const DYNAMIC_PLAY_LIMIT = 3;
 const LIFECYCLE_REPETITIONS = 2;
 const NRT_SEEK_TIMESTAMPS = [0, 125, 250, 500, 750, 1000, 1250, 500, 0, 1250, 1250];
@@ -98,6 +100,10 @@ function createStepScenario(renderMode: RuntimeRenderMode, stepCount: number): R
 
         return scenario;
     }
+    if (!Number.isSafeInteger(stepCount)) {
+        scenario.coverageWarning = IMPRECISE_STEP_COVERAGE;
+        return scenario;
+    }
     scenario.calls.push(playCall(`${id}.initial`, 'playAction() from start', {
         skipAnimation: true,
     }, stepCount === 0 ? null : 0));
@@ -145,9 +151,10 @@ function createAbsoluteEndScenario(
         label: 'Direct transition to end',
         renderMode,
         kind: 'calls',
-        calls: stepCount > 0 ? [playCall(`${id}.goto-end`, `playAction(goto: ${stepCount})`, {
+        calls: stepCount > 0 && Number.isSafeInteger(stepCount) ? [playCall(`${id}.goto-end`, `playAction(goto: ${stepCount})`, {
             goto: stepCount, skipAnimation: true,
         }, null)] : [],
+        ...(!Number.isSafeInteger(stepCount) ? { coverageWarning: IMPRECISE_STEP_COVERAGE } : {}),
         ...(stepCount <= 0 ? {
             notApplicableReason: stepCount === 0
                 ? 'This graphic has no numbered steps; play without a target is tested instead.'

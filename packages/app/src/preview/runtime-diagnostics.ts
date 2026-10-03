@@ -116,7 +116,7 @@ export function diagnoseRuntimeError(
                 `${SPEC}#setactionsschedule`,
             );
         case 'INVALID_RETURN_PAYLOAD': {
-            if (details?.reason !== 'non-vendor-field' || !details.field) {
+            if (details?.reason !== 'non-vendor-field' || details.field === undefined) {
                 if (details?.method === 'playAction') {
                     return diagnostic('playAction must resolve to an object containing statusCode and currentStep. Use the zero-based active step, or currentStep: undefined at the end. The complete payload must not be undefined.', methodRef);
                 }
@@ -162,6 +162,12 @@ export function diagnoseRuntimeError(
         case 'RUNTIME_ABORTED':
             return diagnostic('The test was interrupted. Rerun it to obtain results for the remaining checks.');
         case 'PREVIEW_LIMITATION':
+            if (details?.reason === 'unmatched-render-requirements') {
+                return diagnostic('No declared render alternative can be selected for this test. '
+                    + 'Check the manifest constraints and use a compatible renderer. '
+                    + 'Default preview values do not establish that a requirement is met.',
+                `${SPEC}#renderrequirements`);
+            }
             if (details?.reason === 'blocked-dependent-checks' || details?.reason === 'blocked-prerequisite') {
                 return diagnostic('Resolve the preceding failure or test limitation, then rerun the full suite. Earlier findings remain until the dependent checks can be evaluated.');
             }

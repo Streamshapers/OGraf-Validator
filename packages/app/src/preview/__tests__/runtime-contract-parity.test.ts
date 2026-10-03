@@ -24,6 +24,8 @@ describe('sandbox and application return-contract parity', () => {
         { statusCode: 200, currentStep: -1 }, { statusCode: 200, currentStep: null },
         { statusCode: 200, result: { currentStep: 0 } },
         { statusCode: 200, extra: true }, { statusCode: 200, v_vendor: true },
+        { '': true }, { '': true, extra: true },
+        { statusCode: 200, '': true }, { statusCode: 200, '': true, extra: true },
         Object.create({ statusCode: 200 }),
     ];
     const methods: OgrafApiMethod[] = [
@@ -42,6 +44,24 @@ describe('sandbox and application return-contract parity', () => {
             }
         }
     });
+
+    it.each(['load', 'setActionsSchedule'] as const)(
+        '%s rejects an empty field name before any later unknown field', (method) => {
+            for (const extra of [{ '': true }, { '': true, extra: true }]) {
+                const payload = method === 'load' ? { statusCode: 200, ...extra } : extra;
+                for (const normalize of [normalizeReturnPayload, normalizeInRunner]) {
+                    expect(normalize(method, payload)).toMatchObject({
+                        valid: false,
+                        diagnostic: {
+                            code: method === 'load'
+                                ? 'INVALID_RETURN_PAYLOAD' : 'INVALID_EMPTY_PAYLOAD',
+                            reason: 'non-vendor-field', method, field: '',
+                        },
+                    });
+                }
+            }
+        },
+    );
 });
 
 describe('runner error metadata', () => {

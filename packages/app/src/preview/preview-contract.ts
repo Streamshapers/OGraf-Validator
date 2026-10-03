@@ -70,7 +70,7 @@ export function normalizeReturnPayload(
     const payload = value as Record<string, unknown>;
     if (method === 'setActionsSchedule') {
         const invalidKey = Object.keys(payload).find((key) => !key.startsWith('v_'));
-        if (invalidKey) {
+        if (invalidKey !== undefined) {
             return invalid(value, `EmptyPayload contains non-vendor field "${invalidKey}".`, {
                 code: 'INVALID_EMPTY_PAYLOAD', reason: 'non-vendor-field', method, field: invalidKey,
             });
@@ -91,7 +91,7 @@ export function normalizeReturnPayload(
         ...(method === 'playAction' ? ['currentStep'] : []),
     ]);
     const invalidField = Object.keys(payload).find((key) => !allowedFields.has(key) && !key.startsWith('v_'));
-    if (invalidField) {
+    if (invalidField !== undefined) {
         return invalid(value, `ReturnPayload contains non-vendor field "${invalidField}".`, {
             code: 'INVALID_RETURN_PAYLOAD', reason: 'non-vendor-field', method, field: invalidField,
         });

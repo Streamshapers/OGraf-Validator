@@ -84,3 +84,42 @@ The npm package must have this trusted publisher configuration:
 After the first automated publish succeeds, set the npm package's publishing
 access to require two-factor authentication and disallow traditional publish
 tokens.
+
+## App distribution and manual FTP deployment
+
+Build the app from the same reviewed commit that passed `npm run release:check`.
+For app 0.3.0, validate metadata with `node scripts/check-release-tag.mjs app-v0.3.0`.
+The core remains at its already published version unless core sources change.
+Do not recreate an existing core release for an app-only update.
+
+The website is the **contents** of `packages/app/dist/`, including `assets/`,
+fonts, `preview-runner.html`, `preview-runner.js` and `preview-sw.js`.
+Do not upload the repository, source files, `node_modules`, test reports or the
+local roadmap. Keep release notes, checksums and verification notes outside the
+public website root. Keep a SHA-256 file manifest with the local release archive.
+
+Before an authorized upload:
+
+1. Back up the complete currently deployed website and retain its server-specific
+   configuration (such as `.htaccess`). The build does not contain or replace
+   that configuration.
+2. Extract the prepared ZIP locally. Check its checksum and file manifest. The
+   extracted root should contain `index.html` directly, not a `dist/` wrapper.
+3. Prefer uploading into a separate release directory and switching the document
+   root after the upload. If only in-place FTP is available, use a maintenance
+   window, upload all assets and runner files first, and replace `index.html`
+   last. An in-place upload is not atomic; existing tabs may need reloading.
+4. Retain old hashed assets until the new release is verified and old tabs have
+   been reloaded. Do not delete the entire remote directory before uploading.
+5. Verify the displayed app/core versions, folder and ZIP loading, one passing
+   Graphic, the standard and extended tests, report exports and sandbox preview.
+   Test with a fresh tab as well as a reload of an existing tab.
+6. If verification fails, restore the complete previous build together. Do not
+   mix runner/Service Worker files from different releases.
+
+Serve the site over HTTPS with the existing JavaScript/WASM/font MIME types.
+HTML, the preview runner and Service Worker should revalidate rather than stay
+in a long-lived immutable cache; content-hashed `assets/` files can use a long
+cache lifetime. Verify hosting cache/CDN behavior before considering the upload
+complete. Local release preparation does not publish a GitHub release or upload
+anything by FTP.

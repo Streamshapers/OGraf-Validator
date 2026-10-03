@@ -23,6 +23,11 @@ describe('runtime diagnostics', () => {
         });
         expect(harness.hint).toContain('validator could not complete');
         expect(harness.specRef).toBeUndefined();
+        const render = diagnoseRuntimeError(undefined, {
+            code: 'PREVIEW_LIMITATION', reason: 'unmatched-render-requirements',
+        });
+        expect(render.hint).toContain('Default preview values do not establish');
+        expect(render.specRef).toMatch(/#renderrequirements$/);
     });
 
     it('groups equivalent extended RT/NRT checks without losing their scenario context', () => {
@@ -65,6 +70,9 @@ describe('runtime diagnostics', () => {
             code: 'INVALID_RETURN_PAYLOAD',
             hint: expect.stringContaining('result: { segment: value }'),
         });
+        expect(diagnoseRuntimeError(undefined, {
+            code: 'INVALID_RETURN_PAYLOAD', reason: 'non-vendor-field', field: '', method: 'load',
+        }).hint).toContain('result: { "": value }');
     });
 
     it('recognizes missing API methods', () => {

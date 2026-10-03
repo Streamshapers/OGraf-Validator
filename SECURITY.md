@@ -7,7 +7,9 @@ isolated browser sandbox. Security reports are welcome.
 
 | Package | Supported |
 | --- | --- |
+| OGraf Validator app 0.3.x | Yes |
 | OGraf Validator app 0.2.x | Yes |
+| Validator core 0.3.x | Yes |
 | Validator core 0.2.x | Yes |
 | Older versions | No |
 
@@ -74,3 +76,15 @@ receiver and session checks change.
 Preview Service Worker error responses contain only fixed messages. Detailed
 errors are logged in the trusted worker's console, not included in resource
 responses that package code can read.
+
+## Execution limits
+
+The browser sandbox isolates origin data and capabilities; it is not a separate
+operating-system process or a resource quota. Graphic code can consume CPU,
+memory and network resources. Runtime timeouts limit how long the validator
+waits, but cannot guarantee interruption of a synchronous loop or an event flood.
+Resource observations are diagnostic evidence, not a complete network monitor.
+
+Reports can contain Graphic-provided messages and captured input/output values.
+The export review and escaped HTML protect presentation, not confidentiality of
+values the user chooses to share. Inspect reports before sending them elsewhere.

@@ -11,6 +11,8 @@ export interface RenderRequirementOption {
     engineLabel?: string;
     internetLabel?: string;
     unverifiable: string[];
+    /** No declared alternative can be represented by the automatic runtime harness. */
+    unavailableReason?: string;
 }
 
 export function getRenderRequirementOptions(manifest: unknown): RenderRequirementOption[] {
@@ -25,11 +27,20 @@ export function getRenderRequirementOptions(manifest: unknown): RenderRequiremen
 
 /** First locally representable alternative, or validator defaults when absent. */
 export function selectRuntimeRenderRequirement(manifest: unknown): RenderRequirementOption {
-    return getRenderRequirementOptions(manifest)[0] ?? {
+    const selected = getRenderRequirementOptions(manifest)[0];
+    if (selected) return selected;
+    const requirements = record(manifest)['renderRequirements'];
+    const unavailableReason = Array.isArray(requirements) && requirements.length > 0
+        ? 'No declared render requirement can be represented by this preview. '
+            + 'Automatic runtime checks require a compatible render configuration.'
+        : undefined;
+
+    return {
         index: -1,
         characteristics: DEFAULT_RENDER_CHARACTERISTICS,
         label: `Default - ${formatCharacteristics(DEFAULT_RENDER_CHARACTERISTICS)}`,
-        unverifiable: [],
+        unverifiable: unavailableReason ? [unavailableReason] : [],
+        ...(unavailableReason ? { unavailableReason } : {}),
     };
 }
 

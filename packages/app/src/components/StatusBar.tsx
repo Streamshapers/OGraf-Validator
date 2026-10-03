@@ -159,24 +159,23 @@ function RuntimeProgressBar({ done, total, failed, inconclusive }: {
 }) {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const finished = done === total;
-    const color = !finished
-        ? '#4ba1e2'
-        : failed > 0
-            ? '#cc5662'
+    const color = failed > 0
+        ? '#cc5662'
+        : !finished
+            ? '#4ba1e2'
             : inconclusive > 0
                 ? '#e2b06f'
                 : '#28af62';
-    const title = failed > 0
-        ? `${failed} runtime test${failed === 1 ? '' : 's'} failed`
+    const outcomes = [
+        failed > 0 ? `${failed} failed` : null,
+        inconclusive > 0 ? `${inconclusive} review` : null,
+    ].filter((value): value is string => value !== null);
+    const title = !finished
+        ? `Runtime tests in progress${outcomes.length ? ` · ${outcomes.join(' · ')}` : ''}`
+        : failed > 0 ? `${failed} package${failed === 1 ? '' : 's'} with runtime failures`
             : inconclusive > 0
-                ? `${inconclusive} runtime test${inconclusive === 1 ? '' : 's'} inconclusive`
-                : finished ? 'All runtime tests passed' : 'Runtime tests in progress';
-    const outcomes = finished
-        ? [
-            failed > 0 ? `${failed} failed` : null,
-            inconclusive > 0 ? `${inconclusive} review` : null,
-        ].filter((value): value is string => value !== null)
-        : [];
+                ? `${inconclusive} package${inconclusive === 1 ? '' : 's'} with inconclusive runtime tests`
+                : 'All runtime tests passed';
 
     return (
         <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap" title={title}>

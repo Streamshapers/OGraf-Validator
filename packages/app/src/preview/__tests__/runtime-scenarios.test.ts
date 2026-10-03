@@ -207,3 +207,16 @@ describe('extended runtime scenario planning', () => {
         expect(DEFAULT_DATA).toEqual({ name: 'Example' });
     });
 });
+
+it('does not infer last-step or end expectations beyond exact integer precision', () => {
+    const planned = scenarios(1e20);
+    for (const id of ['rt.steps', 'rt.absolute-end']) {
+        const scenario = getScenario(planned, id);
+        expect(scenario.calls).toEqual([]);
+        expect(scenario.coverageWarning).toContain('exact integer precision');
+        expect(scenario.notApplicableReason).toBeUndefined();
+    }
+    expect(getScenario(planned, 'rt.animation-repeat').calls.some((call) => call.expectedCurrentStep === 0)).toBe(true);
+    expect(getScenario(scenarios(Number.MAX_SAFE_INTEGER), 'rt.steps').calls)
+        .toContainEqual(expect.objectContaining({ params: { goto: Number.MAX_SAFE_INTEGER - 1, skipAnimation: true }, expectedCurrentStep: Number.MAX_SAFE_INTEGER - 1 }));
+});

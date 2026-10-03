@@ -216,8 +216,19 @@
 
         const tagName = `ograf-sandbox-${runnerId.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24)}`;
         if (!tagName.includes('-')) throw new Error('Could not create a valid custom element name.');
-        customElements.define(tagName, GraphicClass);
-        element = document.createElement(tagName);
+        try {
+            customElements.define(tagName, GraphicClass);
+        } catch (error) {
+            if (!(error instanceof DOMException) || error.name !== 'NotSupportedError') throw error;
+            // Modules may register their exported class before the renderer imports it.
+            // Native HTMLElement construction succeeds only for a registered constructor.
+            // Keep constructor errors visible instead of treating the duplicate as a defect.
+            const registeredElement = new GraphicClass();
+            if (!(registeredElement instanceof HTMLElement)
+                || !(registeredElement instanceof GraphicClass)) throw error;
+            element = registeredElement;
+        }
+        if (!element) element = document.createElement(tagName);
         stage.replaceChildren(element);
         // Background runtime frames may have requestAnimationFrame suspended.
         // Connected custom elements are available after the current microtask.
@@ -1280,7 +1291,7 @@ self.addEventListener('message', captureMessage, true);
         const payload = value;
         if (method === 'setActionsSchedule') {
             const invalidKey = Object.keys(payload).find((key) => !key.startsWith('v_'));
-            if (invalidKey) {
+            if (invalidKey !== undefined) {
                 return invalidPayload(value, `EmptyPayload contains non-vendor field "${invalidKey}".`, {
                     code: 'INVALID_EMPTY_PAYLOAD', reason: 'non-vendor-field', method, field: invalidKey,
                 });
@@ -1301,7 +1312,7 @@ self.addEventListener('message', captureMessage, true);
             ...(method === 'playAction' ? ['currentStep'] : []),
         ]);
         const invalidField = Object.keys(payload).find((key) => !allowedFields.has(key) && !key.startsWith('v_'));
-        if (invalidField) {
+        if (invalidField !== undefined) {
             return invalidPayload(value, `ReturnPayload contains non-vendor field "${invalidField}".`, {
                 code: 'INVALID_RETURN_PAYLOAD', reason: 'non-vendor-field', method, field: invalidField,
             });
