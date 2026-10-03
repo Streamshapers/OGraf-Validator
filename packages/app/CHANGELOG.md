@@ -6,6 +6,9 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Added
 
+- Compact standard/extended test coverage in the UI and JSON/HTML reports, based on captured calls, confirmed steps, Custom Actions and attempted render configurations.
+- Local ZIP selection and drag-and-drop with multiple Graphics, shared assets, cancellable read-only snapshots, integrity checks and bounded extraction.
+
 - Expected/received runtime explanations with captured inputs per observation, consistent clipboard/report details, and explicit missing-evidence labels.
 - Manifest issue links that expand and focus the affected field (or the parent of a missing field), with current-value inspection and ambiguity checks.
 

@@ -25,9 +25,27 @@ graphics developers.
 
 1. Open the [hosted validator](https://validator.streamshapers.com) in a current
    version of Chrome or Edge.
-2. Select a folder that contains one or more `*.ograf.json` manifests.
+2. Select a folder, choose **Open ZIP**, or drop a ZIP containing one or more
+   `*.ograf.json` manifests onto the app.
 3. Static validation and runtime checks start automatically.
 4. Select a Graphic to inspect its manifest, data schema, assets, and preview.
+
+ZIP files are read locally into a read-only snapshot for the current tab. Nothing
+is extracted to your disk or uploaded. Multiple manifests and shared relative
+assets work like folder imports; the configured scan depth still applies. Reopen
+the ZIP after changing it. It does not replace your saved last folder.
+
+ZIP import supports unencrypted stored or Deflate-compressed entries with UTF-8
+or ASCII filenames, up to 50 MiB compressed, 100 MiB expanded, 2,000 entries and
+20 path levels. ZIP64, split archives, symbolic links, unsafe or conflicting
+paths, and corrupt contents are rejected. Cancellation or a rejected archive
+keeps the currently opened project available.
+
+**Test coverage** separates standard and extended results, showing check counts,
+confirmed step indices, Custom Actions and the render configurations actually
+sent to Load. Unrun checks and missing evidence remain explicit. A successful
+call does not verify the visual output or establish coverage of other profiles.
+JSON and HTML reports include the same coverage data.
 
 The validator reports three kinds of results:
 

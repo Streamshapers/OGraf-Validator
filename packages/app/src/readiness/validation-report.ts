@@ -1,3 +1,4 @@
+import { deriveRuntimeCoverage, coverageModeText, type SuiteCoverage } from './runtime-coverage.js';
 import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import { reportEnvironment, type PackageFingerprint } from './report-context.js';
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
@@ -18,6 +19,7 @@ import {
 } from './package-readiness.js';
 
 export interface ValidationReport {
+    coverage: SuiteCoverage[];
     reportFormatVersion: 1;
     environment: ReturnType<typeof reportEnvironment>;
     packageAtExport?: { manifestFilename: string; fingerprint: PackageFingerprint };
@@ -53,12 +55,14 @@ export function createValidationReport(
     generatedAt = new Date(),
     extendedState?: RuntimeSuiteState,
     packageAtExport?: ValidationReport['packageAtExport'],
+    manifest?: unknown,
 ): ValidationReport {
     const readiness = derivePackageReadiness(
         staticValidation, runtimeResult, runtimePhase, extendedState,
     );
     const standardReadiness = derivePackageReadiness(staticValidation, runtimeResult, runtimePhase);
     return {
+        coverage: deriveRuntimeCoverage(manifest, runtimeResult, extendedState, runtimePhase),
         reportFormatVersion: 1,
         environment: reportEnvironment(),
         ...(packageAtExport ? { packageAtExport } : {}),
@@ -159,6 +163,11 @@ ${report.readiness.runtimeCoverageIncomplete ? '<p>Test coverage is incomplete. 
     extendedRun: report.extendedRuntimeTest?.result?.reportContext ?? 'Not captured',
 }, null, 2))}</pre>
 <ul>${report.evidenceNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul></details>
+<details><summary>Test coverage</summary>${report.coverage.map((suite) => `<h3>${suite.suite} — ${escapeHtml(suite.status)}</h3>
+<p>${suite.checks.pass} passed · ${suite.checks.fail} failed · ${suite.checks.warning} inconclusive · ${suite.checks.skip} skipped checks</p>
+${suite.modes.map((mode) => `<p>${mode.mode}: ${escapeHtml(coverageModeText(suite, mode))}; confirmed step indices: ${mode.steps.join(', ') || 'None recorded'}</p>`).join('')}
+${suite.customActions.map((action) => `<p>${escapeHtml(action.id)}: ${action.status}</p>`).join('')}`).join('')}
+<p>Recorded results may include retained findings. Profiles show attempted Load configurations, not visual verification.</p></details>
 ${renderRuntimeFindings(findings)}
 ${runtimeSection}
 ${renderExtendedReport(report.extendedRuntimeTest, findings)}

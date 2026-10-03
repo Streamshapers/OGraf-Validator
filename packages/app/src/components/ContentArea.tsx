@@ -1,3 +1,4 @@
+import RuntimeCoverage from './RuntimeCoverage.js';
 import type { ManifestLocation } from '../inspector/manifest-location.js';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, Loader2, FolderOpen, Cpu, History, FileCode2 } from 'lucide-react';
@@ -212,6 +213,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                         {cache && activeTab === 'validation' && (
                             <div className={`flex flex-col gap-3 sm:gap-4 transition-opacity ${isValidating ? 'opacity-50' : 'opacity-100'}`}>
                                 <ValidationOverview
+                                    manifest={cache.manifest}
                                     readiness={readiness!}
                                     result={cache.validationResult}
                                     fullResult={cache.fullValidationResult}
@@ -222,6 +224,8 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                     runtimePhase={cache.runtimeTestPhase}
                                     extendedState={cache.extendedRuntimeTest}
                                 />
+                                <RuntimeCoverage manifest={cache.manifest} standard={cache.runtimeTest}
+                                    extended={cache.extendedRuntimeTest} phase={cache.runtimeTestPhase} />
                                 <IssueList result={cache.validationResult} manifest={cache.manifest}
                                     onShowManifest={(location) => { setManifestLocation(location); setActiveTab('inspect'); }} />
                                 <RuntimeFindings findings={runtimeFindings} />
@@ -389,6 +393,7 @@ function runtimeHeaderTone(status: PackageReadiness['runtimeStatus']): 'success'
 }
 
 function ValidationOverview({
+    manifest,
     readiness,
     result,
     fullResult,
@@ -399,6 +404,7 @@ function ValidationOverview({
     runtimePhase,
     extendedState,
 }: {
+    manifest: unknown;
     readiness: PackageReadiness;
     result: ValidationResult;
     fullResult?: ValidationResult;
@@ -446,6 +452,7 @@ function ValidationOverview({
                     {isValidating && <Spinner />}
                     <ExportButtons
                         result={fullResult ?? result}
+                        manifest={manifest}
                         key={packageEntry.key}
                         packageName={packageName}
                         packageEntry={packageEntry}

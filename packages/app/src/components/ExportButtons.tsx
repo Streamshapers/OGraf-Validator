@@ -9,7 +9,8 @@ import { createValidationReport, renderValidationReportHtml, type ValidationRepo
 
 type ExportFormat = 'JSON' | 'HTML';
 
-export default function ExportButtons({ result, packageName, packageEntry, runtimeResult, runtimePhase, extendedState }: {
+export default function ExportButtons({ manifest, result, packageName, packageEntry, runtimeResult, runtimePhase, extendedState }: {
+    manifest: unknown;
     result: ValidationResult;
     packageName: string;
     packageEntry: PackageEntry;
@@ -33,7 +34,7 @@ export default function ExportButtons({ result, packageName, packageEntry, runti
         setPreparing(true);
         // Freeze the selected results before awaiting file IO or user review.
         const report = JSON.parse(JSON.stringify(createValidationReport(
-            packageName, result, runtimeResult, runtimePhase, undefined, extendedState,
+            packageName, result, runtimeResult, runtimePhase, undefined, extendedState, undefined, manifest,
         ))) as ValidationReport;
         const fingerprint = await fingerprintPackage(new BrowserFS(packageEntry.dirHandle), attempt.signal);
         if (attempt.signal.aborted) return;

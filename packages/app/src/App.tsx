@@ -1,3 +1,4 @@
+import { isArchiveDirectory } from './fs/archive-directory.js';
 import { fingerprintPackage, reportEnvironment, type RuntimeReportContext } from './readiness/report-context.js';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 
@@ -70,6 +71,12 @@ interface ActiveRuntimeTest {
 
 export default function App() {
     const [state, setState] = useState<AppState>(INITIAL_STATE);
+    const projectRequestRef = useRef(0);
+    const zipInputRef = useRef<HTMLInputElement>(null);
+    const zipControllerRef = useRef<AbortController | null>(null);
+    const [zipProgress, setZipProgress] = useState<{ name: string; done: number; total: number } | null>(null);
+    const [zipError, setZipError] = useState<string | null>(null);
+    useEffect(() => () => zipControllerRef.current?.abort(), []);
     const [lastScan, setLastScan] = useState<Date | null>(null);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [settings, updateSettings] = useSettings();
@@ -377,13 +384,16 @@ export default function App() {
         validatedManifestRef.current.clear();
         assetListCacheRef.current = new WeakMap();
 
-        try { localStorage.setItem('ograf-last-directory', dirHandle.name); } catch { /* quota */ }
-        void saveDirectoryHandle(dirHandle);
+        if (!isArchiveDirectory(dirHandle)) {
+            try { localStorage.setItem('ograf-last-directory', dirHandle.name); } catch { /* quota */ }
+            void saveDirectoryHandle(dirHandle);
+        }
 
         setState((prev) => ({
             ...prev,
             rootHandle: dirHandle,
             rootName: dirHandle.name,
+            view: 'packages',
             packages: [],
             isScanning: true,
             selectedPackage: options.preserveSelectionKey ? prev.selectedPackage : null,
@@ -419,7 +429,34 @@ export default function App() {
         }
     }, [settings.scanDepth, validateEntry]);
 
+    const openZip = useCallback(async (file: File) => {
+        const request = ++projectRequestRef.current;
+        zipControllerRef.current?.abort();
+        const controller = new AbortController();
+        zipControllerRef.current = controller;
+        setZipError(null);
+        setZipProgress({ name: file.name, done: 0, total: 0 });
+        try {
+            const { importZip } = await import('./fs/import-zip.js');
+            const directory = await importZip(file, controller.signal, (done, total) => {
+                if (!controller.signal.aborted) setZipProgress({ name: file.name, done, total });
+            });
+            if (controller.signal.aborted || !mountedRef.current || request !== projectRequestRef.current) return;
+            setZipProgress(null);
+            setMobileSidebarOpen(false);
+            await loadDirectory(directory);
+        } catch (error) {
+            if (!controller.signal.aborted && mountedRef.current) setZipError(`Could not open ZIP: ${readErrorMessage(error)}`);
+        } finally {
+            if (zipControllerRef.current === controller && mountedRef.current) setZipProgress(null);
+        }
+    }, [loadDirectory]);
+
     const openDirectory = useCallback(async () => {
+        const request = ++projectRequestRef.current;
+        zipControllerRef.current?.abort();
+        setZipProgress(null);
+        setZipError(null);
         let dirHandle: FileSystemDirectoryHandle;
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'read' });
@@ -435,12 +472,18 @@ export default function App() {
             console.error('Failed to open directory', err);
             return;
         }
+        if (request !== projectRequestRef.current || !mountedRef.current) return;
         void loadDirectory(dirHandle);
     }, [loadDirectory]);
 
     const reopenLastDirectory = useCallback(async () => {
+        const request = ++projectRequestRef.current;
+        zipControllerRef.current?.abort();
+        setZipProgress(null);
+        setZipError(null);
         try {
             const handle = await loadDirectoryHandle();
+            if (request !== projectRequestRef.current || !mountedRef.current) return;
             if (!handle) {
                 // No persisted handle yet – open normal picker
                 void openDirectory();
@@ -449,14 +492,16 @@ export default function App() {
             // Same session: permission might already be granted
             const query = (handle as unknown as { queryPermission: (desc: { mode: string }) => Promise<string> }).queryPermission;
             const current = await query.call(handle, { mode: 'read' });
+            if (request !== projectRequestRef.current || !mountedRef.current) return;
             if (current === 'granted') {
                 void loadDirectory(handle);
                 return;
             }
             // After browser restart: Chrome shows the picker pre-navigated to the
             // stored directory – user only needs to click "Select" to confirm.
-            const request = (handle as unknown as { requestPermission: (desc: { mode: string }) => Promise<string> }).requestPermission;
-            const perm = await request.call(handle, { mode: 'read' });
+            const requestPermission = (handle as unknown as { requestPermission: (desc: { mode: string }) => Promise<string> }).requestPermission;
+            const perm = await requestPermission.call(handle, { mode: 'read' });
+            if (request !== projectRequestRef.current || !mountedRef.current) return;
             if (perm === 'granted') {
                 void loadDirectory(handle);
             }
@@ -522,6 +567,9 @@ export default function App() {
     }, []);
 
     const handleRootDirectoryChange = useCallback(() => {
+        projectRequestRef.current++;
+        zipControllerRef.current?.abort();
+        setZipProgress(null);
         const rootHandle = state.rootHandle;
         if (!rootHandle) return;
         void loadDirectory(rootHandle, {
@@ -533,7 +581,7 @@ export default function App() {
     // invalidate the full scan, queue, and active runtime generation.
     useFileWatcher(
         state.rootHandle,
-        settings.autoRevalidate,
+        settings.autoRevalidate && !zipProgress && !isArchiveDirectory(state.rootHandle),
         settings.revalidateInterval * 1000,
         handleRootDirectoryChange,
     );
@@ -618,7 +666,24 @@ export default function App() {
     } : undefined;
 
     return (
-        <div className="flex flex-col h-full min-w-0">
+        <div className="flex flex-col h-full min-w-0"
+            onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+            onDrop={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return;
+                event.preventDefault();
+                const files = [...event.dataTransfer.files];
+                if (files.length !== 1 || !files[0]!.name.toLowerCase().endsWith('.zip')) {
+                    setZipError('Drop one ZIP archive at a time.');
+                    return;
+                }
+                void openZip(files[0]!);
+            }}>
+            <input ref={zipInputRef} type="file" accept=".zip,application/zip" aria-label="Choose ZIP archive" className="hidden"
+                onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void openZip(file);
+                }} />
             <header className="shrink-0 h-12 sm:h-14 bg-ss-surface-high flex items-center px-3 sm:px-4 gap-2 sm:gap-4 select-none"
                     style={{ borderBottom: '1px solid var(--ss-border-subtle)' }}>
                 {/* Left: branding */}
@@ -661,6 +726,9 @@ export default function App() {
                         <RefreshCw size={15} className={state.isScanning ? 'animate-spin' : undefined} />
                         <span className="hidden sm:inline">Rescan</span>
                     </button>
+                    <button type="button" onClick={() => zipInputRef.current?.click()}
+                        className="h-8 shrink-0 rounded-sm px-2 text-xs font-semibold text-ss-primary ring-1 ring-inset ring-ss-primary/40 hover:bg-ss-primary/10"
+                        title="Open a ZIP archive locally; you can also drag and drop it">Open ZIP</button>
                     <button
                         type="button"
                         onClick={openDirectory}
@@ -673,6 +741,14 @@ export default function App() {
                 </div>
             </header>
 
+            {(zipProgress || zipError || isArchiveDirectory(state.rootHandle)) && <div className="shrink-0 border-b border-ss-outline-variant/30 bg-ss-surface px-3 py-2 text-xs text-ss-on-surface-variant">
+                {zipProgress && <div role="status" className="flex flex-wrap items-center gap-2">
+                    <span>Opening {zipProgress.name}… {zipProgress.total ? `${zipProgress.done}/${zipProgress.total} entries` : ''}</span>
+                    <button className="underline" onClick={() => { zipControllerRef.current?.abort(); setZipProgress(null); }}>Cancel ZIP import</button>
+                </div>}
+                {zipError && <p role="alert">{zipError} <button className="underline" onClick={() => setZipError(null)}>Dismiss</button></p>}
+                {!zipProgress && isArchiveDirectory(state.rootHandle) && <p>ZIP snapshot · Read-only · Stored only in this tab. Reopen the archive to load changes. Current scan-depth settings apply.</p>}
+            </div>}
             <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
                 {mobileSidebarOpen && (
                     <button
