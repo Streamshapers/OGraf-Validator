@@ -103,6 +103,8 @@ test('explains EmptyPayload correctly in UI, clipboard and exported reports', as
 
     const jsonDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Review report contents' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download JSON', exact: true }).click();
     const jsonPath = await (await jsonDownload).path();
     const report = JSON.parse(await readFile(jsonPath!, 'utf8'));
     const failed = report.runtimeTest.result.steps.find((step: { status: string }) => step.status === 'fail');
@@ -112,6 +114,8 @@ test('explains EmptyPayload correctly in UI, clipboard and exported reports', as
 
     const htmlDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export HTML', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Review report contents' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download HTML', exact: true }).click();
     const htmlPath = await (await htmlDownload).path();
     const html = await readFile(htmlPath!, 'utf8');
     expect(html).toContain('INVALID_EMPTY_PAYLOAD');
@@ -290,3 +294,42 @@ for (const handled of [false, true]) {
         }
     });
 }
+
+test('reviews reproducible report data before downloading and allows cancellation on mobile', async ({ page }) => {
+    await openGraphic(page, graphic(), { schema: { type: 'object', properties: {
+        title: { type: 'string', default: 'Private example title' },
+    } } });
+    await expect(page.getByText('Checks Passed', { exact: true }).first()).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(async () => {
+        await Promise.all(document.getAnimations().filter((animation) => (
+            animation.effect?.getComputedTiming().iterations !== Infinity
+        )).map((animation) => animation.finished.catch(() => {})));
+    });
+    const downloads: string[] = [];
+    page.on('download', (download) => downloads.push(download.suggestedFilename()));
+    await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+    const review = page.getByRole('dialog', { name: 'Review report contents' });
+    await expect(review).toBeVisible();
+    await review.getByText('Inspect included data', { exact: true }).click();
+    await expect(review.locator('pre')).toContainText('Private example title');
+    await expect(review.locator('pre')).toContainText('packageBefore');
+    const bounds = await review.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: test.info().outputPath('export-review-mobile.png') });
+    await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(review).not.toBeVisible();
+    expect(downloads).toEqual([]);
+    await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+    const download = page.waitForEvent('download');
+    await review.getByRole('button', { name: 'Download JSON', exact: true }).click();
+    const report = JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+    expect(report.environment.specCommit).toMatch(/^[a-f0-9]{40}$/);
+    expect(report.runtimeTest.result.reportContext.packageComparison).toBe('unchanged');
+    expect(report.packageAtExport.fingerprint).toEqual(report.runtimeTest.result.reportContext.packageBefore);
+    const load = report.runtimeTest.result.steps.find((step: { invocation?: { method: string } }) => step.invocation?.method === 'load');
+    expect(load.invocation.parameters.value.data.title).toBe('Private example title');
+    expect(load.invocation.parameters.value.renderCharacteristics).toBeDefined();
+    expect(load.invocation.response).toEqual({ type: 'undefined' });
+});

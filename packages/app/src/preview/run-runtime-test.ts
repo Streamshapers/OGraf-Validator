@@ -1,3 +1,4 @@
+import { captureReportValue } from '../readiness/report-evidence.js';
 import { validateGddValue } from '@streamshapers/ograf-validator-core';
 import {
     NON_REALTIME_METHODS,
@@ -570,19 +571,29 @@ async function runCall(
     method: OgrafApiMethod,
     params: unknown,
     signal: AbortSignal | undefined,
-    push: (step: RuntimeTestStep) => void,
+    emit: (step: RuntimeTestStep) => void,
     expected?: { currentStep: number | null },
     timeoutMs?: (animated?: boolean) => number,
     animated?: boolean,
     onResult?: (result: PreviewRunnerCallResult) => void,
 ): Promise<boolean> {
     const started = performance.now();
+    const invocation: NonNullable<RuntimeTestStep['invocation']> = {
+        method, parameters: captureReportValue(params),
+        dispatched: false,
+        startedAt: new Date().toISOString(),
+    };
+    const push = (step: RuntimeTestStep) => emit({ ...step, invocation: { ...invocation } });
     try {
         if (signal?.aborted) throw new PreviewRunnerAbortError();
+        invocation.timeoutMs = timeoutMs?.(animated) ?? RUNTIME_STEP_TIMEOUT_MS;
+        invocation.dispatched = true;
         const call = await runner.call(method, params, {
-            timeoutMs: timeoutMs?.(animated) ?? RUNTIME_STEP_TIMEOUT_MS,
+            timeoutMs: invocation.timeoutMs,
             ...(signal ? { signal } : {}),
         });
+        invocation.response = captureReportValue(call.normalized.raw);
+        invocation.wasPromise = call.wasPromise;
         if (!call.wasPromise) {
             push({
                 name,

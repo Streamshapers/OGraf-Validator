@@ -397,6 +397,29 @@ describe('automated runtime evaluation', () => {
         }));
     });
 
+    it('records actual call inputs and raw responses, including undefined end states', async () => {
+        payloads.playAction = { statusCode: 200, currentStep: undefined };
+        const result = await run({ stepCount: 0 });
+        const load = result.steps.find((step) => step.invocation?.method === 'load');
+        expect(load?.invocation).toMatchObject({
+            method: 'load', timeoutMs: 10_000,
+            parameters: { type: 'json', value: { renderType: 'realtime', data: {} } },
+            response: { type: 'undefined' }, wasPromise: true,
+        });
+        const play = result.steps.find((step) => step.invocation?.method === 'playAction');
+        expect(play?.invocation?.response).toEqual({ type: 'json',
+            value: { statusCode: 200, currentStep: null }, undefinedPaths: [['currentStep']] });
+    });
+
+    it('retains invocation evidence for a rejected call', async () => {
+        call.mockRejectedValueOnce(new Error('Rejected input'));
+        const result = await run();
+        expect(result.steps.find((step) => step.status === 'fail')).toMatchObject({
+            invocation: { method: 'load', parameters: { type: 'json' } },
+        });
+        expect(result.steps.find((step) => step.status === 'fail')?.invocation).not.toHaveProperty('response');
+    });
+
     it('does not start a cycle after cancellation', async () => {
         const controller = new AbortController();
         controller.abort();

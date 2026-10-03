@@ -140,6 +140,8 @@ async function finishExtended(page: Page, rerun = false): Promise<void> {
 async function exportReport(page: Page): Promise<ValidationReport> {
     const pending = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Review report contents' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download JSON', exact: true }).click();
     const file = await (await pending).path();
     if (!file) throw new Error('Report download has no local file.');
 
@@ -178,6 +180,8 @@ test('extended checks are opt-in and complete RT/NRT navigation with matching ex
 
     const pending = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export HTML', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Review report contents' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download HTML', exact: true }).click();
     const html = await readFile((await (await pending).path())!, 'utf8');
     expect(html).toContain('Extended Runtime Test');
     expect(html).toContain('rt.steps.previous');
@@ -433,6 +437,8 @@ test('combines the same contract failure across suites in UI, clipboard and repo
     expect(report.extendedRuntimeTest?.result?.steps.filter((step) => step.status === 'fail')).toHaveLength(2);
     const downloading = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export HTML', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Review report contents' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download HTML', exact: true }).click();
     const html = await readFile((await (await downloading).path())!, 'utf8');
     expect(html.match(/INVALID_EMPTY_PAYLOAD/g)).toHaveLength(1);
     expect(html.match(/href="#runtime-finding-1"/g)).toHaveLength(3);

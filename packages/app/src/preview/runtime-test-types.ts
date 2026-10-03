@@ -1,3 +1,5 @@
+import type { ReportValue } from '../readiness/report-evidence.js';
+import type { RuntimeReportContext } from '../readiness/report-context.js';
 import type { RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
 
 export type RuntimeTestSuite = 'standard' | 'extended';
@@ -46,6 +48,7 @@ export interface RuntimeSuiteState {
  */
 
 export interface RuntimeTestResult {
+    reportContext?: RuntimeReportContext;
     passed: boolean;
     /** True when time limits, cancellation, or missing coverage prevent a conclusive result. */
     inconclusive?: boolean;
@@ -59,6 +62,16 @@ export interface RuntimeTestResult {
 }
 
 export interface RuntimeTestStep {
+    reportContext?: RuntimeReportContext;
+    invocation?: {
+        method: string;
+        parameters: ReportValue;
+        timeoutMs?: number;
+        dispatched: boolean;
+        startedAt: string;
+        response?: ReportValue;
+        wasPromise?: boolean;
+    };
     name: string;
     status: 'pass' | 'fail' | 'warning' | 'skip';
     durationMs: number;

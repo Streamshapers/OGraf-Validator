@@ -1,3 +1,4 @@
+import { fingerprintPackage, reportEnvironment, type RuntimeReportContext } from './readiness/report-context.js';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 
 declare const __APP_VERSION__: string;
@@ -124,6 +125,11 @@ export default function App() {
 
                 let session: ReturnType<typeof createPreviewSession> | undefined;
                 try {
+                    const reportContext: RuntimeReportContext = {
+                        environment: reportEnvironment(), manifestFilename: entry.manifestFilename, entryPoint: main,
+                        startedAt: new Date().toISOString(),
+                        packageBefore: await fingerprintPackage(new BrowserFS(entry.dirHandle), controller.signal),
+                    };
                     session = createPreviewSession(entry.dirHandle);
                     const runtimeResult = await runRuntimeTest({
                         importUrl: session.buildUrl(main),
@@ -139,7 +145,7 @@ export default function App() {
                                 ...current,
                                 active: {
                                     ...current.active!,
-                                    steps: [...current.active!.steps, step],
+                                    steps: [...current.active!.steps, { ...step, reportContext }],
                                 },
                             }));
                         },
@@ -149,8 +155,17 @@ export default function App() {
                             }));
                         },
                     });
+                    const packageAfter = await fingerprintPackage(new BrowserFS(entry.dirHandle), controller.signal);
+                    const completedContext: RuntimeReportContext = {
+                        ...reportContext, finishedAt: new Date().toISOString(), packageAfter,
+                        packageComparison: reportContext.packageBefore.status === 'available' && packageAfter.status === 'available'
+                            ? reportContext.packageBefore.digest === packageAfter.digest ? 'unchanged' : 'changed'
+                            : 'unavailable',
+                    };
                     updateAttempt((current) => completeRuntimeSuite(current, {
                         ...runtimeResult, suite, runId, budgetMinutes,
+                        reportContext: completedContext,
+                        steps: runtimeResult.steps.map((step) => ({ ...step, reportContext: completedContext })),
                     }));
                 } catch (error) {
                     updateAttempt((current) => {

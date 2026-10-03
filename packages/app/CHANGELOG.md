@@ -6,6 +6,9 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Added
 
+- Reproduction context in JSON/HTML reports: build and EBU versions, browser, run times, bounded package fingerprints, actual call parameters, render configuration and raw responses with explicit undefined/unavailable evidence.
+- Local export review with included-data inspection and cancellation before download; retained observations keep their original runtime context.
+
 - Optional extended runtime tests for relative and absolute step navigation, animation-enabled actions, repeated lifecycles, and NRT seeking.
 - Separate standard and extended results with scenario progress, background execution, cancellation, and two-minute budgets with five- and ten-minute retries after timeouts.
 - Scenario and step expectations in diagnostic details and exports, with explicit coverage limits and fresh sandbox sessions for independent scenarios.

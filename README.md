@@ -75,6 +75,30 @@ shared findings. Issue counts exclude coverage notes about checks that could not
 run; incomplete coverage remains visible and continues to affect readiness.
 JSON also includes `runtimeFindings` while preserving the individual test results.
 
+Reports include app/core versions, the pinned EBU commit, browser user agent,
+run timestamps, package fingerprints, and captured invocation parameters and raw
+responses. The load invocation records the actual render configuration and test
+data; schedules and subsequent calls retain their own parameters. Missing or
+bounded evidence is explicitly marked rather than reconstructed from current files.
+Before either download, **Review report contents** shows the included data and
+allows cancellation. Defaults and Graphic responses may contain names, URLs or
+other private values; package source files are not embedded and no upload occurs.
+
+`reportFormatVersion: 1` identifies this report format. Invocation evidence uses
+`type: json`, `type: undefined`, or `type: unavailable`; `undefinedPaths` identifies
+nested undefined values represented by null placeholders in the JSON view.
+The package fingerprint is SHA-256 over the UTF-8 JSON serialization of sorted
+`[relativePath, byteLength, fileSha256]` tuples. Paths use JavaScript's default string
+sort order. It covers the package directory using the validator's file scope,
+including shared local resources and excluding ignored directories. External
+resources are not included. Capture is limited to 2,000 files, 100 MiB and five
+seconds per snapshot. Individual evidence values are bounded to 100,000 characters,
+20,000 nodes and 50 levels; exceeding these limits does not change validation results.
+Before/after comparisons are not atomic filesystem snapshots. The separate
+export-time fingerprint must not be mistaken for the tested package's fingerprint.
+Reports support manual reproduction with the matching package; importing a report
+and automatically replaying scenarios remains a future extension.
+
 Diagnostics include method-specific guidance and specification references in the
 UI and exported JSON/HTML reports. The pinned specification is unchanged by
 diagnostic corrections. Where the official prose, examples, and informative

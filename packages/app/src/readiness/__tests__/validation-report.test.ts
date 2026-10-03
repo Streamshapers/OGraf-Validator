@@ -272,3 +272,21 @@ it('exports tested-result terminology and scope without a synthetic score or pro
     expect(JSON.stringify(report)).not.toMatch(/staticScore|productionReady|production-ready/);
     expect(html).not.toContain('Production-Ready');
 });
+
+it('includes call-time evidence in both report formats and escapes arbitrary payload text', () => {
+    const report = createValidationReport('Evidence', STATIC_VALID, {
+        passed: true, totalDurationMs: 1, steps: [{ name: 'load()', status: 'pass', durationMs: 1,
+            invocation: { method: 'load', dispatched: true, timeoutMs: 10_000, startedAt: '2026-10-03',
+                parameters: { type: 'json', value: { data: { title: '<script>alert(1)</script>' } } },
+                response: { type: 'undefined' }, wasPromise: true,
+            },
+        }],
+    });
+    const html = renderValidationReportHtml(report);
+    expect(report.reportFormatVersion).toBe(1);
+    expect(html).toContain('Call parameters and response');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain(report.environment.specCommit);
+    expect(html).toContain('Not captured');
+});

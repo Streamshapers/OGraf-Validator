@@ -1,3 +1,4 @@
+import { reportEnvironment, type PackageFingerprint } from './report-context.js';
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
 import type {
     RuntimeActiveAttempt,
@@ -16,6 +17,10 @@ import {
 } from './package-readiness.js';
 
 export interface ValidationReport {
+    reportFormatVersion: 1;
+    environment: ReturnType<typeof reportEnvironment>;
+    packageAtExport?: { manifestFilename: string; fingerprint: PackageFingerprint };
+    evidenceNotes: string[];
     generatedAt: string;
     packageName: string;
     readiness: PackageReadiness;
@@ -46,12 +51,25 @@ export function createValidationReport(
     runtimePhase?: RuntimeTestPhase,
     generatedAt = new Date(),
     extendedState?: RuntimeSuiteState,
+    packageAtExport?: ValidationReport['packageAtExport'],
 ): ValidationReport {
     const readiness = derivePackageReadiness(
         staticValidation, runtimeResult, runtimePhase, extendedState,
     );
     const standardReadiness = derivePackageReadiness(staticValidation, runtimeResult, runtimePhase);
     return {
+        reportFormatVersion: 1,
+        environment: reportEnvironment(),
+        ...(packageAtExport ? { packageAtExport } : {}),
+        evidenceNotes: [
+            'Invocation parameters and responses are captured at call time. Missing invocation evidence was not recorded.',
+            'Undefined values use a type marker or undefinedPaths; they are distinct from null. Unavailable values are explicitly marked.',
+            'Fingerprint algorithm: SHA-256 of UTF-8 JSON for [relativePath, byteLength, fileSha256] tuples sorted by relative path using JavaScript default string order.',
+            'Package hashes cover relative paths and file bytes in the package directory, using the validator file scope (including shared resources, excluding ignored directories).',
+            'Before/after hashes compare the directory at two points in time, not an immutable filesystem snapshot. External resources are not fingerprinted.',
+            'The export-time fingerprint is separate from the runtime fingerprints. Runtime contexts identify when each observation was recorded.',
+            'Package source files are not embedded. Reproduction requires the matching package and environment; visual equivalence is not asserted.',
+        ],
         generatedAt: generatedAt.toISOString(),
         packageName,
         readiness,
@@ -132,6 +150,14 @@ ${report.staticValidation.errors.length === 0 && report.staticValidation.warning
     : ''}
 ${staticIssues}
 ${report.readiness.runtimeCoverageIncomplete ? '<p>Test coverage is incomplete. See the individual test sections for checks that could not be completed.</p>' : ''}
+<details><summary>Reproduction context and capture limits</summary>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(JSON.stringify({
+    reportFormatVersion: report.reportFormatVersion, environment: report.environment,
+    packageAtExport: report.packageAtExport ?? 'Not captured',
+    standardRun: report.runtimeTest.result?.reportContext ?? 'Not captured',
+    extendedRun: report.extendedRuntimeTest?.result?.reportContext ?? 'Not captured',
+}, null, 2))}</pre>
+<ul>${report.evidenceNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul></details>
 ${renderRuntimeFindings(findings)}
 ${runtimeSection}
 ${renderExtendedReport(report.extendedRuntimeTest, findings)}
@@ -249,7 +275,12 @@ function renderStepContext(step: RuntimeTestStep): string {
         ? `<p>Expected step: ${escapeHtml(formatCurrentStep(step.expectedCurrentStep))}; `
             + `actual: ${escapeHtml(formatCurrentStep(step.actualCurrentStep))}</p>` : '';
 
-    return (context.length > 0 ? `<p>${context.map(escapeHtml).join(' · ')}</p>` : '') + expectation;
+    const evidence = step.invocation
+        ? `<details><summary>Call parameters and response</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(JSON.stringify({
+            invocation: step.invocation, runId: step.runId,
+            reportContext: step.reportContext ?? 'Not captured',
+        }, null, 2))}</pre></details>` : '';
+    return (context.length > 0 ? `<p>${context.map(escapeHtml).join(' · ')}</p>` : '') + expectation + evidence;
 }
 
 function formatCurrentStep(step: number | null | undefined): string {

@@ -23,10 +23,7 @@ import {
     type PackageReadiness,
     type RuntimeTestPhase,
 } from '../readiness/package-readiness.js';
-import {
-    createValidationReport,
-    renderValidationReportHtml,
-} from '../readiness/validation-report.js';
+import ExportButtons from './ExportButtons.js';
 
 export interface PackageCache {
     validationResult: ValidationResult;
@@ -214,6 +211,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                     fullResult={cache.fullValidationResult}
                                     isValidating={isValidating}
                                     packageName={selectedPackage.displayName}
+                                    packageEntry={selectedPackage}
                                     runtimeResult={cache.runtimeTest}
                                     runtimePhase={cache.runtimeTestPhase}
                                     extendedState={cache.extendedRuntimeTest}
@@ -389,6 +387,7 @@ function ValidationOverview({
     fullResult,
     isValidating,
     packageName,
+    packageEntry,
     runtimeResult,
     runtimePhase,
     extendedState,
@@ -398,6 +397,7 @@ function ValidationOverview({
     fullResult?: ValidationResult;
     isValidating: boolean;
     packageName: string;
+    packageEntry: PackageEntry;
     runtimeResult?: RuntimeTestResult;
     runtimePhase?: RuntimeTestPhase;
     extendedState?: RuntimeSuiteState;
@@ -439,7 +439,9 @@ function ValidationOverview({
                     {isValidating && <Spinner />}
                     <ExportButtons
                         result={fullResult ?? result}
+                        key={packageEntry.key}
                         packageName={packageName}
+                        packageEntry={packageEntry}
                         runtimeResult={runtimeResult}
                         runtimePhase={runtimePhase}
                         extendedState={extendedState}
@@ -613,68 +615,6 @@ function Spinner() {
 }
 
 // ─── Validation report export ─────────────────────────────────────────────────
-
-function ExportButtons({
-    result,
-    packageName,
-    runtimeResult,
-    runtimePhase,
-    extendedState,
-}: {
-    result: ValidationResult;
-    packageName: string;
-    runtimeResult?: RuntimeTestResult;
-    runtimePhase?: RuntimeTestPhase;
-    extendedState?: RuntimeSuiteState;
-}) {
-    const slug = packageName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const report = () => createValidationReport(
-        packageName, result, runtimeResult, runtimePhase, undefined, extendedState,
-    );
-
-    const btnCls = 'inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1.5 sm:py-1 rounded-sm text-[11px] sm:text-xs font-medium text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors';
-    const btnStyle = { border: '1px solid rgba(64, 72, 80, 0.5)' };
-
-    return (
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-            <button
-                onClick={() => downloadJson(report(), slug)}
-                className={btnCls}
-                style={btnStyle}
-                title="Download validation result as JSON"
-            >
-                Export JSON
-            </button>
-            <button
-                onClick={() => downloadHtml(report(), slug)}
-                className={btnCls}
-                style={btnStyle}
-                title="Download validation report as HTML"
-            >
-                Export HTML
-            </button>
-        </div>
-    );
-}
-
-function triggerDownload(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-function downloadJson(report: ReturnType<typeof createValidationReport>, slug: string): void {
-    const data = JSON.stringify(report, null, 2);
-    triggerDownload(new Blob([data], { type: 'application/json' }), `${slug}-validation-report.json`);
-}
-
-function downloadHtml(report: ReturnType<typeof createValidationReport>, slug: string): void {
-    const html = renderValidationReportHtml(report);
-    triggerDownload(new Blob([html], { type: 'text/html' }), `${slug}-validation-report.html`);
-}
 
 function PackageSizeBadge({ result }: { result: ValidationResult | undefined }) {
     if (!result) return null;
