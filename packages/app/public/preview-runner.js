@@ -2,7 +2,7 @@
 'use strict';
 
 (() => {
-    const PROTOCOL_VERSION = 5;
+    const PROTOCOL_VERSION = 6;
     const PREVIEW_PREFIX = '/__ograf_preview__/';
     const errorDiagnostics = new WeakMap();
     const teardownCancellations = new WeakSet();
@@ -141,7 +141,7 @@
             ) {
                 pending.resolve(message.result);
             } else {
-                pending.reject(new Error(readRemoteError(message.error)));
+                pending.reject(createRemoteResourceError(message.error));
             }
             return;
         }
@@ -305,7 +305,7 @@
         }
         const localPrefix = `${PREVIEW_PREFIX}${sessionId}/`;
         if (!sessionId || !resolved.pathname.startsWith(localPrefix)) {
-            return nativeFetch(input, init);
+            return observeExternalFetch(input, init, resolved);
         }
 
         const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
@@ -313,7 +313,10 @@
             return new Response(null, { status: 405, statusText: 'Method Not Allowed' });
         }
         const signal = init?.signal || (input instanceof Request ? input.signal : undefined);
-        const resource = await requestPackageFile(resolved.toString(), method, signal);
+        const resource = await requestPackageFile(resolved.toString(), method, signal).catch((error) => {
+            if (!signal?.aborted && !isExpectedResourceCancellation(error)) reportResourceError(error);
+            throw error;
+        });
         return new Response(method === 'HEAD' ? null : resource.buffer, {
             status: 200,
             headers: {
@@ -322,6 +325,54 @@
             },
         });
     }
+
+    function safeResourceLabel(value) {
+        try {
+            const url = new NativeURL(value, base.href || document.URL);
+            const prefix = `${PREVIEW_PREFIX}${sessionId}/`;
+            if (url.pathname.startsWith(prefix)) return decodeURIComponent(url.pathname.slice(prefix.length));
+            return ['http:', 'https:'].includes(url.protocol)
+                ? `${url.origin}${url.pathname}` : `${url.protocol}[resource]`;
+        } catch { return 'Unknown resource'; }
+    }
+
+    function resourceObservation(url, reason, message) {
+        const label = safeResourceLabel(url);
+        const error = diagnosticError(`${message}: ${label}`, {
+            code: 'RESOURCE_LOAD_FAILED', reason, field: label,
+        });
+        post({ type: 'OGRAF_RUNNER_ERROR', error: serializeError(error) });
+    }
+
+    async function observeExternalFetch(input, init, url) {
+        const signal = init?.signal || (input instanceof Request ? input.signal : undefined);
+        try {
+            const response = await nativeFetch(input, init);
+            if (!response.ok && response.type !== 'opaque') {
+                resourceObservation(url.href, 'external-http', `External fetch returned HTTP ${response.status}`);
+            }
+            return response;
+        } catch (error) {
+            if (!signal?.aborted && !isExpectedResourceCancellation(error)) {
+                const label = safeResourceLabel(url.href);
+                if (error instanceof Error) errorDiagnostics.set(error, { code: 'RESOURCE_LOAD_FAILED', reason: 'external-network', field: label });
+                resourceObservation(url.href, 'external-network', 'External fetch failed (browser did not expose the exact cause)');
+            }
+            throw error;
+        }
+    }
+
+    addEventListener('securitypolicyviolation', (event) => {
+        if (!sessionId || !event.blockedURI) return;
+        resourceObservation(event.blockedURI, 'sandbox-policy', `Content security policy blocked ${event.effectiveDirective}`);
+    });
+    addEventListener('error', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const url = target.currentSrc || target.src || target.href;
+        if (!url || String(url).startsWith('blob:')) return;
+        resourceObservation(url, 'element-load', `${target.tagName.toLowerCase()} resource failed to load`);
+    }, true);
 
     function installPackageDomUrlBridge() {
         const bindings = [
@@ -766,11 +817,12 @@
             if (typeof value.code === 'string') error.code = value.code;
             if (typeof value.resourceKind === 'string') error.resourceKind = value.resourceKind;
             if (typeof value.path === 'string') error.path = value.path;
-            if (value.diagnostic && ['PREVIEW_LIMITATION', 'RUNTIME_TIMEOUT', 'RUNTIME_ABORTED']
+            if (value.diagnostic && ['PREVIEW_LIMITATION', 'RUNTIME_TIMEOUT', 'RUNTIME_ABORTED', 'RESOURCE_LOAD_FAILED']
                 .includes(value.diagnostic.code)) {
                 errorDiagnostics.set(error, {
                     code: value.diagnostic.code,
                     ...(typeof value.diagnostic.reason === 'string' ? { reason: value.diagnostic.reason } : {}),
+                    ...(typeof value.diagnostic.field === 'string' ? { field: value.diagnostic.field } : {}),
                 });
             }
         }

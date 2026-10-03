@@ -397,7 +397,7 @@ async function runCycle(
             timeoutMs: control?.timeoutMs() ?? RUNTIME_STEP_TIMEOUT_MS,
             onRuntimeError: (message, diagnostic = { code: 'UNCAUGHT_RUNTIME_ERROR' }) => {
                 push(isInconclusiveDiagnostic(diagnostic)
-                    ? warningStep(`${label}: isolated preview limitation`, message, diagnostic)
+                    ? warningStep(`${label}: ${diagnostic.code === 'RESOURCE_LOAD_FAILED' ? 'resource observation' : 'isolated preview limitation'}`, message, diagnostic)
                     : failStep(`${label}: unhandled runtime error`, message, 0, diagnostic));
             },
             ...(options.signal ? { signal: options.signal } : {}),
@@ -713,7 +713,8 @@ function warningStep(
 }
 
 function isInconclusiveDiagnostic(diagnostic: RuntimeDiagnosticDetails): boolean {
-    return diagnostic.code === 'PREVIEW_LIMITATION'
+    return diagnostic.code === 'RESOURCE_LOAD_FAILED'
+        || diagnostic.code === 'PREVIEW_LIMITATION'
         || diagnostic.code === 'RUNTIME_TIMEOUT'
         || diagnostic.code === 'RUNTIME_ABORTED';
 }

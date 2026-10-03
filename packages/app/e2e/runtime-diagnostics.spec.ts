@@ -368,3 +368,86 @@ test('navigates a missing manifest field to its existing parent', async ({ page 
         .toContainText('customActions[0].name');
     await expect(page.locator('[data-manifest-target="true"]')).toContainText('schema');
 });
+
+test('groups caught missing package fetches as review observations instead of Graphic failures', async ({ page }) => {
+    await openGraphic(page, graphic(`async load() {
+        await fetch('missing-image.png').catch(() => {});
+        await fetch('missing-image.png').catch(() => {});
+    }`));
+    const resources = page.getByRole('region', { name: 'Resource observations' });
+    await expect(resources).toContainText('missing-image.png');
+    await expect(resources).toContainText('2 observations');
+    await expect(resources).toContainText('not found in the selected package');
+    await expect(page.getByRole('region', { name: 'Standard runtime test', exact: true })).toContainText('Inconclusive');
+    await expect(page.getByRole('region', { name: 'Runtime findings', exact: true })).toHaveCount(0);
+});
+
+test('reports external HTTP failures without treating external dependencies as invalid', async ({ page }) => {
+    await page.route('https://assets.example.test/**', (route) => route.fulfill({
+        status: 404, body: 'missing', headers: { 'access-control-allow-origin': '*' },
+    }));
+    await openGraphic(page, graphic(`async load() { await fetch('https://assets.example.test/image.png?secret=hidden'); }`));
+    const resources = page.getByRole('region', { name: 'Resource observations' });
+    await expect(resources).toContainText('HTTP 404');
+    await expect(resources).toContainText('https://assets.example.test/image.png');
+    await expect(resources).not.toContainText('secret=hidden');
+    await expect(page.getByRole('region', { name: 'Standard runtime test', exact: true })).toContainText('Inconclusive');
+});
+
+test('keeps successful external fetches and intentionally aborted fetches neutral', async ({ page }) => {
+    await page.route('https://assets.example.test/**', (route) => route.fulfill({
+        status: 200, body: 'ok', headers: { 'access-control-allow-origin': '*' },
+    }));
+    await openGraphic(page, graphic(`async load() {
+        await fetch('https://assets.example.test/ok');
+        const controller = new AbortController(); controller.abort();
+        await fetch('https://assets.example.test/cancelled', { signal: controller.signal }).catch(() => {});
+    }`));
+    await expect(page.getByRole('region', { name: 'Standard runtime test', exact: true })).toContainText('Passed');
+    await expect(page.getByRole('region', { name: 'Resource observations' })).toHaveCount(0);
+});
+
+test('reports actual CSP blocking as a policy restriction and exports grouped observations', async ({ page }) => {
+    await openGraphic(page, graphic(`async load() {
+        const policy = document.createElement('meta');
+        policy.httpEquiv = 'Content-Security-Policy';
+        policy.content = "connect-src 'none'";
+        document.head.append(policy);
+        const blocked = new Promise(resolve => addEventListener('securitypolicyviolation', resolve, { once: true }));
+        await fetch('https://assets.example.test/blocked').catch(() => {});
+        await blocked;
+    }`));
+    const resources = page.getByRole('region', { name: 'Resource observations' });
+    await expect(resources).toContainText('Browser policy restriction');
+    await expect(resources).toContainText('not an OGraf violation');
+    await expect(page.getByRole('region', { name: 'Standard runtime test', exact: true })).toContainText('Inconclusive');
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+    await page.getByRole('button', { name: 'Download JSON', exact: true }).click();
+    const report = JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+    expect(report.resourceObservations).toHaveLength(1);
+    expect(report.resourceObservations[0].reason).toBe('sandbox-policy');
+    expect(report.readiness.runtimeWarnings).toBe(1);
+    expect(report.coverage[0].resourceReviewCount).toBe(1);
+    expect(report.resourceObservations[0].observations.length).toBeGreaterThanOrEqual(2);
+    expect(report.readiness.status).not.toBe('runtime-failed');
+});
+
+test('reports missing DOM images and CSS assets with package paths', async ({ page }) => {
+    await openGraphic(page, graphic(`async load() {
+        const img = new Image();
+        const failed = new Promise(resolve => img.addEventListener('error', resolve, { once: true }));
+        img.src = 'missing-dom.png'; this.append(img);
+        await failed;
+        const style = document.createElement('style');
+        style.textContent = ':host { background-image: url("missing-css.png"); }';
+        const cssFailed = new Promise(resolve => style.addEventListener('error', resolve, { once: true }));
+        this.append(style);
+        await cssFailed;
+    }`));
+    const resources = page.getByRole('region', { name: 'Resource observations' });
+    await expect(resources).toContainText('missing-dom.png');
+    await expect(resources).toContainText('missing-css.png');
+    await expect(resources).toContainText('Package resource');
+    await expect(page.getByRole('region', { name: 'Standard runtime test', exact: true })).toContainText('Inconclusive');
+});

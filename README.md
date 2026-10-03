@@ -132,6 +132,31 @@ TypeScript definitions disagree, existing compatibility is preserved (including
 `dispose()` resolving to `undefined`, the `result` field, and `currentStep:
 undefined` at the end).
 
+## Resource observations
+
+Runtime tests group observed resource problems across standard and extended runs.
+The resource review section distinguishes unreadable/missing package files,
+external fetch failures (including exposed HTTP statuses), and actual browser CSP
+violations. It includes occurrence details, copy support and the same grouped
+evidence in JSON/HTML reports. These observations produce an inconclusive review
+result, not an automatic OGraf contract failure: optional resources can have
+fallbacks, and renderer restrictions can prevent otherwise valid Graphics from
+loading them. Successful external fetches and intentional fetch cancellation are
+neutral. No extra requests are made to probe external services.
+
+This follows the [EBU RenderRequirements model](https://ograf.ebu.io/v1/specification/docs/Specification.html#renderrequirements),
+including `accessToPublicInternet`; the validator does not infer an undeclared
+internet requirement or claim to measure public Internet availability.
+
+Observation is bounded by the test lifecycle and browser visibility. Main-frame
+fetch, observed element load errors, local CSS/asset preparation and CSP events
+are covered. This is not a complete network recorder: handled Worker/XHR
+requests, some font/CSS/media failures, late loads and exact initiating source
+lines may be unavailable. Generic browser rejection does not identify CORS, DNS
+or connectivity conclusively. Displayed resource labels omit URL credentials,
+queries and fragments; raw Graphic errors and captured call data can still
+contain sensitive values, so review reports before sharing.
+
 ## Features
 
 - Validates the official OGraf v1 manifest and GDD schemas.

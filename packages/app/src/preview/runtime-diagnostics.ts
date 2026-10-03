@@ -99,6 +99,17 @@ export function diagnoseRuntimeError(
     });
 
     switch (code) {
+        case 'RESOURCE_LOAD_FAILED':
+            return diagnostic(
+                details?.reason === 'package-missing'
+                    ? 'The requested file was not found in the selected package. Check its path and filename, including case. Optional fallback resources may fail intentionally; review the visual output.'
+                    : details?.reason === 'package-unreadable'
+                        ? 'The package resource could not be read. Check the selected files and access permissions. This observation alone does not establish an OGraf violation.'
+                        : details?.reason === 'sandbox-policy'
+                            ? 'A browser content security policy blocked this resource. Review the applicable policy and test in a compatible renderer; this observation is not an OGraf violation.'
+                            : 'Review the external resource and the declared render requirements. A browser failure may reflect CORS, connectivity or server behavior; the exact cause is not always exposed. This observation alone does not establish an OGraf violation.',
+                `${SPEC}#renderrequirements`,
+            );
         case 'INVALID_EMPTY_PAYLOAD':
             return diagnostic(
                 'setActionsSchedule must resolve to undefined, {}, or an object containing only v_-prefixed vendor fields. Do not return statusCode, statusMessage, or result.',

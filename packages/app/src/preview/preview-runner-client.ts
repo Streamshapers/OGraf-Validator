@@ -1,3 +1,4 @@
+import { packageResourceDiagnostic } from './resource-diagnostics.js';
 import type { NormalizedReturnPayload, OgrafApiMethod } from './preview-contract.js';
 import { buildPreviewModuleGraph, previewMimeTypeForPath } from './preview-module-graph.js';
 import {
@@ -230,7 +231,10 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             if (parsed.sessionId !== options.sessionId) {
                 throw new Error('Local package request does not match the active preview session.');
             }
-            const buffer = await readPreviewSessionFile(options.sessionId, parsed.path);
+            const buffer = await readPreviewSessionFile(options.sessionId, parsed.path).catch((error: unknown) => {
+                throw new PreviewDiagnosticError(`Package resource could not be read: ${parsed.path}`,
+                    packageResourceDiagnostic(parsed.path, error));
+            });
             channel.port1.postMessage({
                 protocol: PREVIEW_PROTOCOL_VERSION,
                 runnerId,
@@ -249,7 +253,7 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
                 type: 'OGRAF_RUNNER_FILE_RESPONSE',
                 requestId,
                 ok: false,
-                error: readErrorMessage(error),
+                error: serializeResourceError(error),
             });
         }
     };

@@ -1,3 +1,4 @@
+import { getResourceObservations } from '../preview/resource-diagnostics.js';
 import type { ValidationResult } from '@streamshapers/ograf-validator-core';
 import { getRuntimeFindings } from '../preview/runtime-findings.js';
 import type { RuntimeSuiteState, RuntimeTestResult } from '../preview/runtime-test-types.js';
@@ -56,7 +57,9 @@ export function derivePackageReadiness(
     const coverageSteps = steps.filter((step) => step.status === 'warning'
         && ['blocked-dependent-checks', 'blocked-prerequisite', 'bounded-step-coverage']
             .includes(step.diagnostic?.reason ?? '')).length;
-    const warningSteps = steps.filter((step) => step.status === 'warning').length - coverageSteps;
+    const warningSteps = steps.filter((step) => step.status === 'warning'
+        && step.diagnostic?.code !== 'RESOURCE_LOAD_FAILED').length - coverageSteps
+        + getResourceObservations(runtimeResult, extendedState).length;
     const runtimeFailed = results.some((result) => !result.passed) || failedSteps > 0;
     const runtimeInconclusive = results.some((result) => !isConclusiveRuntimeResult(result));
     const runtimeErrors = !staticInvalid && runtimeFailed

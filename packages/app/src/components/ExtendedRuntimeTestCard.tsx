@@ -38,7 +38,7 @@ export default function ExtendedRuntimeTestCard({ state, onRun, onCancel, findin
             : inconclusive ? 'text-ss-warning' : result ? 'text-ss-success' : 'text-ss-on-surface-variant';
     const progress = active?.progress;
     const retryBudgets = availableRetryBudgets(latest);
-    const otherSteps = result?.steps.filter((step) => step.status !== 'fail') ?? [];
+    const otherSteps = result?.steps.filter((step) => step.status !== 'fail' && step.diagnostic?.code !== 'RESOURCE_LOAD_FAILED') ?? [];
 
     return (
         <section aria-label="Extended runtime test" className="rounded-sm overflow-hidden bg-ss-surface border border-ss-outline-variant/40">
@@ -111,7 +111,7 @@ export default function ExtendedRuntimeTestCard({ state, onRun, onCancel, findin
                 </p>}
                 <ScenarioCoverage result={latest ?? state?.lastCompleted} />
                 {active && active.steps.length > 0 && (
-                    <GroupedSteps title="Current attempt checks" steps={active.steps.filter((step) => step.status !== 'fail')} />
+                    <GroupedSteps title="Current attempt checks" steps={active.steps.filter((step) => step.status !== 'fail' && step.diagnostic?.code !== 'RESOURCE_LOAD_FAILED')} />
                 )}
                 {otherSteps.length > 0 && <GroupedSteps title="Completed attempt checks" steps={otherSteps} />}
                 <p className="text-[11px] text-ss-on-surface-variant/70">

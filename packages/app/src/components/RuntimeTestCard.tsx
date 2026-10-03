@@ -37,7 +37,7 @@ export default function RuntimeTestCard({ result, phase, liveSteps, onRerun, fin
     const status = failed ? 'Failed' : phase === 'pending' ? 'Pending'
         : phase === 'running' ? 'Running' : inconclusive ? 'Inconclusive' : 'Passed';
     const steps = phase ? liveSteps ?? [] : result?.steps ?? [];
-    const warnings = steps.filter((step) => step.status === 'warning');
+    const warnings = steps.filter((step) => step.status === 'warning' && step.diagnostic?.code !== 'RESOURCE_LOAD_FAILED');
     const checks = steps.filter((step) => step.status === 'pass' || step.status === 'skip');
 
     return <section aria-label="Standard runtime test"

@@ -1,3 +1,4 @@
+import { getResourceObservations } from '../preview/resource-diagnostics.js';
 import { getRuntimeFindings } from '../preview/runtime-findings.js';
 import type { RuntimeSuiteState, RuntimeTestResult, RuntimeTestStep } from '../preview/runtime-test-types.js';
 import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
@@ -5,6 +6,7 @@ import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/run
 export interface SuiteCoverage {
     suite: 'Standard' | 'Extended';
     status: string;
+    resourceReviewCount: number;
     issueCount: number;
     issueOccurrences: number;
     checks: Record<RuntimeTestStep['status'], number>;
@@ -37,6 +39,7 @@ export function deriveRuntimeCoverage(manifest: unknown, standard?: RuntimeTestR
                     : !result ? 'Not run' : isConclusiveRuntimeResult(result) ? 'Passed' : 'Inconclusive';
             return {
                 suite, status, checks, declaredStepCount,
+                resourceReviewCount: getResourceObservations(result).length,
                 issueCount: findings.length,
                 issueOccurrences: findings.reduce((sum, finding) => sum + finding.occurrences.length, 0),
                 evidenceMissing: !!result && !calls.length,
@@ -82,7 +85,9 @@ export function coverageModeText(coverage: SuiteCoverage, mode: SuiteCoverage['m
 export function coverageIssueText(coverage: SuiteCoverage): string {
     const count = coverage.issueCount;
     const issues = `${count} ${count === 1 ? 'issue' : 'issues'}`;
-    if (count === 0) return coverage.status === 'Not run' ? 'Not tested yet' : 'No issues detected';
+    const resources = coverage.resourceReviewCount;
+    const review = resources ? `${resources} ${resources === 1 ? 'resource requires' : 'resources require'} review` : '';
+    if (count === 0) return coverage.status === 'Not run' ? 'Not tested yet' : review || 'No issues detected';
     return `${issues} · ${coverage.issueOccurrences === 1 ? 'detected once'
-        : `detected in ${coverage.issueOccurrences} checks`}`;
+        : `detected in ${coverage.issueOccurrences} checks`}${review ? ` · ${review}` : ''}`;
 }

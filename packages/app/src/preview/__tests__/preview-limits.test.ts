@@ -49,10 +49,10 @@ describe('preview implementation limits are inconclusive', () => {
         } });
     });
 
-    it('does not turn actual resource failures or forged codes into limitations', () => {
+    it('distinguishes resource observations from preview limits and rejects forged codes', () => {
         expect(serializeResourceError(new PreviewResourceGraphError({
             code: 'RESOURCE_READ_FAILED', resourceKind: 'asset', path: 'missing.png', message: 'Missing',
-        })).diagnostic).toBeUndefined();
+        })).diagnostic).toMatchObject({ code: 'RESOURCE_LOAD_FAILED', reason: 'package-unreadable', field: 'missing.png' });
         expect(serializeResourceError(Object.assign(new Error('Limit'), {
             diagnostic: { code: 'PREVIEW_LIMITATION' },
         })).diagnostic).toBeUndefined();

@@ -6,6 +6,8 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Added
 
+- Grouped resource observations for package reads, external fetch failures, element load errors and browser CSP restrictions, with copy support and JSON/HTML evidence. Treat observations as review requirements rather than inferred OGraf contract violations.
+
 - Compact standard/extended test coverage in the UI and JSON/HTML reports, based on captured calls, confirmed steps, Custom Actions and attempted render configurations.
 - Local ZIP selection and drag-and-drop with multiple Graphics, shared assets, cancellable read-only snapshots, integrity checks and bounded extraction.
 

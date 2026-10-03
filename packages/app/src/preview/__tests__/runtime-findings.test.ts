@@ -91,3 +91,19 @@ describe('shared runtime findings', () => {
         expect(getRuntimeFindings(result([failure]), success)[0]?.occurrences).toHaveLength(1);
     });
 });
+
+it('exports grouped resource review evidence and escapes resource labels in HTML', () => {
+    const result: RuntimeTestResult = { passed: true, inconclusive: true, totalDurationMs: 0, steps: [
+        { name: 'resource', status: 'warning', durationMs: 0, error: 'Missing <asset>',
+            diagnostic: { code: 'RESOURCE_LOAD_FAILED', reason: 'package-missing', field: '<asset>.png' } },
+    ] };
+    const report = createValidationReport('Graphic', { valid: true, issues: [], errors: [], warnings: [], infos: [] }, result);
+    expect(report.resourceObservations).toHaveLength(1);
+    expect(report.readiness).toMatchObject({ runtimeErrors: 0, runtimeWarnings: 1, totalIssues: 1 });
+    expect(report.resourceObservations[0]?.observations[0]?.step.diagnostic?.hint).toContain('not found');
+    expect(report.runtimeFindings).toHaveLength(0);
+    const html = renderValidationReportHtml(report);
+    expect(html).toContain('Resources requiring review');
+    expect(html).toContain('&lt;asset&gt;.png');
+    expect(html).not.toContain('<asset>');
+});

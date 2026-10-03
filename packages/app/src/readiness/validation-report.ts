@@ -1,3 +1,4 @@
+import { getResourceObservations, resourceCategory, type ResourceObservation } from '../preview/resource-diagnostics.js';
 import { deriveRuntimeCoverage, coverageIssueText, coverageModeText, type SuiteCoverage } from './runtime-coverage.js';
 import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import { reportEnvironment, type PackageFingerprint } from './report-context.js';
@@ -20,6 +21,7 @@ import {
 
 export interface ValidationReport {
     coverage: SuiteCoverage[];
+    resourceObservations: ResourceObservation[];
     reportFormatVersion: 1;
     environment: ReturnType<typeof reportEnvironment>;
     packageAtExport?: { manifestFilename: string; fingerprint: PackageFingerprint };
@@ -62,6 +64,9 @@ export function createValidationReport(
     );
     const standardReadiness = derivePackageReadiness(staticValidation, runtimeResult, runtimePhase);
     return {
+        resourceObservations: getResourceObservations(runtimeResult, extendedState).map((group) => ({
+            ...group, observations: group.observations.map((item) => ({ ...item, step: enrichStep(item.step) })),
+        })),
         coverage: deriveRuntimeCoverage(manifest, runtimeResult, extendedState, runtimePhase),
         reportFormatVersion: 1,
         environment: reportEnvironment(),
@@ -169,6 +174,8 @@ ${report.readiness.runtimeCoverageIncomplete ? '<p>Test coverage is incomplete. 
 ${suite.modes.map((mode) => `<p>${mode.mode}: ${escapeHtml(coverageModeText(suite, mode))}; confirmed step indices: ${mode.steps.join(', ') || 'None recorded'}</p>`).join('')}
 ${suite.customActions.map((action) => `<p>${escapeHtml(action.id)}: ${action.status}</p>`).join('')}</details>`).join('')}
 <p>Recorded results may include retained findings. Profiles show attempted Load configurations, not visual verification.</p></details>
+${report.resourceObservations.length ? `<h2>Resources requiring review</h2><p>Observed load failures and preview restrictions are not by themselves OGraf violations. Initiating file and line may be unavailable.</p>` : ''}
+${report.resourceObservations.map((group) => `<article><h3>${escapeHtml(resourceCategory(group.reason))}: ${escapeHtml(group.resource)}</h3><p>${group.observations.length} observations</p><details><summary>Show resource observations</summary>${group.observations.map(({ suite, step }) => `<p>${escapeHtml(suite)}: ${renderRuntimeMessage(step)}</p>`).join('')}</details></article>`).join('')}
 ${renderRuntimeFindings(findings)}
 ${runtimeSection}
 ${renderExtendedReport(report.extendedRuntimeTest, findings)}

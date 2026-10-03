@@ -6,7 +6,7 @@ async function mountRunner(page: Page): Promise<void> {
         const frame = document.createElement('iframe');
         frame.id = 'security-runner';
         frame.setAttribute('sandbox', 'allow-scripts');
-        frame.src = '/preview-runner.html?protocol=5&runner=security-test';
+        frame.src = '/preview-runner.html?protocol=6&runner=security-test';
         await new Promise<void>((resolve) => {
             frame.onload = () => resolve();
             document.body.append(frame);
@@ -14,7 +14,7 @@ async function mountRunner(page: Page): Promise<void> {
     });
 }
 
-async function connect(page: Page, targetOrigin = '*', protocol = 5): Promise<boolean> {
+async function connect(page: Page, targetOrigin = '*', protocol = 6): Promise<boolean> {
     return page.evaluate(({ targetOrigin, protocol }) => new Promise<boolean>((resolve) => {
         const frame = document.querySelector<HTMLIFrameElement>('#security-runner')!;
         const channel = new MessageChannel();
@@ -61,7 +61,7 @@ test('rejects a connection from a sibling window', async ({ page }) => {
         const timer = setTimeout(() => { channel.port1.close(); resolve(false); }, 750);
         channel.port1.onmessage = () => { clearTimeout(timer); channel.port1.close(); resolve(true); };
         parent.frames[0]!.postMessage({
-            protocol: 5, type: 'OGRAF_RUNNER_CONNECT', runnerId: 'security-test', sessionId: '0123456789abcdef',
+            protocol: 6, type: 'OGRAF_RUNNER_CONNECT', runnerId: 'security-test', sessionId: '0123456789abcdef',
         }, '*', [channel.port2]);
     }));
     expect(accepted).toBe(false);
@@ -74,7 +74,7 @@ test('rejects port commands for another protocol, runner, or session', async ({ 
         const frame = document.querySelector<HTMLIFrameElement>('#security-runner')!;
         const channel = new MessageChannel();
         const seen: string[] = [];
-        const binding = { protocol: 5, runnerId: 'security-test', sessionId: '0123456789abcdef' };
+        const binding = { protocol: 6, runnerId: 'security-test', sessionId: '0123456789abcdef' };
         const timer = setTimeout(() => {
             channel.port1.close();
             reject(new Error('The runner did not acknowledge the valid command.'));

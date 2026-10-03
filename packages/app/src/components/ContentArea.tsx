@@ -1,3 +1,4 @@
+import ResourceObservations from './ResourceObservations.js';
 import RuntimeCoverage from './RuntimeCoverage.js';
 import type { ManifestLocation } from '../inspector/manifest-location.js';
 import { lazy, Suspense, useState, useEffect } from 'react';
@@ -229,6 +230,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                 <IssueList result={cache.validationResult} manifest={cache.manifest}
                                     onShowManifest={(location) => { setManifestLocation(location); setActiveTab('inspect'); }} />
                                 <RuntimeFindings findings={runtimeFindings} />
+                                <ResourceObservations standard={cache?.runtimeTest} extended={cache?.extendedRuntimeTest} />
                                 <RuntimeTestCard
                                     findings={runtimeFindings}
                                     result={cache.runtimeTest}
