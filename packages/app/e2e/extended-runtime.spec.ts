@@ -59,7 +59,7 @@ async function openGraphic(
     page: Page,
     source: string,
     manifest: Record<string, unknown> = {},
-    options: { controlled?: boolean; secondGraphic?: boolean; mode?: string } = {},
+    options: { controlled?: boolean; secondGraphic?: boolean; mode?: string; standardFailed?: boolean } = {},
 ): Promise<void> {
     await page.addInitScript(({ controlled, mode }) => {
         localStorage.setItem('ograf-settings', JSON.stringify({ autoRevalidate: false }));
@@ -117,7 +117,8 @@ async function openGraphic(
     });
     await page.getByRole('button', { name: 'Open Directory', exact: true }).first().click();
     await selectGraphic(page, GRAPHIC_NAME);
-    await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(options.standardFailed ? 'Runtime Failed' : 'Runtime Passed',
+        { exact: true }).first()).toBeVisible();
 }
 
 async function selectGraphic(page: Page, name: string): Promise<void> {
@@ -392,4 +393,52 @@ test('cancels a queued extended test without creating a sandbox or declaring suc
     await expect.poll(() => page.workers().length).toBe(0);
     expect(await page.evaluate(() => Reflect.get(window, '__createdQueuedSandboxes'))).toEqual([]);
     await expect(card.getByText('Inconclusive', { exact: true })).toBeVisible();
+});
+
+test('combines the same contract failure across suites in UI, clipboard and reports', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await openGraphic(page, graphic(`async setActionsSchedule() { return { statusCode: 200 }; }`),
+        { supportsNonRealTime: true }, { standardFailed: true });
+    await finishExtended(page);
+    const findings = page.getByRole('region', { name: 'Runtime findings', exact: true });
+    const issue = findings.getByRole('article');
+    await expect(issue).toHaveCount(1);
+    await expect(issue).toContainText('3 occurrences');
+    await expect(issue).toContainText('Standard test · Extended test');
+    await expect(page.getByText('INVALID_EMPTY_PAYLOAD', { exact: true })).toHaveCount(1);
+    const standard = page.getByRole('region', { name: 'Standard runtime test', exact: true });
+    const extended = page.getByRole('region', { name: 'Extended runtime test', exact: true });
+    for (const card of [standard, extended]) {
+        await expect(card.getByRole('article')).toHaveCount(0);
+        await expect(card.getByRole('link', { name: 'setActionsSchedule()', exact: true }))
+            .toHaveAttribute('href', '#runtime-finding-1');
+        await expect(card).toContainText('Not fully tested');
+    }
+    await extended.getByRole('link', { name: 'setActionsSchedule()', exact: true }).click();
+    await expect(issue).toBeInViewport();
+    await issue.getByText('Show calls and scenarios (3)', { exact: true }).click();
+    await expect(issue.getByText(/nrt.seeking.schedule/)).toBeVisible();
+    await issue.getByRole('button', { name: 'Copy diagnostic' }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain('standard');
+    expect(copied).toContain('extended');
+    expect(copied).toContain('nrt.seeking.schedule');
+    expect(copied.match(/INVALID_EMPTY_PAYLOAD/g)).toHaveLength(1);
+    const report = await exportReport(page);
+    expect(report.readiness).toMatchObject({ totalIssues: 1, runtimeErrors: 1,
+        runtimeCoverageIncomplete: true });
+    expect(report.runtimeFindings).toHaveLength(1);
+    expect(report.runtimeFindings?.[0]?.occurrences).toHaveLength(3);
+    expect(report.runtimeTest.result?.steps.filter((step) => step.status === 'fail')).toHaveLength(1);
+    expect(report.extendedRuntimeTest?.result?.steps.filter((step) => step.status === 'fail')).toHaveLength(2);
+    const downloading = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export HTML', exact: true }).click();
+    const html = await readFile((await (await downloading).path())!, 'utf8');
+    expect(html.match(/INVALID_EMPTY_PAYLOAD/g)).toHaveLength(1);
+    expect(html.match(/href="#runtime-finding-1"/g)).toHaveLength(3);
+    for (const width of [390, 640, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(issue).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
 });

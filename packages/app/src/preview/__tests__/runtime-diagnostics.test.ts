@@ -163,7 +163,7 @@ describe('runtime diagnostics', () => {
         expect(groups).toHaveLength(1);
         expect(groups[0]).toMatchObject({
             code: 'INVALID_RETURN_PAYLOAD',
-            label: 'playAction(goto: 0)',
+            label: 'playAction()',
             occurrences: [
                 { mode: 'RT', step: { durationMs: 7 } },
                 { mode: 'NRT', step: { durationMs: 9 } },

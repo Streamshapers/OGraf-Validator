@@ -43,7 +43,8 @@ describe('validation reports', () => {
         });
         expect(report.readiness.status).toBe('runtime-failed');
         const html = renderValidationReportHtml(report);
-        expect(html).toContain('Runtime Test<strong>Passed</strong>');
+        expect(html).toContain('Standard Runtime Test — Passed');
+        expect(html).toContain('Runtime tests<strong>Failed</strong>');
         expect(html).toContain('Extended Runtime Test — Failed');
     });
 
@@ -174,7 +175,7 @@ describe('validation reports', () => {
         ));
 
         expect(html).toContain('No static validation issues found.');
-        expect(html).toContain('Runtime Test<strong>Failed</strong>');
+        expect(html).toContain('Runtime tests<strong>Failed</strong>');
         expect(html).toContain('Overall Readiness<strong>Not Production-Ready</strong>');
         expect(html).not.toContain('fully valid');
     });

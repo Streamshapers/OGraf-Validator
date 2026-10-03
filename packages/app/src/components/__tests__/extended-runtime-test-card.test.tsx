@@ -6,11 +6,15 @@ import type {
     RuntimeTestResult,
 } from '../../preview/runtime-test-types.js';
 import { completeRuntimeSuite, startRuntimeSuite } from '../../preview/runtime-suite-state.js';
+import RuntimeFindings from '../RuntimeFindings.js';
+import { getRuntimeFindings } from '../../preview/runtime-findings.js';
 import ExtendedRuntimeTestCard from '../ExtendedRuntimeTestCard.js';
 
 function renderCard(state?: RuntimeSuiteState): string {
     return renderToStaticMarkup(
-        <ExtendedRuntimeTestCard state={state} onRun={vi.fn()} onCancel={vi.fn()} />,
+        <><RuntimeFindings findings={getRuntimeFindings(undefined, state)} />
+            <ExtendedRuntimeTestCard findings={getRuntimeFindings(undefined, state)}
+                state={state} onRun={vi.fn()} onCancel={vi.fn()} /></>,
     );
 }
 
@@ -108,7 +112,7 @@ describe('extended runtime test evidence', () => {
         });
         const html = renderCard(state);
 
-        expect(buttonLabels(html)).toEqual(['Cancel', 'Copy']);
+        expect(buttonLabels(html)).toEqual(['Copy', 'Cancel']);
         expect(html).toContain('>Failed</span>');
         expect(html).toContain('Previous findings remain visible');
         expect(html).toContain('Expected the end state, but the Graphic reported step 2.');

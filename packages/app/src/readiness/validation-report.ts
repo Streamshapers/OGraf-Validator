@@ -6,7 +6,8 @@ import type {
     RuntimeTestStep,
 } from '../preview/runtime-test-types.js';
 import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
-import { diagnoseRuntimeError } from '../preview/runtime-diagnostics.js';
+import { diagnoseRuntimeError, runtimeFailureIdentity, type RuntimeFailureGroup } from '../preview/runtime-diagnostics.js';
+import { getRuntimeFindings } from '../preview/runtime-findings.js';
 import { safeSpecReference } from './spec-reference.js';
 import {
     derivePackageReadiness,
@@ -19,6 +20,7 @@ export interface ValidationReport {
     packageName: string;
     readiness: PackageReadiness;
     staticValidation: ValidationResult;
+    runtimeFindings?: RuntimeFailureGroup[];
     runtimeTest: {
         status: PackageReadiness['runtimeStatus'];
         label: string;
@@ -54,6 +56,7 @@ export function createValidationReport(
         packageName,
         readiness,
         staticValidation,
+        runtimeFindings: getRuntimeFindings(runtimeResult, extendedState),
         runtimeTest: {
             status: standardReadiness.runtimeStatus,
             label: standardReadiness.runtimeLabel,
@@ -65,6 +68,10 @@ export function createValidationReport(
 }
 
 export function renderValidationReportHtml(report: ValidationReport): string {
+    const findings = report.runtimeFindings ?? getRuntimeFindings(
+        report.runtimeTest.result ?? undefined,
+        { latestAttempt: report.extendedRuntimeTest?.result ?? undefined },
+    );
     const statusColor = readinessColor(report.readiness.status);
     const staticStatus = report.staticValidation.valid ? 'Manifest Valid' : 'Manifest Invalid';
     const staticIssues = [
@@ -76,15 +83,15 @@ export function renderValidationReportHtml(report: ValidationReport): string {
             <tr>
                 <td><span class="runtime-${step.status}">${escapeHtml(step.status.toUpperCase())}</span></td>
                 <td><code>${escapeHtml(step.name)}</code>${renderStepContext(step)}</td>
-                <td>${renderRuntimeMessage(step)}</td>
+                <td>${renderCheckMessage(step, findings, 'standard')}</td>
             </tr>`).join('') ?? '';
     const runtimeSection = runtimeRows
-        ? `<h2>Runtime Test</h2>
+        ? `<h2>Standard Runtime Test — ${escapeHtml(report.runtimeTest.label)}</h2>
             <table>
                 <thead><tr><th>Status</th><th>Check</th><th>Message</th></tr></thead>
                 <tbody>${runtimeRows}</tbody>
             </table>`
-        : `<h2>Runtime Test</h2><p>${escapeHtml(runtimeEmptyMessage(report))}</p>`;
+        : `<h2>Standard Runtime Test — ${escapeHtml(report.runtimeTest.label)}</h2><p>${escapeHtml(runtimeEmptyMessage(report))}</p>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -115,15 +122,17 @@ export function renderValidationReportHtml(report: ValidationReport): string {
 <p class="meta">Generated ${escapeHtml(report.generatedAt)} &middot; OGraf Validator</p>
 <div class="summary">
   <div>Static Validation<strong>${staticStatus}</strong></div>
-  <div>Runtime Test<strong>${escapeHtml(report.runtimeTest.label)}</strong></div>
+  <div>Runtime tests<strong>${escapeHtml(report.readiness.runtimeLabel)}</strong></div>
   <div>Overall Readiness<strong>${escapeHtml(report.readiness.label)}</strong></div>
 </div>
 ${report.staticValidation.errors.length === 0 && report.staticValidation.warnings.length === 0
     ? '<p class="ok">No static validation issues found.</p>'
     : ''}
 ${staticIssues}
+${report.readiness.runtimeCoverageIncomplete ? '<p>Test coverage is incomplete. See the individual test sections for checks that could not be completed.</p>' : ''}
+${renderRuntimeFindings(findings)}
 ${runtimeSection}
-${renderExtendedReport(report.extendedRuntimeTest)}
+${renderExtendedReport(report.extendedRuntimeTest, findings)}
 </body>
 </html>`;
 }
@@ -161,7 +170,7 @@ function createExtendedReport(state: RuntimeSuiteState): NonNullable<ValidationR
     };
 }
 
-function renderExtendedReport(extended: ValidationReport['extendedRuntimeTest']): string {
+function renderExtendedReport(extended: ValidationReport['extendedRuntimeTest'], findings: RuntimeFailureGroup[]): string {
     if (!extended) return '';
 
     const attempt = extended.latestAttempt;
@@ -170,7 +179,7 @@ function renderExtendedReport(extended: ValidationReport['extendedRuntimeTest'])
     const rows = extended.result?.steps.map((step) => `<tr>
         <td class="runtime-${step.status}">${escapeHtml(step.status.toUpperCase())}</td>
         <td><code>${escapeHtml(step.name)}</code>${renderStepContext(step)}</td>
-        <td>${step.durationMs} ms</td><td>${renderRuntimeMessage(step)}</td>
+        <td>${step.durationMs} ms</td><td>${renderCheckMessage(step, findings, 'extended')}</td>
     </tr>`).join('') ?? '';
     const scenarios = attempt?.scenarios ?? extended.lastCompleted?.scenarios ?? [];
     const scenarioRows = scenarios.map((scenario) => `<tr>
@@ -199,6 +208,36 @@ function renderExtendedReport(extended: ValidationReport['extendedRuntimeTest'])
         <p>Checks cover API contracts and observed runtime errors. Visual correctness is not tested.</p>
         ${rows ? `<table><thead><tr><th>Status</th><th>Check</th><th>Duration</th><th>Message</th>
             </tr></thead><tbody>${rows}</tbody></table>` : ''}`;
+}
+
+function renderRuntimeFindings(findings: RuntimeFailureGroup[]): string {
+    if (findings.length === 0) return '';
+    return `<h2>Runtime findings (${findings.length})</h2>
+        <p>Each issue is shown once, even when several checks encounter it.</p>`
+        + findings.map((finding) => `<article id="${escapeHtml(finding.id)}">
+            <h3>${escapeHtml(finding.label)}</h3>
+            <p><code>${escapeHtml(finding.code)}</code></p>
+            <p>${escapeHtml(finding.error ?? 'The runtime check failed.')}</p>
+            <p>${finding.occurrences.length} ${finding.occurrences.length === 1 ? 'occurrence' : 'occurrences'} · ${
+                [...new Set(finding.occurrences.map(({ step }) => step.suite === 'extended'
+                    ? 'Extended test' : 'Standard test'))].join(' · ')
+            }</p>
+            <p><strong>How to fix:</strong> ${escapeHtml(finding.hint)}</p>
+            ${renderSpecReference(finding.specRef)}
+            <details><summary>Show calls and scenarios</summary>
+            ${finding.occurrences.map(({ step }) => `<p>${step.suite === 'extended' ? 'Extended test' : 'Standard test'}
+                · ${escapeHtml(step.name)}</p>${renderStepContext(step)}`).join('')}
+            </details></article>`).join('');
+}
+
+function renderCheckMessage(step: RuntimeTestStep, findings: RuntimeFailureGroup[], suite: 'standard' | 'extended'): string {
+    if (step.status !== 'fail') return renderRuntimeMessage(step);
+    const key = runtimeFailureIdentity({ ...step, suite });
+    const finding = findings.find((candidate) => candidate.occurrences.some(({ step: occurrence }) => (
+        runtimeFailureIdentity(occurrence) === key
+    )));
+    return finding ? `<a href="#${escapeHtml(finding.id)}">See shared finding: ${escapeHtml(finding.label)}</a>`
+        : renderRuntimeMessage(step);
 }
 
 function renderStepContext(step: RuntimeTestStep): string {

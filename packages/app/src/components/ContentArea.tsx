@@ -9,6 +9,8 @@ import IssueList from './IssueList.js';
 import PreviewFrame from '../preview/PreviewFrame.js';
 import PackageOverview from './PackageOverview.js';
 import RuntimeTestCard from './RuntimeTestCard.js';
+import RuntimeFindings from './RuntimeFindings.js';
+import { getRuntimeFindings } from '../preview/runtime-findings.js';
 import ExtendedRuntimeTestCard from './ExtendedRuntimeTestCard.js';
 import type {
     RuntimeBudgetMinutes,
@@ -93,6 +95,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
 
     if (!selectedPackage) return <WelcomeScreen onOpenDirectory={onOpenDirectory} onReopenLastDirectory={onReopenLastDirectory} />;
 
+    const runtimeFindings = getRuntimeFindings(cache?.runtimeTest, cache?.extendedRuntimeTest);
     const version = readManifestVersion(cache?.manifest);
     const stability = readManifestStability(cache?.manifest);
     const readiness = cache
@@ -216,13 +219,16 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                     extendedState={cache.extendedRuntimeTest}
                                 />
                                 <IssueList result={cache.validationResult} />
+                                <RuntimeFindings findings={runtimeFindings} />
                                 <RuntimeTestCard
+                                    findings={runtimeFindings}
                                     result={cache.runtimeTest}
                                     phase={cache.runtimeTestPhase}
                                     liveSteps={cache.runtimeTestSteps}
                                     onRerun={onRerunRuntimeTest}
                                 />
                                 <ExtendedRuntimeTestCard
+                                    findings={runtimeFindings}
                                     state={cache.extendedRuntimeTest}
                                     onRun={cache.validationResult.valid && !isValidating
                                         ? onRunExtendedTest : undefined}
@@ -458,7 +464,7 @@ function ValidationOverview({
                 <OverviewMetric
                     label="Runtime"
                     value={readiness.runtimeLabel}
-                    detail={runtimeFindings > 0 ? `${runtimeFindings} runtime finding${runtimeFindings === 1 ? '' : 's'}` : 'No runtime findings'}
+                    detail={`${runtimeFindings} issue${runtimeFindings === 1 ? '' : 's'}${readiness.runtimeCoverageIncomplete ? ' · Coverage incomplete' : ''}`}
                     valueClass={runtimeHeaderTone(readiness.runtimeStatus) === 'success'
                         ? 'text-ss-success'
                         : runtimeHeaderTone(readiness.runtimeStatus) === 'warning'

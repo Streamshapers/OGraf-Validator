@@ -15,6 +15,7 @@ export interface RuntimeFailureOccurrence {
 }
 
 export interface RuntimeFailureGroup extends RuntimeDiagnostic {
+    id: string;
     label: string;
     error?: string;
     occurrences: RuntimeFailureOccurrence[];
@@ -27,12 +28,7 @@ export function splitRuntimeStepName(name: string): { mode?: RuntimeMode; label:
         : { label: name };
 }
 
-/**
- * Group repeated observations of the same OGraf contract violation. The exact
- * check label and error remain part of the identity, so unrelated methods,
- * custom actions, and failures are never merged merely because they share a
- * diagnostic code.
- */
+/** Contract identity spans suites; uncertain exceptions keep their execution context. */
 export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): RuntimeFailureGroup[] {
     const groups = new Map<string, RuntimeFailureGroup>();
 
@@ -41,15 +37,9 @@ export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): Runtime
         const diagnostic = diagnoseRuntimeError(step.error, step.diagnostic);
         const parsed = splitRuntimeStepName(step.name);
         const mode = step.renderMode ?? parsed.mode;
-        const label = parsed.label;
+        const label = hasContractIdentity(step) ? `${step.diagnostic?.method}()` : parsed.label;
         const error = step.error?.trim();
-        const key = JSON.stringify([
-            diagnostic.code, step.diagnostic?.reason, step.diagnostic?.method,
-            step.diagnostic?.field, label, error ?? '', step.suite,
-            step.scenarioId?.replace(/^(?:rt|nrt)\./, ''),
-            step.checkId?.replace(/^(?:rt|nrt)\./, ''),
-            step.expectedCurrentStep, step.actualCurrentStep,
-        ]);
+        const key = runtimeFailureIdentity(step);
         const existing = groups.get(key);
         const occurrence: RuntimeFailureOccurrence = {
             ...(mode ? { mode } : {}),
@@ -60,6 +50,7 @@ export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): Runtime
             existing.occurrences.push(occurrence);
         } else {
             groups.set(key, {
+                id: `runtime-finding-${groups.size + 1}`,
                 ...diagnostic,
                 label,
                 ...(error ? { error } : {}),
@@ -69,6 +60,28 @@ export function groupRuntimeFailures(steps: readonly RuntimeTestStep[]): Runtime
     }
 
     return [...groups.values()];
+}
+
+function hasContractIdentity(step: RuntimeTestStep): boolean {
+    const { code, method } = step.diagnostic ?? {};
+    return !!method && method !== 'customAction' && !!code
+        && ['INVALID_EMPTY_PAYLOAD', 'INVALID_RETURN_PAYLOAD', 'INVALID_STATUS_CODE',
+            'INVALID_STATUS_MESSAGE', 'INVALID_CURRENT_STEP', 'CURRENT_STEP_MISMATCH',
+            'ACTION_RETURNED_ERROR_STATUS', 'METHOD_MUST_RETURN_PROMISE'].includes(code);
+}
+
+export function runtimeFailureIdentity(step: RuntimeTestStep): string {
+    const contract = hasContractIdentity(step);
+    const details = step.diagnostic;
+    return JSON.stringify([
+        details?.code ?? 'RUNTIME_CHECK_FAILED', details?.reason, details?.method,
+        details?.field, details?.statusCode, step.error?.trim() ?? '',
+        ...(contract ? [] : [splitRuntimeStepName(step.name).label, step.suite ?? 'standard',
+            step.scenarioId?.replace(/^(?:rt|nrt)\./, ''),
+            step.checkId?.replace(/^(?:rt|nrt)\./, '')]),
+        step.expectedCurrentStep === undefined ? 'not-specified' : step.expectedCurrentStep,
+        step.actualCurrentStep === undefined ? 'not-reported' : step.actualCurrentStep,
+    ]);
 }
 
 const SPEC = 'https://ograf.ebu.io/v1/specification/docs/Specification.html';

@@ -6,10 +6,13 @@ import type {
     RuntimeTestStep,
 } from '../preview/runtime-test-types.js';
 import { getRuntimeSuiteResult, isConclusiveRuntimeResult } from '../preview/runtime-suite-state.js';
-import { groupRuntimeFailures } from '../preview/runtime-diagnostics.js';
-import { FailureDiagnostic, StepRow } from './RuntimeTestCard.js';
+import { groupRuntimeFailures, type RuntimeFailureGroup } from '../preview/runtime-diagnostics.js';
+import { StepRow } from './RuntimeTestCard.js';
+
+import RuntimeFindingLinks from './RuntimeFindingLinks.js';
 
 interface Props {
+    findings: RuntimeFailureGroup[];
     state?: RuntimeSuiteState;
     onRun?: (budgetMinutes: RuntimeBudgetMinutes) => void;
     onCancel?: () => void;
@@ -19,7 +22,7 @@ const BUTTON_CLASS = 'inline-flex items-center justify-center gap-1.5 rounded-sm
     + 'text-xs font-medium bg-ss-surface-high hover:bg-ss-surface-highest '
     + 'text-ss-on-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
 
-export default function ExtendedRuntimeTestCard({ state, onRun, onCancel }: Props) {
+export default function ExtendedRuntimeTestCard({ state, onRun, onCancel, findings }: Props) {
     const active = state?.active;
     const result = getRuntimeSuiteResult(state);
     const latest = state?.latestAttempt;
@@ -97,17 +100,18 @@ export default function ExtendedRuntimeTestCard({ state, onRun, onCancel }: Prop
                         {' '}Remaining checks were not completed.
                     </p>
                 )}
-                {(active && result || (state?.retainedFailures?.length ?? 0) > 0) && (
+                {(active && result || state?.retainedFailures?.some((step) => step.runId !== latest?.runId)) && (
                     <p className="text-xs text-ss-on-surface-variant">
                         Previous findings remain visible until a complete, conclusive replacement test finishes.
                     </p>
                 )}
-                {failures.map((failure, index) => (
-                    <FailureDiagnostic key={`${failure.code}-${index}`} failure={failure} />
-                ))}
+                <RuntimeFindingLinks findings={findings} suite="extended" />
+                {inconclusive && <p className="text-xs text-ss-warning">
+                    Not fully tested. See scenario coverage for checks that could not be completed.
+                </p>}
                 <ScenarioCoverage result={latest ?? state?.lastCompleted} />
                 {active && active.steps.length > 0 && (
-                    <GroupedSteps title="Current attempt checks" steps={active.steps} />
+                    <GroupedSteps title="Current attempt checks" steps={active.steps.filter((step) => step.status !== 'fail')} />
                 )}
                 {otherSteps.length > 0 && <GroupedSteps title="Completed attempt checks" steps={otherSteps} />}
                 <p className="text-[11px] text-ss-on-surface-variant/70">
@@ -122,7 +126,8 @@ function ScenarioCoverage({ result }: { result?: RuntimeTestResult }) {
     if (!result?.scenarios?.length) return null;
 
     return (
-        <div className="overflow-x-auto">
+        <details className="overflow-x-auto">
+            <summary className="cursor-pointer text-xs text-ss-on-surface-variant mb-2">Scenario coverage</summary>
             <table aria-label="Extended scenario coverage" className="w-full text-left text-[11px]">
                 <thead className="text-ss-on-surface-variant"><tr>
                     <th className="py-2 pr-3">Mode</th><th className="pr-3">Scenario</th>
@@ -140,7 +145,7 @@ function ScenarioCoverage({ result }: { result?: RuntimeTestResult }) {
                 ))}</tbody>
             </table>
             <p className="text-[10px] text-ss-on-surface-variant mt-1">Checks executed / planned; not-applicable scenarios are separate from untested scenarios.</p>
-        </div>
+        </details>
     );
 }
 

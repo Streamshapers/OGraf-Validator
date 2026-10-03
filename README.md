@@ -69,6 +69,11 @@ visual correctness or animation duration.
 
 JSON reports retain standard results in `runtimeTest` and add extended results in
 `extendedRuntimeTest`; HTML reports include both suites and their coverage.
+Matching contract failures appear once under **Runtime findings**, with their
+observations from both suites in expandable details. Test sections link to those
+shared findings. Issue counts exclude coverage notes about checks that could not
+run; incomplete coverage remains visible and continues to affect readiness.
+JSON also includes `runtimeFindings` while preserving the individual test results.
 
 Diagnostics include method-specific guidance and specification references in the
 UI and exported JSON/HTML reports. The pinned specification is unchanged by

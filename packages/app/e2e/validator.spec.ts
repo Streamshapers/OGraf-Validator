@@ -23,6 +23,12 @@ interface SerializedOpfsFile {
     contents: string;
 }
 
+async function expandStandardChecks(page: Page): Promise<void> {
+    await expect(page.getByRole('button', { name: 'Rerun', exact: true })).toBeVisible();
+    const summary = page.getByText(/^Passed and skipped checks/);
+    if (await summary.locator('..').getAttribute('open') === null) await summary.click();
+}
+
 test.beforeEach(async ({ context, page }) => {
     await installDirectoryPicker(context);
     await page.goto('/');
@@ -96,6 +102,7 @@ test('isolates packages, tabs, reloads, Unicode imports, and parent origin', asy
 
     await openFixture(page);
     await selectGraphic(page, 'Alpha Graphic');
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('Runtime Passed', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Production-Ready', { exact: true }).first()).toBeVisible();
@@ -173,6 +180,7 @@ test('runs RT and NRT lifecycles and reports non-2xx payloads', async ({ page })
     await openFixture(page);
     await selectGraphic(page, 'Beta Dual');
 
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: setActionsSchedule()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: goToTime(0)', { exact: true })).toBeVisible();
@@ -507,6 +515,7 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByText('· 1 failed', { exact: true })).toBeVisible();
 
     await selectGraphic(page, 'Lower Third');
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: required methods', { exact: true })).toBeVisible();
     await expect(page.getByText('RT: load()', { exact: true })).toBeVisible();
     await expect(page.getByText('RT: updateAction()', { exact: true })).toBeVisible();
@@ -528,6 +537,7 @@ test('runs committed valid fixtures and explains the committed runtime-invalid f
     await expect(page.getByText('Not Production-Ready', { exact: true }).first()).toBeVisible();
 
     await selectGraphic(page, 'Football Scoreboard');
+    await expandStandardChecks(page);
     await expect(page.getByText('RT: dispose()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: setActionsSchedule()', { exact: true })).toBeVisible();
     await expect(page.getByText('NRT: goToTime(0)', { exact: true })).toBeVisible();
