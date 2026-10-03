@@ -99,6 +99,14 @@ export-time fingerprint must not be mistaken for the tested package's fingerprin
 Reports support manual reproduction with the matching package; importing a report
 and automatically replaying scenarios remains a future extension.
 
+Runtime findings show **Expected / Received** for known API contract failures.
+Expand **Show calls and scenarios** to inspect each observation's actual inputs and
+response. Exceptions retain their recorded context without inferred expectations.
+Static issues offer **Show in manifest** when the diagnostic path identifies a unique
+field; missing fields link to their existing parent. Ambiguous paths are not linked.
+JavaScript source-line navigation is not offered without a verified mapping to the
+original package file.
+
 Diagnostics include method-specific guidance and specification references in the
 UI and exported JSON/HTML reports. The pinned specification is unchanged by
 diagnostic corrections. Where the official prose, examples, and informative

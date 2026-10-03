@@ -1,3 +1,4 @@
+import type { ManifestLocation } from '../inspector/manifest-location.js';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, Loader2, FolderOpen, Cpu, History, FileCode2 } from 'lucide-react';
 
@@ -72,11 +73,15 @@ interface Props {
 
 export default function ContentArea({ selectedPackage, cache, packageReadiness, isValidating, validationError, swReady, onOpenDirectory, onReopenLastDirectory, onRerunRuntimeTest, onRunExtendedTest, onCancelExtendedTest, rootName, packages, packageCache, isScanning, onSelectPackage }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>('validation');
+    const [manifestLocation, setManifestLocation] = useState<ManifestLocation>();
 
     // Reset to validation tab whenever a different package is selected
     useEffect(() => {
         setActiveTab('validation');
+        setManifestLocation(undefined);
     }, [selectedPackage?.key]);
+
+    useEffect(() => { setManifestLocation(undefined); }, [cache?.manifest]);
 
     if (!selectedPackage && rootName) {
         return (
@@ -169,6 +174,7 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                             <InspectTab
                                 key={selectedPackage.key}
                                 manifest={cache.manifest}
+                                location={manifestLocation}
                                 previousManifest={cache.previousManifest}
                                 assets={cache.assets}
                                 dirHandle={selectedPackage.dirHandle}
@@ -216,7 +222,8 @@ export default function ContentArea({ selectedPackage, cache, packageReadiness, 
                                     runtimePhase={cache.runtimeTestPhase}
                                     extendedState={cache.extendedRuntimeTest}
                                 />
-                                <IssueList result={cache.validationResult} />
+                                <IssueList result={cache.validationResult} manifest={cache.manifest}
+                                    onShowManifest={(location) => { setManifestLocation(location); setActiveTab('inspect'); }} />
                                 <RuntimeFindings findings={runtimeFindings} />
                                 <RuntimeTestCard
                                     findings={runtimeFindings}

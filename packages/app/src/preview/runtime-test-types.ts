@@ -1,3 +1,4 @@
+import type { RuntimeExplanation } from './runtime-explanation.js';
 import type { ReportValue } from '../readiness/report-evidence.js';
 import type { RuntimeReportContext } from '../readiness/report-context.js';
 import type { RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
@@ -62,6 +63,7 @@ export interface RuntimeTestResult {
 }
 
 export interface RuntimeTestStep {
+    explanation?: RuntimeExplanation;
     reportContext?: RuntimeReportContext;
     invocation?: {
         method: string;

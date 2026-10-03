@@ -333,3 +333,38 @@ test('reviews reproducible report data before downloading and allows cancellatio
     expect(load.invocation.parameters.value.renderCharacteristics).toBeDefined();
     expect(load.invocation.response).toEqual({ type: 'undefined' });
 });
+
+test('shows expected and captured values and lets the user inspect individual calls', async ({ page }) => {
+    await openGraphic(page, graphic(`
+        async setActionsSchedule() { return { statusCode: 200, statusMessage: 'OK' }; }
+    `), { supportsRealTime: false, supportsNonRealTime: true });
+    const issue = page.getByRole('article', { name: 'NRT: setActionsSchedule() failed' });
+    await expect(issue).toContainText('Expected');
+    await expect(issue).toContainText('Received');
+    await expect(issue).toContainText('"statusCode": 200');
+    await issue.getByText(/Show calls and scenarios/).click();
+    await expect(issue).toContainText('Call inputs · setActionsSchedule()');
+    await expect(issue).toContainText('"schedule"');
+});
+
+test('navigates a nested manifest diagnostic to its highlighted field', async ({ page }) => {
+    await openGraphic(page, graphic(), { customActions: [{ id: 'example', name: 42, schema: null }] });
+    const issue = page.getByRole('article').filter({ hasText: 'customActions[0].name' }).first();
+    await issue.getByRole('button', { name: 'Show in manifest', exact: true }).click();
+    const target = page.locator('[data-manifest-target="true"]');
+    await expect(target).toContainText('"name"');
+    await expect(target).toContainText('42');
+    await expect(target).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: 'Selected field:' }))
+        .toContainText('customActions[0].name');
+    await page.screenshot({ path: test.info().outputPath('manifest-location.png') });
+});
+
+test('navigates a missing manifest field to its existing parent', async ({ page }) => {
+    await openGraphic(page, graphic(), { customActions: [{ id: 'example', schema: null }] });
+    const missing = page.getByRole('article').filter({ hasText: 'customActions[0].name' }).first();
+    await missing.getByRole('button', { name: 'Show parent in manifest', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Field not present;' }))
+        .toContainText('customActions[0].name');
+    await expect(page.locator('[data-manifest-target="true"]')).toContainText('schema');
+});

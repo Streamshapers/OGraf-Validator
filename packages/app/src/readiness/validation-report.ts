@@ -1,3 +1,4 @@
+import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import { reportEnvironment, type PackageFingerprint } from './report-context.js';
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
 import type {
@@ -167,7 +168,7 @@ ${renderExtendedReport(report.extendedRuntimeTest, findings)}
 
 function enrichStep(step: RuntimeTestStep): RuntimeTestStep {
     return step.status === 'fail' || step.status === 'warning' || step.diagnostic
-        ? { ...step, diagnostic: {
+        ? { ...step, explanation: explainRuntimeStep(step), diagnostic: {
             ...step.diagnostic,
             ...diagnoseRuntimeError(step.error, step.diagnostic),
         } }
@@ -250,6 +251,8 @@ function renderRuntimeFindings(findings: RuntimeFailureGroup[]): string {
                 [...new Set(finding.occurrences.map(({ step }) => step.suite === 'extended'
                     ? 'Extended test' : 'Standard test'))].join(' · ')
             }</p>
+            ${finding.occurrences[0] ? renderRuntimeExplanation(finding.occurrences[0].step) : ''}
+            ${finding.occurrences.length > 1 ? '<p>First observation shown. Expand calls to inspect each observation.</p>' : ''}
             <p><strong>How to fix:</strong> ${escapeHtml(finding.hint)}</p>
             ${renderSpecReference(finding.specRef)}
             <details><summary>Show calls and scenarios</summary>
@@ -266,6 +269,12 @@ function renderCheckMessage(step: RuntimeTestStep, findings: RuntimeFailureGroup
     )));
     return finding ? `<a href="#${escapeHtml(finding.id)}">See shared finding: ${escapeHtml(finding.label)}</a>`
         : renderRuntimeMessage(step);
+}
+
+function renderRuntimeExplanation(step: RuntimeTestStep): string {
+    const explanation = explainRuntimeStep(step);
+    return (explanation.expected ? `<p><strong>Expected:</strong> ${escapeHtml(explanation.expected)}</p>` : '')
+        + `<p><strong>${explanation.expected ? 'Received' : 'Response'}:</strong></p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(explanation.received)}</pre>`;
 }
 
 function renderStepContext(step: RuntimeTestStep): string {

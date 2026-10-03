@@ -1,3 +1,5 @@
+import RuntimeEvidence from './RuntimeEvidence.js';
+import { explainRuntimeStep } from '../preview/runtime-explanation.js';
 import {
     AlertTriangle,
     CheckCircle2,
@@ -87,6 +89,10 @@ export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup })
         `${occurrenceLabel} · ${suites.join(' · ')}`,
         modes.length > 0 ? `Affected modes: ${modes.join(', ')}` : undefined,
         ...contexts,
+        ...failure.occurrences.map(({ step }) => {
+            const explanation = explainRuntimeStep(step);
+            return `${stepContext(step)}\n${step.name}\n${explanation.expected ? `Expected: ${explanation.expected}\n` : ''}Received: ${explanation.received}\nCall inputs: ${explanation.parameters}`;
+        }),
         failure.hint,
         safeSpecReference(failure.specRef),
     ].filter(Boolean).join('\n');
@@ -118,7 +124,7 @@ export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup })
                         type="button"
                         onClick={() => void navigator.clipboard?.writeText(copyText)}
                         className="inline-flex h-8 w-8 sm:h-auto sm:w-auto items-center justify-center gap-1 sm:px-2 sm:py-1 rounded-sm text-[10px] text-ss-on-surface-variant hover:text-ss-on-surface hover:bg-ss-surface-high transition-colors shrink-0"
-                        title="Copy diagnostic"
+                        title="Copy diagnostic, including captured inputs and responses"
                         aria-label="Copy diagnostic"
                     >
                         <Copy size={10} />
@@ -128,6 +134,10 @@ export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup })
                 <p title={failure.error} className="mt-2 text-[13px] sm:text-xs leading-relaxed text-ss-error whitespace-pre-wrap [overflow-wrap:anywhere]">
                     {failure.error ?? 'The runtime check failed without an error message.'}
                 </p>
+                {failure.occurrences[0] && <RuntimeEvidence step={failure.occurrences[0].step} />}
+                {failure.occurrences.length > 1 && <p className="mt-1 text-[11px] text-ss-on-surface-variant">
+                    First observation shown. Expand calls below to inspect each observation and its inputs.
+                </p>}
                 {failure.hint && (
                     <div className="mt-3 rounded-sm px-3 sm:px-4 py-3 bg-ss-surface-lowest text-xs leading-relaxed text-ss-on-surface-variant"
                          style={{ border: '1px solid rgba(64, 72, 80, 0.28)' }}>
@@ -143,6 +153,7 @@ export function FailureDiagnostic({ failure }: { failure: RuntimeFailureGroup })
                             <span className="font-medium">{step.suite === 'extended' ? 'Extended test' : 'Standard test'}</span>
                             {' · '}{step.name} · {step.durationMs} ms
                             <p className="mt-1 [overflow-wrap:anywhere]">{stepContext(step)}</p>
+                            <RuntimeEvidence step={step} inputs />
                         </li>)}
                     </ul>
                 </details>

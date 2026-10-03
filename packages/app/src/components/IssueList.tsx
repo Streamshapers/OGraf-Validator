@@ -1,11 +1,20 @@
+import { useMemo } from 'react';
+import { captureReportValue } from '../readiness/report-evidence.js';
+import { formatCapturedValue } from '../preview/runtime-explanation.js';
+import { createManifestIssueLocator, type ManifestLocation } from '../inspector/manifest-location.js';
 import type { ValidationIssue, ValidationResult } from '@streamshapers/ograf-validator-core';
 import SpecReferenceLink from './SpecReferenceLink.js';
 
+const FILE_LOCATION_CODES = new Set(['FILE_ACCESS_ERROR', 'LARGE_FILE', 'INVALID_MANIFEST_FILENAME']);
+
 interface Props {
     result: ValidationResult;
+    manifest?: unknown;
+    onShowManifest?: (location: ManifestLocation) => void;
 }
 
-export default function IssueList({ result }: Props) {
+export default function IssueList({ result, manifest, onShowManifest }: Props) {
+    const locate = useMemo(() => createManifestIssueLocator(manifest), [manifest]);
     // Codes that are displayed elsewhere in the UI (title bar badge)
     const HIDDEN_CODES = new Set(['PACKAGE_FILE_COUNT', 'PACKAGE_TOTAL_SIZE']);
 
@@ -21,7 +30,8 @@ export default function IssueList({ result }: Props) {
     return (
         <div className="flex flex-col gap-1">
             {allIssues.map(({ issue, severity }, idx) => (
-                <IssueCard key={idx} issue={issue} severity={severity} />
+                <IssueCard key={idx} issue={issue} severity={severity}
+                    location={FILE_LOCATION_CODES.has(issue.code) ? undefined : locate(issue.path)} onShowManifest={onShowManifest} />
             ))}
         </div>
     );
@@ -30,9 +40,11 @@ export default function IssueList({ result }: Props) {
 interface CardProps {
     issue: ValidationIssue;
     severity: 'error' | 'warning' | 'info';
+    location?: ManifestLocation;
+    onShowManifest?: (location: ManifestLocation) => void;
 }
 
-function IssueCard({ issue, severity }: CardProps) {
+function IssueCard({ issue, severity, location, onShowManifest }: CardProps) {
     const borderColor = {
         error:   '#cc5662',
         warning: '#e2b06f',
@@ -77,6 +89,17 @@ function IssueCard({ issue, severity }: CardProps) {
                     )}
                 </div>
                 <p className="text-[13px] sm:text-xs text-ss-on-surface-variant leading-relaxed [overflow-wrap:anywhere]">{issue.message}</p>
+                {location && <details className="mt-2 text-xs text-ss-on-surface-variant">
+                    <summary className="cursor-pointer">Current manifest value</summary>
+                    <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]">
+                        {location.exists ? formatCapturedValue(captureReportValue(location.value)) : 'Field not present'}
+                    </pre>
+                </details>}
+                {location && onShowManifest && <button type="button"
+                    className="mt-2 text-xs text-ss-primary underline underline-offset-2"
+                    onClick={() => onShowManifest(location)}>
+                    {location.exists ? 'Show in manifest' : 'Show parent in manifest'}
+                </button>}
                 <SpecReferenceLink reference={issue.specRef} />
             </div>
         </article>

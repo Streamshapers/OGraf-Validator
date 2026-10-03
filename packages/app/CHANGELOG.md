@@ -6,6 +6,9 @@ All notable changes to the hosted OGraf Validator app are documented here.
 
 ### Added
 
+- Expected/received runtime explanations with captured inputs per observation, consistent clipboard/report details, and explicit missing-evidence labels.
+- Manifest issue links that expand and focus the affected field (or the parent of a missing field), with current-value inspection and ambiguity checks.
+
 - Reproduction context in JSON/HTML reports: build and EBU versions, browser, run times, bounded package fingerprints, actual call parameters, render configuration and raw responses with explicit undefined/unavailable evidence.
 - Local export review with included-data inspection and cancellation before download; retained observations keep their original runtime context.
 

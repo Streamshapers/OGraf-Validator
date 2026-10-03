@@ -290,3 +290,21 @@ it('includes call-time evidence in both report formats and escapes arbitrary pay
     expect(html).toContain(report.environment.specCommit);
     expect(html).toContain('Not captured');
 });
+
+it('exports the same structured expectation and captured value as the runtime issue card', () => {
+    const report = createValidationReport('Schedule', STATIC_VALID, {
+        passed: false, totalDurationMs: 1, steps: [{ name: 'setActionsSchedule()', status: 'fail', durationMs: 1,
+            diagnostic: { code: 'INVALID_EMPTY_PAYLOAD', method: 'setActionsSchedule' },
+            invocation: { method: 'setActionsSchedule', dispatched: true, startedAt: 'test',
+                parameters: { type: 'json', value: { actions: [] } },
+                response: { type: 'json', value: { statusCode: 200, statusMessage: '<b>OK</b>' } },
+            },
+        }],
+    });
+    expect(report.runtimeTest.result?.steps[0]?.explanation?.expected).toContain('v_-prefixed');
+    const html = renderValidationReportHtml(report);
+    expect(html).toContain('<strong>Expected:</strong>');
+    expect(html).toContain('<strong>Received:</strong>');
+    expect(html).toContain('&lt;b&gt;OK&lt;/b&gt;');
+    expect(html).not.toContain('<b>OK</b>');
+});

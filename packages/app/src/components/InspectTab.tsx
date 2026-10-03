@@ -1,3 +1,4 @@
+import type { ManifestLocation } from '../inspector/manifest-location.js';
 import { useMemo, useState } from 'react';
 import {
     AlertTriangle,
@@ -33,6 +34,7 @@ import {
 
 interface Props {
     manifest: unknown;
+    location?: ManifestLocation;
     previousManifest?: unknown;
     assets: string[];
     dirHandle: FileSystemDirectoryHandle;
@@ -50,12 +52,13 @@ interface InspectorSectionOption {
 export default function InspectTab({
     manifest,
     previousManifest,
+    location,
     assets,
     dirHandle,
     validationResult,
     onShowValidation,
 }: Props) {
-    const [activeView, setActiveView] = useState<InspectorView>('overview');
+    const [activeView, setActiveView] = useState<InspectorView>(location ? 'manifest' : 'overview');
     const customActions = useMemo(() => readCustomActions(manifest), [manifest]);
     const durations = useMemo(() => readActionDurations(manifest), [manifest]);
     const thumbnails = useMemo(() => readThumbnails(manifest), [manifest]);
@@ -137,7 +140,7 @@ export default function InspectTab({
                             onNavigate={setActiveView}
                             onShowValidation={onShowValidation}
                         >
-                            <ManifestTab manifest={manifest} />
+                            <ManifestTab key={location?.pointer ?? 'root'} manifest={manifest} location={location} />
                             {previousManifest !== undefined && previousManifest !== null && (
                                 <div className="mt-4">
                                     <ManifestDiffPanel previous={previousManifest} current={manifest} />
