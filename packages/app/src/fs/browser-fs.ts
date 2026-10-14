@@ -24,6 +24,12 @@ export class BrowserFS implements VirtualFS {
         return file.arrayBuffer();
     }
 
+    /** Preserve file-backed storage instead of materializing every asset in JS memory. */
+    async readBlob(path: string): Promise<Blob> {
+        const handle = await this.resolveFile(path);
+        return handle.getFile();
+    }
+
     async fileExists(path: string): Promise<boolean> {
         try {
             await this.resolveFile(path);

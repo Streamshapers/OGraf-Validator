@@ -2,7 +2,7 @@
 'use strict';
 
 (() => {
-    const PROTOCOL_VERSION = 6;
+    const PROTOCOL_VERSION = 7;
     const PREVIEW_PREFIX = '/__ograf_preview__/';
     const errorDiagnostics = new WeakMap();
     const teardownCancellations = new WeakSet();
@@ -19,7 +19,12 @@
     const nativeRegExpTest = RegExp.prototype.test;
     const nativeCssSupports = CSS.supports.bind(CSS);
     const nativeElementSetAttribute = Element.prototype.setAttribute;
+    const nativeElementSetAttributeNS = Element.prototype.setAttributeNS;
     const nativeElementRemoveAttribute = Element.prototype.removeAttribute;
+    const nativeElementRemoveAttributeNS = Element.prototype.removeAttributeNS;
+    const nativeElementGetAttributeNS = Element.prototype.getAttributeNS;
+    const svgImageAttributes = new WeakMap();
+    const XLINK_NAMESPACE = 'http://www.w3.org/1999/xlink';
     const nativeStyleSetProperty = CSSStyleDeclaration.prototype.setProperty;
     const nativeStyleRemoveProperty = CSSStyleDeclaration.prototype.removeProperty;
     const previewBackground = createPreviewBackground(viewport);
@@ -136,7 +141,9 @@
             pending.removeAbortListener?.();
             if (
                 message.ok === true &&
-                message.result?.buffer instanceof ArrayBuffer &&
+                (pending.responseType === 'blob'
+                    ? message.result?.blob instanceof Blob
+                    : message.result?.buffer instanceof ArrayBuffer) &&
                 typeof message.result?.mimeType === 'string'
             ) {
                 pending.resolve(message.result);
@@ -380,6 +387,8 @@
     addEventListener('error', (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
+        // SVG images have a direct listener, including inside closed Shadow Roots.
+        if (svgImageAttributes.has(target)) return;
         const url = target.currentSrc || target.src || target.href;
         if (!url || String(url).startsWith('blob:')) return;
         resourceObservation(url, 'element-load', `${target.tagName.toLowerCase()} resource failed to load`);
@@ -447,6 +456,14 @@
         }
 
         Element.prototype.setAttribute = function setPackageAttribute(name, value) {
+            const svgSlot = svgImageAttributeSlot(this, null, name, false);
+            if (svgSlot) {
+                setSvgImageAttribute(this, svgSlot, value,
+                    (url) => svgSlot.namespace === null
+                        ? nativeElementSetAttribute.call(this, name, url)
+                        : nativeElementSetAttributeNS.call(this, svgSlot.namespace, name, url));
+                return;
+            }
             const lowerName = String(name).toLowerCase();
             if (lowerName === 'srcset' && (this instanceof HTMLImageElement || this instanceof HTMLSourceElement)) {
                 this.srcset = value;
@@ -468,8 +485,103 @@
             nativeElementSetAttribute.call(this, name, value);
         };
 
+        Element.prototype.setAttributeNS = function setPackageAttributeNS(namespace, name, value) {
+            const slot = svgImageAttributeSlot(this, namespace, name, true);
+            if (!slot) return nativeElementSetAttributeNS.call(this, namespace, name, value);
+            setSvgImageAttribute(this, slot, value,
+                (url) => nativeElementSetAttributeNS.call(this, namespace, name, url));
+        };
+        Element.prototype.removeAttribute = function removePackageAttribute(name) {
+            const slot = svgImageAttributeSlot(this, null, name, false);
+            if (slot) svgImageAttributes.get(this)?.delete(slot.key);
+            return nativeElementRemoveAttribute.call(this, name);
+        };
+        Element.prototype.removeAttributeNS = function removePackageAttributeNS(namespace, name) {
+            // removeAttributeNS takes a local name, not a qualified name.
+            if (this instanceof SVGImageElement) {
+                const ns = namespace == null || namespace === '' ? null : String(namespace);
+                const localName = String(name);
+                const key = ns === XLINK_NAMESPACE && localName === 'href' ? 'xlink'
+                    : ns === null && (localName === 'href' || localName === 'xlink:href') ? localName : undefined;
+                if (key) svgImageAttributes.get(this)?.delete(key);
+            }
+            return nativeElementRemoveAttributeNS.call(this, namespace, name);
+        };
+
         installSrcsetProperty(globalThis.HTMLImageElement);
         installSrcsetProperty(globalThis.HTMLSourceElement);
+    }
+
+    function svgImageAttributeSlot(target, namespace, name, namespaced) {
+        if (!(target instanceof SVGImageElement)) return undefined;
+        const qualifiedName = String(name);
+        const ns = namespace == null || namespace === '' ? null : String(namespace);
+        if (namespaced) {
+            if (ns === null && qualifiedName === 'href') {
+                return { key: 'href', namespace: null, localName: 'href', qualifiedName };
+            }
+            if (ns === XLINK_NAMESPACE && (qualifiedName === 'href' || qualifiedName === 'xlink:href')) {
+                return { key: 'xlink', namespace: ns, localName: 'href', qualifiedName };
+            }
+            return undefined;
+        }
+        if (qualifiedName !== 'href' && qualifiedName !== 'xlink:href') return undefined;
+        // setAttribute/removeAttribute operate by qualified name, even when the
+        // existing attribute was created with setAttributeNS.
+        const existing = target.getAttributeNode(qualifiedName);
+        if (existing) {
+            const slot = svgImageAttributeSlot(target, existing.namespaceURI, existing.localName, true);
+            return slot ? { ...slot, qualifiedName }
+                : { key: qualifiedName, namespace: null, localName: qualifiedName, qualifiedName };
+        }
+        for (const record of svgImageAttributes.get(target)?.values() ?? []) {
+            if (record.slot.qualifiedName === qualifiedName) return record.slot;
+        }
+        return { key: qualifiedName, namespace: null, localName: qualifiedName, qualifiedName };
+    }
+
+    function setSvgImageAttribute(target, slot, value, apply) {
+        let attributes = svgImageAttributes.get(target);
+        if (!attributes) {
+            attributes = new Map();
+            svgImageAttributes.set(target, attributes);
+            target.addEventListener('error', (event) => {
+                if (!event.isTrusted || shuttingDown) return;
+                // SVG2 href takes precedence over the legacy XLink attribute.
+                const plain = nativeElementGetAttributeNS.call(target, null, 'href');
+                const current = plain !== null ? plain
+                    : nativeElementGetAttributeNS.call(target, XLINK_NAMESPACE, 'href');
+                const record = [...attributes.values()].find((entry) => entry.blobUrl === current);
+                if (!record || record.failed) return;
+                record.failed = true;
+                reportResourceError(diagnosticError(
+                    `Browser could not load OGraf package image: ${safeResourceLabel(record.url)} (the image error event does not expose the exact cause).`,
+                    { code: 'RESOURCE_LOAD_FAILED', reason: 'package-image-load', field: safeResourceLabel(record.url) },
+                ));
+            });
+        }
+        const url = resolvePackageResourceUrl(value);
+        // Record identity is the generation: replacement/removal invalidates all
+        // callbacks for the old attribute, including when the URL is reused.
+        const record = { slot, url, blobUrl: null, failed: false };
+        attributes.set(slot.key, record);
+        if (!url) {
+            apply(value);
+            return;
+        }
+        const active = () => !shuttingDown && attributes.get(slot.key) === record;
+        const assign = (blobUrl) => {
+            if (!active()) return;
+            record.blobUrl = blobUrl;
+            apply(blobUrl);
+        };
+        const cached = packageResourceBlobUrls.get(url);
+        if (cached) assign(cached);
+        else void getPackageResourceBlobUrl(url).then(assign).catch((error) => {
+            if (!active() || isExpectedResourceCancellation(error)) return;
+            record.failed = true;
+            reportResourceError(error, target);
+        });
     }
 
     function installSrcsetProperty(Constructor) {
@@ -650,8 +762,9 @@
         const pending = pendingPackageResourceBlobUrls.get(url);
         if (pending) return pending;
 
-        const request = requestPackageFile(url, 'GET').then((resource) => {
-            const blobUrl = NativeURL.createObjectURL(new Blob([resource.buffer], { type: resource.mimeType }));
+        const request = requestPackageFile(url, 'GET', undefined, 'blob').then((resource) => {
+            if (shuttingDown) throw createRunnerDestroyedError();
+            const blobUrl = NativeURL.createObjectURL(resource.blob);
             packageResourceBlobUrls.set(url, blobUrl);
             return blobUrl;
         }).finally(() => {
@@ -750,7 +863,7 @@
         return rewritten;
     }
 
-    function requestPackageFile(url, method, signal) {
+    function requestPackageFile(url, method, signal, responseType = 'arraybuffer') {
         if (shuttingDown) return Promise.reject(createRunnerDestroyedError());
         if (!postPort) return Promise.reject(new Error('Preview runner is not connected.'));
         if (signal?.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
@@ -777,8 +890,8 @@
                 ? () => signal.removeEventListener('abort', onAbort)
                 : undefined;
             signal?.addEventListener('abort', onAbort, { once: true });
-            pendingFileRequests.set(requestId, { resolve, reject, timeout, removeAbortListener });
-            post({ type: 'OGRAF_RUNNER_FILE_REQUEST', requestId, url, method });
+            pendingFileRequests.set(requestId, { resolve, reject, timeout, removeAbortListener, responseType });
+            post({ type: 'OGRAF_RUNNER_FILE_REQUEST', requestId, url, method, responseType });
         });
     }
 

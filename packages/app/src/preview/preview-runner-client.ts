@@ -6,7 +6,7 @@ import {
     createPreviewSessionId,
     parsePreviewResourceUrl,
 } from './preview-resources.js';
-import { listPreviewSessionFiles, readPreviewSessionFile } from './use-preview-sw.js';
+import { listPreviewSessionFiles, readPreviewSessionFile, readPreviewSessionBlob } from './use-preview-sw.js';
 import { DEFAULT_BACKGROUND, type PreviewBackground } from './preview-types.js';
 import { readRuntimeDiagnostic, type RuntimeDiagnosticDetails } from './runtime-diagnostic-types.js';
 import { PreviewDiagnosticError } from './preview-errors.js';
@@ -103,6 +103,7 @@ interface RunnerMessage {
     args?: unknown;
     url?: unknown;
     method?: unknown;
+    responseType?: unknown;
     resourceKind?: unknown;
     source?: unknown;
     baseUrl?: unknown;
@@ -189,7 +190,7 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
             typeof message.requestId === 'string' &&
             typeof message.url === 'string'
         ) {
-            void respondToFileRequest(message.requestId, message.url, message.method);
+            void respondToFileRequest(message.requestId, message.url, message.method, message.responseType);
             return;
         }
         if (
@@ -221,20 +222,33 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
         requestId: string,
         url: string,
         method: unknown,
+        responseType: unknown,
     ): Promise<void> => {
         try {
             if (closed) throw new PreviewRunnerAbortError('Preview runner is closed.');
             if (method !== undefined && method !== 'GET' && method !== 'HEAD') {
                 throw new Error(`Unsupported local package request method "${String(method)}".`);
             }
+            if (responseType !== undefined && responseType !== 'arraybuffer' && responseType !== 'blob') {
+                throw new Error('Unsupported local package response type.');
+            }
             const parsed = parsePreviewResourceUrl(url);
             if (parsed.sessionId !== options.sessionId) {
                 throw new Error('Local package request does not match the active preview session.');
             }
-            const buffer = await readPreviewSessionFile(options.sessionId, parsed.path).catch((error: unknown) => {
+            const body = await (responseType === 'blob'
+                ? readPreviewSessionBlob(options.sessionId, parsed.path)
+                : readPreviewSessionFile(options.sessionId, parsed.path)).catch((error: unknown) => {
                 throw new PreviewDiagnosticError(`Package resource could not be read: ${parsed.path}`,
                     packageResourceDiagnostic(parsed.path, error));
             });
+            if (closed) return;
+            const mimeType = previewMimeTypeForPath(parsed.path);
+            // Blob structured cloning preserves its backing storage. Sending
+            // ArrayBuffers and rebuilding Blobs would duplicate the full package.
+            const result = body instanceof Blob
+                ? { blob: body.type === mimeType ? body : body.slice(0, body.size, mimeType), mimeType }
+                : { buffer: body, mimeType };
             channel.port1.postMessage({
                 protocol: PREVIEW_PROTOCOL_VERSION,
                 runnerId,
@@ -242,8 +256,8 @@ export async function createPreviewRunner(options: PreviewRunnerOptions): Promis
                 type: 'OGRAF_RUNNER_FILE_RESPONSE',
                 requestId,
                 ok: true,
-                result: { buffer, mimeType: previewMimeTypeForPath(parsed.path) },
-            }, [buffer]);
+                result,
+            }, body instanceof ArrayBuffer ? [body] : []);
         } catch (error) {
             if (closed) return;
             channel.port1.postMessage({

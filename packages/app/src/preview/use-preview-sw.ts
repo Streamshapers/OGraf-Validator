@@ -31,13 +31,25 @@ const sessions = new Map<string, SessionRegistration>();
 let brokerInstalled = false;
 
 export async function readPreviewSessionFile(sessionId: string, path: string): Promise<ArrayBuffer> {
+    return readPreviewSessionResource(sessionId, path, (fs, safePath) => fs.readArrayBuffer(safePath));
+}
+
+export async function readPreviewSessionBlob(sessionId: string, path: string): Promise<Blob> {
+    return readPreviewSessionResource(sessionId, path, (fs, safePath) => fs.readBlob(safePath));
+}
+
+async function readPreviewSessionResource<T>(
+    sessionId: string,
+    path: string,
+    read: (fs: BrowserFS, safePath: string) => Promise<T>,
+): Promise<T> {
     assertPreviewSessionId(sessionId);
     const registration = sessions.get(sessionId);
     if (!registration) throw new Error(`Preview session "${sessionId}" is not registered in this tab.`);
     const fs = new BrowserFS(registration.handle);
     const normalizedPath = normalizePreviewPath(path);
     try {
-        return await fs.readArrayBuffer(normalizedPath);
+        return await read(fs, normalizedPath);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw Object.assign(

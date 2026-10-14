@@ -2,6 +2,14 @@
 
 All notable changes to the hosted OGraf Validator app are documented here.
 
+## 0.3.1 - 2026-10-14
+
+### Fixed
+
+- Load local SVG images, including Lottie PNG sequences, through the isolated package file bridge. Preserve href namespaces and ignore stale loads after image replacement, removal or teardown; report missing and failed images inside Shadow Roots.
+- Preserve file-backed package assets across the isolated broker instead of copying each image into an ArrayBuffer and a new memory Blob, preventing Blob memory failures with large PNG sequences. Version the internal runner protocol to reject mixed cached transports.
+- Update the transitive `source-map-js` dependency to 1.2.2 to resolve GHSA-68fv-2mgg-jv7q.
+
 ## 0.3.0 - 2026-10-03
 
 ### Added

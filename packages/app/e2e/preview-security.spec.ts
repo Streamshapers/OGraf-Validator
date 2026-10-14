@@ -6,7 +6,7 @@ async function mountRunner(page: Page): Promise<void> {
         const frame = document.createElement('iframe');
         frame.id = 'security-runner';
         frame.setAttribute('sandbox', 'allow-scripts');
-        frame.src = '/preview-runner.html?protocol=6&runner=security-test';
+        frame.src = '/preview-runner.html?protocol=7&runner=security-test';
         await new Promise<void>((resolve) => {
             frame.onload = () => resolve();
             document.body.append(frame);
@@ -14,7 +14,7 @@ async function mountRunner(page: Page): Promise<void> {
     });
 }
 
-async function connect(page: Page, targetOrigin = '*', protocol = 6): Promise<boolean> {
+async function connect(page: Page, targetOrigin = '*', protocol = 7): Promise<boolean> {
     return page.evaluate(({ targetOrigin, protocol }) => new Promise<boolean>((resolve) => {
         const frame = document.querySelector<HTMLIFrameElement>('#security-runner')!;
         const channel = new MessageChannel();
@@ -38,6 +38,7 @@ test('connects the opaque runner once using the wildcard target origin', async (
     const origin = new URL(page.url()).origin;
     expect(await connect(page, origin)).toBe(false);
     expect(await connect(page, '*', 99)).toBe(false);
+    expect(await connect(page, '*', 6)).toBe(false);
     expect(await connect(page)).toBe(true);
     expect(await connect(page)).toBe(false);
     await expect(page.locator('#security-runner')).toHaveAttribute('sandbox', 'allow-scripts');
@@ -61,7 +62,7 @@ test('rejects a connection from a sibling window', async ({ page }) => {
         const timer = setTimeout(() => { channel.port1.close(); resolve(false); }, 750);
         channel.port1.onmessage = () => { clearTimeout(timer); channel.port1.close(); resolve(true); };
         parent.frames[0]!.postMessage({
-            protocol: 6, type: 'OGRAF_RUNNER_CONNECT', runnerId: 'security-test', sessionId: '0123456789abcdef',
+            protocol: 7, type: 'OGRAF_RUNNER_CONNECT', runnerId: 'security-test', sessionId: '0123456789abcdef',
         }, '*', [channel.port2]);
     }));
     expect(accepted).toBe(false);
@@ -74,7 +75,7 @@ test('rejects port commands for another protocol, runner, or session', async ({ 
         const frame = document.querySelector<HTMLIFrameElement>('#security-runner')!;
         const channel = new MessageChannel();
         const seen: string[] = [];
-        const binding = { protocol: 6, runnerId: 'security-test', sessionId: '0123456789abcdef' };
+        const binding = { protocol: 7, runnerId: 'security-test', sessionId: '0123456789abcdef' };
         const timer = setTimeout(() => {
             channel.port1.close();
             reject(new Error('The runner did not acknowledge the valid command.'));
