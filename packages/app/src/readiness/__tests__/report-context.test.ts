@@ -36,7 +36,7 @@ it('checks size limits before loading large files', async () => {
 });
 
 it('reports actual build versions and the pinned full EBU commit', () => {
-    expect(reportEnvironment()).toMatchObject({ appVersion: '0.3.1', coreVersion: '0.3.0',
+    expect(reportEnvironment()).toMatchObject({ appVersion: '0.3.1', coreVersion: '0.3.1',
         specCommit: '8a74757bc4919fd898db1f562b14ad18fe22bc77' });
 });
 
