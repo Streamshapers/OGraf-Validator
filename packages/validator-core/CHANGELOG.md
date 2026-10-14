@@ -2,6 +2,10 @@
 
 All notable changes to `@streamshapers/ograf-validator-core` are documented here.
 
+## 0.3.1 - 2026-10-15
+
+- Maintenance release; no changes to validation behavior or public API.
+
 ## 0.3.0 - 2026-10-03
 
 ### Added
