@@ -33,7 +33,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "lottie-web": "5.12.2",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.3.0",
+    "vite": "^8.3.4",
     "vitest": "^4.1.11"
   }
 }
